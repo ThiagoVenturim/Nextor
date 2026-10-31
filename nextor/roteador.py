@@ -8,7 +8,7 @@ from . import config
 PREFIXOS = r"^(ei|ola|oi|opa|fala|bom dia|boa tarde|boa noite|e ai)?[, ]*(nextor|nestor)?[,: ]*"
 PALAVRAS_AGENDA = ("agenda", "compromisso", "reuniao", "audiencia", "prazo", "calendario")
 PALAVRAS_NOTICIA = ("noticia", "noticias", "novidade", "novidades", "manchete", "manchetes")
-PALAVRAS_ANOTAR = ("anota", "anotar", "anote", "lembra", "lembrar", "lembrete", "escreve", "escrever")
+PALAVRAS_ANOTAR = ("anota", "anotar", "anote", "lembra", "lembrar", "lembrete")
 
 
 def _sem_acento(s: str) -> str:
@@ -30,6 +30,25 @@ def _registra(frase: str, intencao: str) -> None:
 def rotear(frase: str) -> dict:
     limpa = _limpa(frase)
     base = _sem_acento(limpa)
+
+    # Skill de texto (traduzir / resumir / escrever) - antes das outras intencoes.
+    if "traduz" in base:
+        m = re.search(r"traduz\w*\s+(.*?)\s+para\s+(.+)$", limpa, flags=re.IGNORECASE)
+        if m:
+            conteudo, idioma = m.group(1).strip(), m.group(2).strip(" ?.")
+        else:
+            conteudo = re.sub(r".*?traduz\w*\s+", "", limpa, count=1, flags=re.IGNORECASE).strip()
+            idioma = "ingles"
+        _registra(frase, "traduzir")
+        return {"intencao": "traduzir", "resposta": _fazer_texto("traduzir", conteudo, idioma)}
+    if "resum" in base:
+        conteudo = re.sub(r".*?resum\w*\s+", "", limpa, count=1, flags=re.IGNORECASE).strip()
+        _registra(frase, "resumir")
+        return {"intencao": "resumir", "resposta": _fazer_texto("resumir", conteudo)}
+    if "escrev" in base or "conta uma historia" in base or base.startswith("historia"):
+        pedido = re.sub(r".*?escrev\w*\s+", "", limpa, count=1, flags=re.IGNORECASE).strip() or limpa
+        _registra(frase, "escrever")
+        return {"intencao": "escrever", "resposta": _fazer_texto("escrever", pedido)}
 
     for p in PALAVRAS_ANOTAR:
         if base.startswith(p) or f" {p} " in f" {base} ":
@@ -76,6 +95,18 @@ def _fazer_noticias(assunto: str) -> str:
         return resumir(assunto)
     except Exception:
         return "Nao consegui buscar as noticias agora."
+
+
+def _fazer_texto(acao: str, conteudo: str, idioma: str = "ingles") -> str:
+    try:
+        from .texto import traduzir, resumir_texto, escrever
+        if acao == "traduzir":
+            return traduzir(conteudo, idioma)["aviso"]
+        if acao == "resumir":
+            return resumir_texto(conteudo)["aviso"]
+        return escrever(conteudo)["aviso"]
+    except Exception:
+        return "Nao consegui gerar o texto agora."
 
 
 def _fazer_conversar(frase: str) -> str:

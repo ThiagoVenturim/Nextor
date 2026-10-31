@@ -25,7 +25,7 @@ except Exception:
 
 app = Flask(__name__)
 PROTEGIDOS = ("anotar", "falar_endpoint", "conversar_endpoint", "notas",
-              "agenda", "noticias", "comando", "automacoes_endpoint")
+              "agenda", "noticias", "comando", "automacoes_endpoint", "texto_endpoint")
 
 
 def autorizado() -> bool:
@@ -103,6 +103,23 @@ def agenda():
         frase = "Hoje: " + resumo_falado(evs)
     falar(frase)
     return jsonify(ok=True, quando=quando, quantidade=len(evs), frase=frase)
+
+
+@app.post("/texto")
+def texto_endpoint():
+    from . import texto as tx
+    acao = request.values.get("acao", "escrever")
+    conteudo = pega_texto() or request.values.get("conteudo", "")
+    if not conteudo:
+        return jsonify(erro="texto vazio"), 400
+    if acao == "traduzir":
+        res = tx.traduzir(conteudo, request.values.get("idioma", "ingles"))
+    elif acao == "resumir":
+        res = tx.resumir_texto(conteudo)
+    else:
+        res = tx.escrever(conteudo)
+    falar(res["aviso"])
+    return jsonify(ok=True, acao=acao, arquivo=res["arquivo"], texto=res["texto"])
 
 
 @app.route("/noticias", methods=["GET", "POST"])

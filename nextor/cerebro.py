@@ -26,12 +26,13 @@ def _chamar_ollama(mensagem: str, sistema: str = "", num_predict: int = 120) -> 
     return (dados.get("message", {}).get("content") or "").strip()
 
 
-def responder(mensagem: str, sistema: str = "", num_predict: int = 120) -> str:
-    """Despacha para o cerebro escolhido (local, claude ou agy). Cai para local se falhar."""
+def responder(mensagem: str, sistema: str = "", tokens: int = 120) -> str:
+    """Despacha para o cerebro escolhido (local, claude ou agy). Cai para local se falhar.
+    tokens limita o tamanho da resposta (num_predict no Ollama, max_tokens no Claude)."""
     if config.CEREBRO == "claude":
         try:
             from .claude_cerebro import responder as responder_claude
-            texto = responder_claude(mensagem, sistema)
+            texto = responder_claude(mensagem, sistema, max_tokens=max(tokens, 256))
             if texto:
                 return texto
         except Exception as e:
@@ -44,7 +45,7 @@ def responder(mensagem: str, sistema: str = "", num_predict: int = 120) -> str:
                 return texto
         except Exception as e:
             print(f"[cerebro] agy indisponivel ({e}); usando local.")
-    return _chamar_ollama(mensagem, sistema, num_predict)
+    return _chamar_ollama(mensagem, sistema, tokens)
 
 
 def ultimas_notas(n: int = 20) -> str:

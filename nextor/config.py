@@ -38,6 +38,9 @@ OLLAMA_URL = os.getenv("NEXTOR_OLLAMA_URL", "http://localhost:11434/api/chat")
 CLAUDE_MODELO = os.getenv("NEXTOR_CLAUDE_MODELO", "claude-haiku-5-5")
 # Cerebro via agy/Maestri: agente da canvas que responde.
 AGY_AGENTE = os.getenv("NEXTOR_AGY_AGENTE", "Claude Code")
+# Pasta onde salvar textos (traducao/resumo/escrita). Vazio = pasta textos/ do projeto.
+# Dica: aponte para um cofre do Obsidian para ler no celular.
+TEXTOS_DIR = os.getenv("NEXTOR_TEXTOS_DIR", "")
 
 # Agenda e fuso
 AGENDA_ICAL = os.getenv("NEXTOR_AGENDA_ICAL", "")

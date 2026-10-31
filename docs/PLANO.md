@@ -430,3 +430,13 @@ Material de controle do Nest Mini pela rede local, uso legitimo, sem firmware/ro
   e API /automacoes (GET/POST/DELETE). Agendador inicia junto com o servico.
 - Testado ao vivo: automacao criada para o minuto seguinte disparou sozinha e falou no Nest.
 - Sem apps de terceiros (sem Docker/HA/Nabu Casa) para automacoes e painel.
+
+### Skill de texto + pesquisa do gatilho Google Home - 31/10/2026 (develop)
+- nextor/texto.py: traduzir, resumir e escrever usando o cerebro escolhido; salva o texto
+  completo em arquivo (NEXTOR_TEXTOS_DIR, dica: cofre do Obsidian) e o Nest fala um aviso curto.
+- Roteador entende "traduz ... para <idioma>", "resume ...", "escreve/conta uma historia ...".
+  Endpoint /texto (acao=traduzir|resumir|escrever). Testado: poema escrito, salvo e falado.
+- Cerebro.responder ganhou limite de tokens (textos longos). Pasta textos/ ignorada no git.
+- Gatilho pelo Google Home: pesquisa confirmou que NAO e possivel acionar nosso servico por voz
+  no Nest; o Google Assistente sera desligado em 04/09/2026. Caminho real para "ei Nextor":
+  microfone proprio (notebook) com palavra de ativacao - proximo passo.

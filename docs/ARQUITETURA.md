@@ -17,6 +17,7 @@ nextor/                 pacote principal (o codigo)
   mcp_server.py         expoe as habilidades como ferramentas MCP
   agenda.py             Google Agenda por endereco privado iCal
   noticias.py           manchetes (Google News RSS) + resumo
+  texto.py              skill de texto: traduzir, resumir, escrever (salva em arquivo)
   roteador.py           entende a frase e escolhe a habilidade
   rotina.py             rotina matinal (bom dia + agenda + noticias)
   automacoes.py         agendador proprio (automacoes por horario)
