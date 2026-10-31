@@ -13,3 +13,6 @@ comandos.log
 
 # Dados locais do Home Assistant (contem segredos)
 home_assistant/config/
+.env.*
+.perfil
+!.env.example

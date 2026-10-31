@@ -414,3 +414,10 @@ Material de controle do Nest Mini pela rede local, uso legitimo, sem firmware/ro
 - Servidor MCP (nextor/mcp_server.py, MCP 2.x / MCPServer) expoe anotar, listar_notas, agenda,
   noticias e falar para o Claude ou outro assistente se conectar. 5 ferramentas registradas.
 - Noticias e conversa agora passam pelo cerebro escolhido (podem usar Claude).
+
+### Perfis (agentes casa/escritorio) + verdade do "ei Nextor" - 31/10/2026 (develop)
+- Perfis: cada .env.<nome> e um Nextor proprio (persona, cerebro, agenda, noticias, dispositivo).
+  Ativo por NEXTOR_PERFIL ou pelo arquivo .perfil. Exemplos: .env.casa (companheiro),
+  .env.escritorio (profissional). .env.* e .perfil ignorados; .env.example versionado.
+- "ei Nextor" no Nest NAO e possivel (Google tranca a palavra de ativacao). Palavra propria so
+  com satelite de voz (HA Voice/ESP32/openWakeWord). Documentado em docs/PERFIS_E_VOZ.md.

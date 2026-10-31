@@ -4,9 +4,19 @@ from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parent.parent
 
+# Perfil (agente): casa, escritorio, etc. Escolha por variavel de ambiente NEXTOR_PERFIL
+# ou escrevendo o nome no arquivo .perfil. Cada perfil e um .env proprio (.env.<perfil>).
+PERFIL = os.getenv("NEXTOR_PERFIL", "").strip()
+if not PERFIL and (RAIZ / ".perfil").exists():
+    PERFIL = (RAIZ / ".perfil").read_text(encoding="utf-8").strip()
+
+_ENV = RAIZ / (f".env.{PERFIL}" if PERFIL else ".env")
+if not _ENV.exists():
+    _ENV = RAIZ / ".env"
+
 try:
     from dotenv import load_dotenv
-    load_dotenv(RAIZ / ".env")
+    load_dotenv(_ENV)
 except ImportError:
     pass
 
