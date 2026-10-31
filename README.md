@@ -49,10 +49,22 @@ Subir o servico (deixe a janela aberta):
 Endpoints (POST, com `?token=...`):
 - `/anotar`   salva a nota e confirma em voz
 - `/falar`    fala o texto
-- `/conversar` pensa com a IA local e responde em voz
+- `/conversar` pensa com a IA local e responde em voz (conhece notas e agenda)
+- `/agenda`   fala os compromissos (`?quando=hoje` ou `?quando=proximos`)
 - `/notas`    (GET) lista as notas
 
 O atalho do iPhone esta descrito em `ATALHO_IPHONE.md`.
+
+## Google Agenda
+
+O Nextor le a agenda por um endereco privado iCal, sem projeto no Google Cloud:
+
+1. Google Agenda no navegador > Configuracoes da sua agenda > "Integrar agenda".
+2. Copie o "Endereco secreto no formato iCal".
+3. Cole no `.env` em `NEXTOR_AGENDA_ICAL`. Esse endereco e um segredo, nao compartilhe.
+
+Depois, `/agenda` fala os compromissos e o `/conversar` passa a responder "o que tenho
+amanha". Sem o endereco, o resto do Nextor funciona normalmente.
 
 ## Seguranca
 

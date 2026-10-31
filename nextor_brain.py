@@ -36,8 +36,22 @@ def ultimas_notas(n: int = 20) -> str:
     return "\n".join(linhas[-n:]) if linhas else "(ainda nao ha anotacoes)"
 
 
+def _agenda_texto() -> str:
+    try:
+        from nextor_agenda import eventos_proximos, resumo_falado
+        evs = eventos_proximos(7)
+        if not evs:
+            return "(sem compromissos nos proximos 7 dias ou agenda nao configurada)"
+        return resumo_falado(evs, prefixo_dia=True)
+    except Exception:
+        return "(agenda indisponivel)"
+
+
 def conversar(mensagem: str) -> str:
-    contexto = f"{PERSONA}\n\nAnotacoes recentes do Thiago (memoria):\n{ultimas_notas()}"
+    contexto = (
+        f"{PERSONA}\n\nAnotacoes recentes do Thiago (memoria):\n{ultimas_notas()}"
+        f"\n\nProximos compromissos da agenda:\n{_agenda_texto()}"
+    )
     corpo = {
         "model": MODELO,
         "messages": [

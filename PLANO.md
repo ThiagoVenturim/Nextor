@@ -361,3 +361,11 @@ Material de controle do Nest Mini pela rede local, uso legitimo, sem firmware/ro
 ### Proximo: V2 - personalidade e memoria (Ollama)
 - Dar ao Nestor um modelo de IA local (qwen2.5:3b ou llama3.2:3b) que le as anotacoes
   e conversa. Endpoint /conversar: Thiago fala pelo iPhone, Nestor responde no Nest.
+
+### V3 (parcial) - Google Agenda - 31/10/2026 (branch develop)
+- Modulo nextor_agenda.py: le a Google Agenda por endereco privado iCal (sem Google Cloud),
+  expande eventos repetidos, monta frase curta para falar.
+- Endpoint /agenda (hoje / proximos) e agenda ligada ao cerebro (/conversar conhece a semana).
+- Config por .env: NEXTOR_AGENDA_ICAL e NEXTOR_FUSO.
+- Testado com a agenda real: Nextor falou os compromissos da semana no Nest.
+- Pendencia: Thiago colar o endereco iCal privado no .env para o modo autonomo.

@@ -19,3 +19,7 @@ TOKEN = os.getenv("NEXTOR_TOKEN", "troque-este-token")
 MODELO = os.getenv("NEXTOR_MODELO", "qwen2.5:3b")
 # Porta do servico local.
 PORTA = int(os.getenv("NEXTOR_PORTA", "5005"))
+# Endereco privado iCal da sua Google Agenda (segredo). Opcional.
+AGENDA_ICAL = os.getenv("NEXTOR_AGENDA_ICAL", "")
+# Fuso horario (IANA).
+FUSO = os.getenv("NEXTOR_FUSO", "America/Sao_Paulo")

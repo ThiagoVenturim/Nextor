@@ -29,6 +29,11 @@ except Exception:
     conversar = None
 
 try:
+    from nextor_agenda import eventos_hoje, eventos_proximos, resumo_falado
+except Exception:
+    eventos_hoje = eventos_proximos = resumo_falado = None
+
+try:
     from settings import TOKEN, PORTA
 except ImportError:
     TOKEN, PORTA = "troque-este-token", 5005
@@ -53,7 +58,7 @@ def pega_texto() -> str:
 
 @app.before_request
 def checa_token():
-    if request.endpoint in ("anotar", "falar", "conversar_endpoint", "notas") and not autorizado():
+    if request.endpoint in ("anotar", "falar", "conversar_endpoint", "notas", "agenda") and not autorizado():
         return jsonify(erro="token invalido"), 401
 
 
@@ -88,6 +93,21 @@ def conversar_endpoint():
     resposta = conversar(texto)
     falar(resposta)
     return jsonify(ok=True, pergunta=texto, resposta=resposta)
+
+
+@app.route("/agenda", methods=["GET", "POST"])
+def agenda():
+    if eventos_hoje is None:
+        return jsonify(erro="agenda indisponivel (libs)"), 503
+    quando = (request.values.get("quando") or "hoje").lower()
+    if quando.startswith("prox") or quando == "semana":
+        eventos = eventos_proximos(7)
+        frase = resumo_falado(eventos, prefixo_dia=True)
+    else:
+        eventos = eventos_hoje()
+        frase = "Hoje: " + resumo_falado(eventos)
+    falar(frase)
+    return jsonify(ok=True, quando=quando, quantidade=len(eventos), frase=frase)
 
 
 @app.get("/notas")
