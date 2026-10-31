@@ -71,6 +71,19 @@ O cerebro e escolhido em `NEXTOR_CEREBRO` no `.env`:
 
 Se o cerebro escolhido falhar (sem chave, offline), cai para o local automaticamente.
 
+## Automacoes e painel (o nosso Home Assistant, sem apps de terceiros)
+
+O servico ja traz um agendador proprio: automacoes em horarios fixos, sem Docker, sem
+Home Assistant, sem Agendador do Windows. Acoes: `rotina` (bom dia), `agenda`, `noticias`,
+`falar` e `comando`. Ficam em `automacoes.json` (fora do git); vem com a rotina das 7h.
+
+Painel web (navegador/celular na rede de casa):
+```
+http://localhost:5005/painel?token=SEU_TOKEN
+```
+De la da para falar, anotar, ouvir agenda/noticias e criar ou remover automacoes.
+API: `GET/POST/DELETE /automacoes` (POST com `hora`, `acao`, `texto`).
+
 ## MCP (conectar o Claude ou outro assistente ao Nextor)
 
 O Nextor tambem e um servidor MCP: expoe as habilidades (anotar, ler notas, agenda,

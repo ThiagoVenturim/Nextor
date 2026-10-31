@@ -19,7 +19,8 @@ nextor/                 pacote principal (o codigo)
   noticias.py           manchetes (Google News RSS) + resumo
   roteador.py           entende a frase e escolhe a habilidade
   rotina.py             rotina matinal (bom dia + agenda + noticias)
-  servico.py            API HTTP local (Flask) com token
+  automacoes.py         agendador proprio (automacoes por horario)
+  servico.py            API HTTP local (Flask) + painel web + token
 scripts/
   setup.py              configuracao de primeira vez (escreve o .env)
   agendar_rotina.ps1    agenda a rotina diaria no Windows

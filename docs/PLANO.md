@@ -421,3 +421,12 @@ Material de controle do Nest Mini pela rede local, uso legitimo, sem firmware/ro
   .env.escritorio (profissional). .env.* e .perfil ignorados; .env.example versionado.
 - "ei Nextor" no Nest NAO e possivel (Google tranca a palavra de ativacao). Palavra propria so
   com satelite de voz (HA Voice/ESP32/openWakeWord). Documentado em docs/PERFIS_E_VOZ.md.
+
+### Nosso "Home Assistant": automacoes + painel - 31/10/2026 (develop)
+- nextor/automacoes.py: agendador proprio dentro do servico (thread, checa a cada 30s),
+  automacoes por horario em automacoes.json (ignorado). Acoes: rotina, agenda, noticias,
+  falar, comando. Semente: bom dia as 7h. Resolve o agendamento sem Agendador do Windows.
+- servico.py: painel web /painel (falar, anotar, agenda, noticias, criar/remover automacoes)
+  e API /automacoes (GET/POST/DELETE). Agendador inicia junto com o servico.
+- Testado ao vivo: automacao criada para o minuto seguinte disparou sozinha e falou no Nest.
+- Sem apps de terceiros (sem Docker/HA/Nabu Casa) para automacoes e painel.

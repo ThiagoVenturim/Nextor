@@ -16,3 +16,4 @@ home_assistant/config/
 .env.*
 .perfil
 !.env.example
+automacoes.json
