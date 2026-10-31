@@ -440,3 +440,12 @@ Material de controle do Nest Mini pela rede local, uso legitimo, sem firmware/ro
 - Gatilho pelo Google Home: pesquisa confirmou que NAO e possivel acionar nosso servico por voz
   no Nest; o Google Assistente sera desligado em 04/09/2026. Caminho real para "ei Nextor":
   microfone proprio (notebook) com palavra de ativacao - proximo passo.
+
+### Controle do Nest pela rede + gatilho fisico - 31/10/2026 (develop)
+- nextor/nest.py (pychromecast, sem token/nuvem): Nextor controla o proprio Nest - volume,
+  parar, status. Roteador entende "coloca o volume em N", "aumenta/diminui volume", "para a
+  musica". Endpoint /nest (acao=status|volume|parar). Testado: status e volume 40 ok.
+- Gatilho fisico experimental (vigia): observa o volume do Nest e dispara um comando quando
+  chega ao nivel alvo (ex.: deslizar o volume ao maximo no topo do Nest). Opt-in por
+  NEXTOR_NEST_VIGIA_ACAO. E a unica forma honesta de "comando atraves do Nest" na rede local;
+  nao e voz (microfone fechado), e um botao fisico.

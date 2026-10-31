@@ -25,7 +25,8 @@ except Exception:
 
 app = Flask(__name__)
 PROTEGIDOS = ("anotar", "falar_endpoint", "conversar_endpoint", "notas",
-              "agenda", "noticias", "comando", "automacoes_endpoint", "texto_endpoint")
+              "agenda", "noticias", "comando", "automacoes_endpoint", "texto_endpoint",
+              "nest_endpoint")
 
 
 def autorizado() -> bool:
@@ -196,9 +197,28 @@ def painel():
     return PAINEL_HTML, 200, {"Content-Type": "text/html; charset=utf-8"}
 
 
+@app.route("/nest", methods=["GET", "POST"])
+def nest_endpoint():
+    from . import nest as n
+    acao = request.values.get("acao", "status")
+    try:
+        if acao == "volume":
+            return jsonify(ok=True, resultado=n.volume(int(request.values.get("nivel", "50"))))
+        if acao == "parar":
+            return jsonify(ok=True, resultado=n.parar())
+        return jsonify(ok=True, status=n.status())
+    except Exception as e:
+        return jsonify(erro=str(e)), 503
+
+
 def main():
     from .automacoes import iniciar_agendador
     iniciar_agendador()
+    try:
+        from .nest import iniciar_vigia_se_configurado
+        iniciar_vigia_se_configurado()
+    except Exception as e:
+        print(f"[nest] vigia nao iniciou: {e}")
     print(f"Nextor ouvindo na porta {config.PORTA}. Persona: {config.PERSONA}. Perfil: {config.PERFIL or 'padrao'}.")
     print(f"Painel: http://localhost:{config.PORTA}/painel?token=SEU_TOKEN")
     app.run(host="0.0.0.0", port=config.PORTA)

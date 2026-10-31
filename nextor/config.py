@@ -41,6 +41,9 @@ AGY_AGENTE = os.getenv("NEXTOR_AGY_AGENTE", "Claude Code")
 # Pasta onde salvar textos (traducao/resumo/escrita). Vazio = pasta textos/ do projeto.
 # Dica: aponte para um cofre do Obsidian para ler no celular.
 TEXTOS_DIR = os.getenv("NEXTOR_TEXTOS_DIR", "")
+# Gatilho fisico pelo Nest (experimental): ao levar o volume ao nivel abaixo, roda o comando.
+NEST_VIGIA_ACAO = os.getenv("NEXTOR_NEST_VIGIA_ACAO", "")  # ex.: "o que tenho hoje"
+NEST_VIGIA_VOLUME = int(os.getenv("NEXTOR_NEST_VIGIA_VOLUME", "100"))
 
 # Agenda e fuso
 AGENDA_ICAL = os.getenv("NEXTOR_AGENDA_ICAL", "")

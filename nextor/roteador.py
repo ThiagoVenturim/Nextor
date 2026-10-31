@@ -63,6 +63,19 @@ def rotear(frase: str) -> dict:
         _registra(frase, "noticias")
         return {"intencao": "noticias", "resposta": _fazer_noticias(assunto)}
 
+    if "volume" in base:
+        m = re.search(r"(\d{1,3})", base)
+        _registra(frase, "nest_volume")
+        if m:
+            return {"intencao": "nest", "resposta": _fazer_nest("volume", int(m.group(1)))}
+        if "aument" in base or "mais alto" in base:
+            return {"intencao": "nest", "resposta": _fazer_nest("volume", 80)}
+        if "diminu" in base or "mais baixo" in base or "abaix" in base:
+            return {"intencao": "nest", "resposta": _fazer_nest("volume", 25)}
+    if base.startswith("para") and ("musica" in base or "som" in base or "tocar" in base) or "parar a musica" in base:
+        _registra(frase, "nest_parar")
+        return {"intencao": "nest", "resposta": _fazer_nest("parar")}
+
     if any(w in base for w in PALAVRAS_AGENDA) or "o que tenho" in base or "o que eu tenho" in base:
         quando = "proximos" if any(k in base for k in ("amanha", "semana", "proxim")) else "hoje"
         _registra(frase, "agenda")
@@ -95,6 +108,16 @@ def _fazer_noticias(assunto: str) -> str:
         return resumir(assunto)
     except Exception:
         return "Nao consegui buscar as noticias agora."
+
+
+def _fazer_nest(acao: str, nivel: int = 50) -> str:
+    try:
+        from . import nest
+        if acao == "volume":
+            return nest.volume(nivel)
+        return nest.parar()
+    except Exception as e:
+        return "Nao consegui controlar o Nest agora."
 
 
 def _fazer_texto(acao: str, conteudo: str, idioma: str = "ingles") -> str:

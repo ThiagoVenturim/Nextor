@@ -11,6 +11,7 @@ nextor/                 pacote principal (o codigo)
   config.py             le o .env e centraliza configuracao e caminhos
   personas.py           personalidades selecionaveis do assistente
   voz.py                fala no Nest (gTTS + catt via Google Cast)
+  nest.py               controla o Nest (volume, parar, status) e gatilho fisico
   cerebro.py            despacha o cerebro escolhido (local/claude/agy)
   claude_cerebro.py     cerebro na nuvem (API do Claude)
   agy_cerebro.py        cerebro via agente do Maestri
