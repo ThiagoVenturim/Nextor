@@ -1,0 +1,11 @@
+# Ambiente Python
+.venv/
+__pycache__/
+*.pyc
+
+# Segredos e dados pessoais (nao versionar)
+.env
+anotacoes.md
+
+# Audio gerado
+*.mp3

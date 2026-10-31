@@ -1,0 +1,4 @@
+gTTS
+catt
+flask
+python-dotenv
