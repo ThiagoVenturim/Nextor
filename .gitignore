@@ -10,3 +10,6 @@ anotacoes.md
 # Audio gerado
 *.mp3
 comandos.log
+
+# Dados locais do Home Assistant (contem segredos)
+home_assistant/config/

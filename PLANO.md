@@ -379,3 +379,12 @@ Material de controle do Nest Mini pela rede local, uso legitimo, sem firmware/ro
 - Gatilho "ei Nextor" no Google Home: so chega ao servico via Home Assistant (webhook); a
   rotina do Google sozinha nao faz chamada HTTP. Por enquanto, gatilho pela Siri/iPhone.
 - Reconhecer so a voz do dono: tratado como pesquisa; DTW nao e a tecnica certa (ver VISAO.md).
+
+### V4 (inicio) - Home Assistant - 31/10/2026 (develop)
+- Pasta home_assistant/: docker-compose.yml (HA em container), packages/nextor.yaml
+  (rest_command para /comando, /agenda, /noticias; automacoes: gatilho de voz via
+  input_boolean exposto ao Google, webhook para frase livre, rotina "bom dia" 7h) e HOWTO.md.
+- config/ do HA fica fora do git (segredos). host.docker.internal liga o HA ao Nextor.
+- Gatilho de voz pelo Nest exige expor o HA ao Google (Nabu Casa ou manual). Webhook e
+  rotinas por horario ja funcionam sem custo.
+- Docker Desktop estava instalado mas parado; iniciado nesta sessao, imagem do HA baixando.

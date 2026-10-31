@@ -1,0 +1,18 @@
+# Home Assistant em container (leve, sem VM). No Windows, use com Docker Desktop.
+# Subir:   docker compose up -d
+# Abrir:   http://localhost:8123  (primeira vez: cria conta e faz o assistente inicial)
+# Parar:   docker compose down
+services:
+  homeassistant:
+    container_name: homeassistant
+    image: ghcr.io/home-assistant/home-assistant:stable
+    volumes:
+      - ./config:/config
+      # Fuso horario do Windows e geralmente resolvido pelo HA; ajuste no onboarding.
+    ports:
+      - "8123:8123"
+    restart: unless-stopped
+    # No Docker Desktop (Windows), o HA alcanca o Nextor no host por
+    # host.docker.internal (ja usado no pacote nextor.yaml).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
