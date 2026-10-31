@@ -33,14 +33,15 @@ def resumir(assunto: str = "", n: int = 6) -> str:
         return "Nao encontrei noticias novas sobre esse assunto hoje."
     lista = "\n".join(f"- {i['titulo']}" for i in itens)
     try:
-        from .cerebro import _chamar_ollama
+        from .cerebro import responder
         prompt = (
             "Resuma para serem lidas em voz alta, em portugues do Brasil, as manchetes abaixo "
             "sobre " + (assunto or config.NOTICIAS_ASSUNTO) + ". Em no maximo quatro frases "
             "curtas, diga os destaques do dia, sem listar uma por uma, sem emojis e sem "
             "markdown. Manchetes:\n" + lista
         )
-        resumo = _chamar_ollama(prompt)
+        sistema = "Voce resume noticias em portugues do Brasil, curto e claro, para ouvir em voz alta."
+        resumo = responder(prompt, sistema=sistema)
         if resumo:
             return resumo
     except Exception:

@@ -19,9 +19,15 @@ PERSONA = os.getenv("NEXTOR_PERSONA", "assistente")
 TOKEN = os.getenv("NEXTOR_TOKEN", "troque-este-token")
 PORTA = int(os.getenv("NEXTOR_PORTA", "5005"))
 
-# Cerebro (Ollama)
+# Cerebro: "local" (Ollama) ou "claude" (API Anthropic). Claude cai para local se falhar.
+CEREBRO = os.getenv("NEXTOR_CEREBRO", "local").lower()
+# Cerebro local (Ollama)
 MODELO = os.getenv("NEXTOR_MODELO", "qwen2.5:3b")
 OLLAMA_URL = os.getenv("NEXTOR_OLLAMA_URL", "http://localhost:11434/api/chat")
+# Cerebro na nuvem (Claude). A chave vai em ANTHROPIC_API_KEY no .env.
+CLAUDE_MODELO = os.getenv("NEXTOR_CLAUDE_MODELO", "claude-haiku-5-5")
+# Cerebro via agy/Maestri: agente da canvas que responde.
+AGY_AGENTE = os.getenv("NEXTOR_AGY_AGENTE", "Claude Code")
 
 # Agenda e fuso
 AGENDA_ICAL = os.getenv("NEXTOR_AGENDA_ICAL", "")

@@ -11,7 +11,10 @@ nextor/                 pacote principal (o codigo)
   config.py             le o .env e centraliza configuracao e caminhos
   personas.py           personalidades selecionaveis do assistente
   voz.py                fala no Nest (gTTS + catt via Google Cast)
-  cerebro.py            conversa com a IA local (Ollama), com persona e memoria
+  cerebro.py            despacha o cerebro escolhido (local/claude/agy)
+  claude_cerebro.py     cerebro na nuvem (API do Claude)
+  agy_cerebro.py        cerebro via agente do Maestri
+  mcp_server.py         expoe as habilidades como ferramentas MCP
   agenda.py             Google Agenda por endereco privado iCal
   noticias.py           manchetes (Google News RSS) + resumo
   roteador.py           entende a frase e escolhe a habilidade

@@ -26,6 +26,27 @@ def _chamar_ollama(mensagem: str, sistema: str = "", num_predict: int = 120) -> 
     return (dados.get("message", {}).get("content") or "").strip()
 
 
+def responder(mensagem: str, sistema: str = "", num_predict: int = 120) -> str:
+    """Despacha para o cerebro escolhido (local, claude ou agy). Cai para local se falhar."""
+    if config.CEREBRO == "claude":
+        try:
+            from .claude_cerebro import responder as responder_claude
+            texto = responder_claude(mensagem, sistema)
+            if texto:
+                return texto
+        except Exception as e:
+            print(f"[cerebro] Claude indisponivel ({e}); usando local.")
+    elif config.CEREBRO == "agy":
+        try:
+            from .agy_cerebro import responder as responder_agy
+            texto = responder_agy(mensagem, sistema)
+            if texto:
+                return texto
+        except Exception as e:
+            print(f"[cerebro] agy indisponivel ({e}); usando local.")
+    return _chamar_ollama(mensagem, sistema, num_predict)
+
+
 def ultimas_notas(n: int = 20) -> str:
     if not config.ANOTACOES.exists():
         return "(ainda nao ha anotacoes)"
@@ -49,7 +70,7 @@ def conversar(mensagem: str) -> str:
         f"{persona(config.PERSONA, config.NOME)}\n\nAnotacoes recentes (memoria):\n{ultimas_notas()}"
         f"\n\nProximos compromissos da agenda:\n{_agenda_texto()}"
     )
-    return _chamar_ollama(mensagem, sistema=contexto)
+    return responder(mensagem, sistema=contexto)
 
 
 if __name__ == "__main__":

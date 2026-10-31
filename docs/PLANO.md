@@ -405,3 +405,12 @@ Material de controle do Nest Mini pela rede local, uso legitimo, sem firmware/ro
 - Personas selecionaveis (NEXTOR_PERSONA): assistente, companheiro, profissional, amigo, coach.
 - docs/ARQUITETURA.md explica a estrutura e como adicionar habilidades.
 - Testado: pacote importa, rotas ok, /comando falou no Nest.
+
+### Cerebro plugavel (local/Claude/agy) + servidor MCP - 31/10/2026 (develop)
+- Cerebro escolhido por NEXTOR_CEREBRO: local (Ollama), claude (API, nextor/claude_cerebro.py,
+  padrao claude-haiku-5-5) ou agy (nextor/agy_cerebro.py, via maestri ask). Cai para local se falhar.
+- Chave do Claude em ANTHROPIC_API_KEY (.env, fora do git). Testado: modo claude sem chave cai
+  para local sem quebrar.
+- Servidor MCP (nextor/mcp_server.py, MCP 2.x / MCPServer) expoe anotar, listar_notas, agenda,
+  noticias e falar para o Claude ou outro assistente se conectar. 5 ferramentas registradas.
+- Noticias e conversa agora passam pelo cerebro escolhido (podem usar Claude).

@@ -61,6 +61,28 @@ A pessoa escolhe o jeito do assistente em `NEXTOR_PERSONA` no `.env`: `assistent
 `companheiro`, `profissional`, `amigo` ou `coach`. Adicionar novas e facil em
 `nextor/personas.py`.
 
+## Cerebro (qualquer IA)
+
+O cerebro e escolhido em `NEXTOR_CEREBRO` no `.env`:
+- `local` - Ollama na propria maquina (gratis). Modelo em `NEXTOR_MODELO`.
+- `claude` - API do Claude (melhor, pago). Modelo em `NEXTOR_CLAUDE_MODELO` (padrao
+  `claude-haiku-5-5`, o mais barato) e chave em `ANTHROPIC_API_KEY`.
+- `agy` - encaminha para um agente do Maestri em `NEXTOR_AGY_AGENTE`.
+
+Se o cerebro escolhido falhar (sem chave, offline), cai para o local automaticamente.
+
+## MCP (conectar o Claude ou outro assistente ao Nextor)
+
+O Nextor tambem e um servidor MCP: expoe as habilidades (anotar, ler notas, agenda,
+noticias, falar) para um assistente compativel com MCP se conectar e usar.
+
+```
+.venv/Scripts/python.exe -m nextor.mcp_server
+```
+
+Num cliente MCP (ex.: Claude Desktop), aponte para esse comando (transporte stdio),
+com `cwd` na pasta do projeto.
+
 Endpoints (POST, com `?token=...`):
 - `/comando`  entrada unica: entende a frase e roteia (anotar/agenda/noticias/conversar)
 - `/anotar`   salva a nota e confirma em voz
