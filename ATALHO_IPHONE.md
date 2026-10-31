@@ -37,3 +37,11 @@ Assim o Nextor so fala o que voce ditar, sem salvar como nota.
   usar uma VPN privada (Tailscale).
 - Se der erro de conexao: confira se a janela do servico esta aberta no notebook e se o
   Firewall do Windows liberou o Python na rede privada (costuma perguntar na primeira vez).
+
+## Atalho unico "Nextor" (recomendado)
+
+Um so atalho que entende qualquer pedido (anotar, agenda, noticias, conversar):
+- Acao "Ditar texto" -> acao "Obter conteudo de URL":
+  - URL: http://<IP_DO_NOTEBOOK>:5005/comando?token=SEU-TOKEN
+  - Metodo POST, corpo Formulario, campo texto = Texto Ditado
+- Renomeie para "Nextor". Use com "E ai Siri, Nextor" e fale o pedido.

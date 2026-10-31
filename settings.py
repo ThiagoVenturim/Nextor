@@ -23,3 +23,7 @@ PORTA = int(os.getenv("NEXTOR_PORTA", "5005"))
 AGENDA_ICAL = os.getenv("NEXTOR_AGENDA_ICAL", "")
 # Fuso horario (IANA).
 FUSO = os.getenv("NEXTOR_FUSO", "America/Sao_Paulo")
+# Nome do usuario (o Nextor trata a pessoa por este nome).
+NOME = os.getenv("NEXTOR_NOME", "")
+# Assunto padrao das noticias.
+NOTICIAS_ASSUNTO = os.getenv("NEXTOR_NOTICIAS_ASSUNTO", "inteligencia artificial generativa")

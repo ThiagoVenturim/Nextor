@@ -34,6 +34,16 @@ except Exception:
     eventos_hoje = eventos_proximos = resumo_falado = None
 
 try:
+    from nextor_noticias import resumir as resumir_noticias
+except Exception:
+    resumir_noticias = None
+
+try:
+    from nextor_router import rotear
+except Exception:
+    rotear = None
+
+try:
     from settings import TOKEN, PORTA
 except ImportError:
     TOKEN, PORTA = "troque-este-token", 5005
@@ -58,7 +68,8 @@ def pega_texto() -> str:
 
 @app.before_request
 def checa_token():
-    if request.endpoint in ("anotar", "falar", "conversar_endpoint", "notas", "agenda") and not autorizado():
+    protegidos = ("anotar", "falar", "conversar_endpoint", "notas", "agenda", "noticias", "comando")
+    if request.endpoint in protegidos and not autorizado():
         return jsonify(erro="token invalido"), 401
 
 
@@ -108,6 +119,28 @@ def agenda():
         frase = "Hoje: " + resumo_falado(eventos)
     falar(frase)
     return jsonify(ok=True, quando=quando, quantidade=len(eventos), frase=frase)
+
+
+@app.post("/comando")
+def comando():
+    if rotear is None:
+        return jsonify(erro="roteador indisponivel"), 503
+    texto = pega_texto()
+    if not texto:
+        return jsonify(erro="texto vazio"), 400
+    r = rotear(texto)
+    falar(r["resposta"])
+    return jsonify(ok=True, intencao=r["intencao"], resposta=r["resposta"])
+
+
+@app.route("/noticias", methods=["GET", "POST"])
+def noticias():
+    if resumir_noticias is None:
+        return jsonify(erro="noticias indisponivel (libs)"), 503
+    assunto = request.values.get("assunto", "")
+    frase = resumir_noticias(assunto)
+    falar(frase)
+    return jsonify(ok=True, assunto=assunto or "padrao", frase=frase)
 
 
 @app.get("/notas")

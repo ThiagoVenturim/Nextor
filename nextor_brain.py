@@ -47,19 +47,15 @@ def _agenda_texto() -> str:
         return "(agenda indisponivel)"
 
 
-def conversar(mensagem: str) -> str:
-    contexto = (
-        f"{PERSONA}\n\nAnotacoes recentes do Thiago (memoria):\n{ultimas_notas()}"
-        f"\n\nProximos compromissos da agenda:\n{_agenda_texto()}"
-    )
+def _chamar_ollama(mensagem: str, sistema: str = "", num_predict: int = 120) -> str:
     corpo = {
         "model": MODELO,
         "messages": [
-            {"role": "system", "content": contexto},
+            {"role": "system", "content": sistema or PERSONA},
             {"role": "user", "content": mensagem},
         ],
         "stream": False,
-        "options": {"temperature": 0.7, "num_predict": 120},
+        "options": {"temperature": 0.7, "num_predict": num_predict},
     }
     req = urllib.request.Request(
         OLLAMA_URL,
@@ -69,6 +65,19 @@ def conversar(mensagem: str) -> str:
     with urllib.request.urlopen(req, timeout=120) as resp:
         dados = json.loads(resp.read().decode("utf-8"))
     return (dados.get("message", {}).get("content") or "").strip()
+
+
+def conversar(mensagem: str) -> str:
+    try:
+        from settings import NOME
+    except ImportError:
+        NOME = ""
+    nome = f"O nome do usuario e {NOME}; trate-o por esse nome. " if NOME else ""
+    contexto = (
+        f"{PERSONA} {nome}\n\nAnotacoes recentes (memoria):\n{ultimas_notas()}"
+        f"\n\nProximos compromissos da agenda:\n{_agenda_texto()}"
+    )
+    return _chamar_ollama(mensagem, sistema=contexto)
 
 
 if __name__ == "__main__":

@@ -369,3 +369,13 @@ Material de controle do Nest Mini pela rede local, uso legitimo, sem firmware/ro
 - Config por .env: NEXTOR_AGENDA_ICAL e NEXTOR_FUSO.
 - Testado com a agenda real: Nextor falou os compromissos da semana no Nest.
 - Pendencia: Thiago colar o endereco iCal privado no .env para o modo autonomo.
+
+### V3 (continuacao) - noticias, nome, roteador - 31/10/2026 (develop)
+- Nome do usuario no .env (NEXTOR_NOME) e setup de primeira vez (nextor_setup.py).
+- Noticias: nextor_noticias.py (Google News RSS + resumo com IA local), endpoint /noticias.
+- Roteador de intencoes: nextor_router.py decide anotar/agenda/noticias/conversar a partir de
+  uma frase livre (tira saudacao e nome tipo "ei Nextor"); endpoint unico /comando. Log de
+  comandos em comandos.log (ignorado no git) para analise de uso futura.
+- Gatilho "ei Nextor" no Google Home: so chega ao servico via Home Assistant (webhook); a
+  rotina do Google sozinha nao faz chamada HTTP. Por enquanto, gatilho pela Siri/iPhone.
+- Reconhecer so a voz do dono: tratado como pesquisa; DTW nao e a tecnica certa (ver VISAO.md).

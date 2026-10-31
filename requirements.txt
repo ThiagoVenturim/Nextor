@@ -4,3 +4,4 @@ flask
 python-dotenv
 icalendar
 recurring_ical_events
+feedparser

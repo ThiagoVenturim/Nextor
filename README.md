@@ -47,11 +47,19 @@ Subir o servico (deixe a janela aberta):
 ```
 
 Endpoints (POST, com `?token=...`):
+- `/comando`  entrada unica: entende a frase e roteia (anotar/agenda/noticias/conversar)
 - `/anotar`   salva a nota e confirma em voz
 - `/falar`    fala o texto
 - `/conversar` pensa com a IA local e responde em voz (conhece notas e agenda)
 - `/agenda`   fala os compromissos (`?quando=hoje` ou `?quando=proximos`)
+- `/noticias` resume e fala as noticias (`?assunto=...`)
 - `/notas`    (GET) lista as notas
+
+Comando unico (recomendado para o atalho do iPhone): mande a fala para `/comando` e o
+Nextor decide o que fazer. Ex.: "ei Nextor, anota comprar pao", "o que tenho amanha",
+"me traz as noticias sobre IA".
+
+Primeira configuracao: `.venv/Scripts/python.exe nextor_setup.py` (define nome, token, etc.).
 
 O atalho do iPhone esta descrito em `ATALHO_IPHONE.md`.
 

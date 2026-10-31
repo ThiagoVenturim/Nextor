@@ -69,3 +69,44 @@ Ideias que unem "Nest" + "IA" e a ideia de assistente geral:
 - Mininho (mini + ninho)
 
 Decisao do nome pendente com o Thiago.
+
+## Adendos de 31/10/2026 (branch develop)
+
+### Feito nesta rodada
+- Nome do usuario na config (.env NEXTOR_NOME) e setup de primeira vez (nextor_setup.py):
+  a primeira acao e a pessoa configurar nome, dispositivo, token e agenda.
+- Noticias diarias: nextor_noticias.py busca manchetes (Google News RSS, sem chave) sobre um
+  assunto (padrao: IA generativa) e resume com a IA local; endpoint /noticias fala no Nest.
+
+### Reconhecer apenas a sua voz (pesquisa, nao pronto)
+Objetivo: o assistente so obedecer a voz do Thiago. Pontos honestos:
+- O microfone do Nest NAO e acessivel a terceiros. A captacao de voz tem de ser no celular
+  ou no notebook (microfone proprio), nao no Nest.
+- Series temporais + DTW: DTW alinha duas series no tempo e serve para comparar formatos de
+  onda ou padroes curtos, mas NAO e a tecnica certa para identificar quem fala. Reconhecimento
+  de locutor moderno usa "embeddings" de voz (ex.: resemblyzer, SpeechBrain, pyannote): a voz
+  vira um vetor e compara-se por similaridade. DTW pode aparecer so em deteccao de uma palavra
+  de ativacao fixa dita pela mesma pessoa, com acerto limitado e sensivel a ruido.
+- Proposta realista, em fases: (1) ditar comandos pelo celular (ja temos, confiavel);
+  (2) STT local no notebook com Whisper para comandos falados; (3) verificacao de locutor por
+  embedding: a pessoa grava algumas amostras (cadastro), e so comandos com voz parecida passam,
+  com um limiar ajustavel. Mineracao de dados / serie temporal entram na analise de uso (quando
+  a pessoa costuma pedir o que), nao na identificacao da voz.
+
+### Comandos por fala (intencoes)
+- Depois do STT, mapear a frase para uma intencao (anotar, agenda, noticias, conversar) por
+  regras simples e, no futuro, pela propria IA decidindo qual habilidade chamar.
+
+### Conectar com Claude, agy e outros (via MCP)
+- Cerebro na nuvem: usar a API do Claude como cerebro opcional para respostas melhores que o
+  modelo local (escolha por tarefa). Chave de API no .env.
+- MCPs: criar pequenos servidores MCP (ou clientes) para cada fonte (agenda, noticias,
+  Maestri, documentos). Assim Claude, os agentes do Maestri (agy) e o proprio Nextor usam as
+  mesmas habilidades. E um passo de arquitetura; fazer um MCP de cada vez, comecando pelo de
+  noticias ou agenda, que ja existem como modulos.
+- Agendamento: rodar as noticias e o resumo da agenda todo dia em horario fixo (tarefa agendada
+  no Windows ou rotina do Maestri) e o Nest fala sozinho de manha.
+
+### Escopo (importante)
+A lista cresceu bastante. Sugestao de ordem: STT local -> comandos por intencao -> cerebro
+Claude via API -> um MCP -> verificacao de voz por embedding (o mais dificil, por ultimo).
