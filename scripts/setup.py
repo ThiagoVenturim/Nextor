@@ -4,16 +4,17 @@ Nextor - configuracao de primeira vez.
 Cria (ou atualiza) o arquivo .env perguntando o essencial: seu nome, o nome do
 dispositivo no Google Home, o token e, se quiser, o endereco iCal da agenda.
 
-Rodar uma vez:
-    .venv/Scripts/python.exe nextor_setup.py
+Rodar uma vez (a partir da raiz do projeto):
+    .venv/Scripts/python.exe scripts/setup.py
 """
 from pathlib import Path
 
-PASTA = Path(__file__).resolve().parent
-ENV = PASTA / ".env"
+RAIZ = Path(__file__).resolve().parent.parent
+ENV = RAIZ / ".env"
 
 CAMPOS = [
     ("NEXTOR_NOME", "Seu nome", ""),
+    ("NEXTOR_PERSONA", "Persona (assistente, companheiro, profissional, amigo, coach)", "assistente"),
     ("NEXTOR_DISPOSITIVO", "Nome do dispositivo no Google Home", "Nome do dispositivo no Google Home"),
     ("NEXTOR_TOKEN", "Token (uma senha so sua para o servico)", "troque-este-token"),
     ("NEXTOR_MODELO", "Modelo do Ollama", "qwen2.5:3b"),
@@ -49,7 +50,7 @@ def main():
     print(f"\nPronto. Salvo em {ENV}.")
     nome = novo.get("NEXTOR_NOME")
     if nome:
-        print(f"Ola, {nome}. Agora rode: .venv/Scripts/python.exe nextor_service.py")
+        print(f"Ola, {nome}. Agora rode: .venv/Scripts/python.exe -m nextor")
 
 
 if __name__ == "__main__":

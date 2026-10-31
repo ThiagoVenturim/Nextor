@@ -28,23 +28,38 @@ Nada e instalado no Nest. Nenhum firmware e modificado. Tudo usa as interfaces o
 ```
 python -m venv .venv
 .venv/Scripts/python.exe -m pip install -r requirements.txt
-cp .env.example .env   # e edite o .env
+.venv/Scripts/python.exe scripts/setup.py   # configura o .env (nome, persona, token, etc.)
 ```
 
-No `.env`, ajuste o nome do dispositivo (como aparece no app Google Home), o token e o
-modelo. O `.env` guarda os segredos e nao vai para o git.
+O `setup.py` pergunta o essencial e escreve o `.env` (segredos e preferencias), que nao vai
+para o git. Tambem da para copiar `.env.example` para `.env` e editar na mao.
+
+## Estrutura
+
+O codigo e um pacote em `nextor/` (um modulo por habilidade). Veja `docs/ARQUITETURA.md`.
 
 ## Uso
 
 Falar uma frase no Nest:
 ```
-.venv/Scripts/python.exe nextor.py "bom dia, Thiago"
+.venv/Scripts/python.exe -m nextor.voz "bom dia, Thiago"
 ```
 
 Subir o servico (deixe a janela aberta):
 ```
-.venv/Scripts/python.exe nextor_service.py
+.venv/Scripts/python.exe -m nextor
 ```
+
+Rotina matinal (bom dia + agenda + noticias):
+```
+.venv/Scripts/python.exe -m nextor.rotina
+```
+
+## Personas
+
+A pessoa escolhe o jeito do assistente em `NEXTOR_PERSONA` no `.env`: `assistente`,
+`companheiro`, `profissional`, `amigo` ou `coach`. Adicionar novas e facil em
+`nextor/personas.py`.
 
 Endpoints (POST, com `?token=...`):
 - `/comando`  entrada unica: entende a frase e roteia (anotar/agenda/noticias/conversar)

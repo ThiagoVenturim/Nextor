@@ -1,17 +1,9 @@
-"""
-Nextor - agenda (Google Agenda via endereco privado iCal).
-
-Le a agenda do Google por um endereco secreto no formato iCal (.ics) e devolve os
-compromissos, inclusive os repetidos. Nao precisa de projeto no Google Cloud nem de
-login: funciona para qualquer pessoa que pegue o proprio endereco iCal privado.
-
-Como obter o endereco (uma vez): Google Agenda no navegador > Configuracoes da sua
-agenda > "Integrar agenda" > "Endereco secreto no formato iCal". Cole no .env em
-NEXTOR_AGENDA_ICAL. Esse endereco e um segredo; nao compartilhe.
-"""
+"""Agenda do Nextor: le a Google Agenda por um endereco privado iCal (sem Google Cloud)."""
 import urllib.request
 from datetime import datetime, date, timedelta
 from zoneinfo import ZoneInfo
+
+from . import config
 
 try:
     from icalendar import Calendar
@@ -19,17 +11,11 @@ try:
 except ImportError:
     Calendar = None
 
-try:
-    from settings import AGENDA_ICAL, FUSO
-except ImportError:
-    AGENDA_ICAL, FUSO = "", "America/Sao_Paulo"
-
-TZ = ZoneInfo(FUSO)
+TZ = ZoneInfo(config.FUSO)
 DIAS_SEMANA = ["segunda", "terca", "quarta", "quinta", "sexta", "sabado", "domingo"]
 
 
 def _baixar_ics(url: str) -> bytes:
-    # webcal:// e o mesmo que https:// para o Google
     url = url.replace("webcal://", "https://")
     req = urllib.request.Request(url, headers={"User-Agent": "Nextor/1.0"})
     with urllib.request.urlopen(req, timeout=30) as resp:
@@ -49,7 +35,7 @@ def _normaliza(ev) -> dict:
 
 
 def eventos_entre(inicio: date, fim: date, url: str = "") -> list:
-    url = url or AGENDA_ICAL
+    url = url or config.AGENDA_ICAL
     if not url or Calendar is None:
         return []
     cal = Calendar.from_ical(_baixar_ics(url))
@@ -73,13 +59,10 @@ def eventos_proximos(dias: int = 7, url: str = "") -> list:
 
 
 def _hora_falada(dt) -> str:
-    if dt.minute == 0:
-        return f"as {dt.hour} horas"
-    return f"as {dt.hour} e {dt.minute:02d}"
+    return f"as {dt.hour} horas" if dt.minute == 0 else f"as {dt.hour} e {dt.minute:02d}"
 
 
 def resumo_falado(eventos: list, prefixo_dia: bool = False) -> str:
-    """Monta uma frase curta para o Nest falar."""
     if not eventos:
         return "Voce nao tem compromissos marcados."
     partes = []
@@ -87,21 +70,16 @@ def resumo_falado(eventos: list, prefixo_dia: bool = False) -> str:
     for e in eventos:
         inicio = e["inicio"]
         if e["dia_inteiro"]:
-            quando = ""
-            dia = inicio
+            quando, dia = "", inicio
         else:
-            quando = _hora_falada(inicio)
-            dia = inicio.date()
+            quando, dia = _hora_falada(inicio), inicio.date()
         if prefixo_dia and dia != hoje:
-            nome_dia = DIAS_SEMANA[dia.weekday()]
-            prefixo = f"{nome_dia} dia {dia.day}"
-            quando = f"{prefixo} {quando}".strip()
+            quando = f"{DIAS_SEMANA[dia.weekday()]} dia {dia.day} {quando}".strip()
         partes.append(f"{quando}, {e['titulo']}".strip(", ").strip())
     if len(partes) == 1:
         return f"Voce tem um compromisso: {partes[0]}."
-    return "Voce tem " + str(len(partes)) + " compromissos. " + "; ".join(partes) + "."
+    return f"Voce tem {len(partes)} compromissos. " + "; ".join(partes) + "."
 
 
 if __name__ == "__main__":
-    evs = eventos_proximos(7)
-    print(resumo_falado(evs, prefixo_dia=True))
+    print(resumo_falado(eventos_proximos(7), prefixo_dia=True))

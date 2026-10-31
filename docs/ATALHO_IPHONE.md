@@ -4,7 +4,7 @@ Faz voce ditar uma nota pela Siri; o notebook salva e o Nextor confirma falando 
 
 Pre-requisitos:
 - O servico do Nextor rodando no notebook: na pasta estudo-nest-mini, rodar
-  `.venv/Scripts/python.exe nextor_service.py` e deixar a janela aberta.
+  `.venv/Scripts/python.exe -m nextor` e deixar a janela aberta.
 - iPhone e notebook na mesma rede Wi-Fi de casa (<SUA_REDE_WIFI>).
 - Notebook no IP <IP_DO_NOTEBOOK>, porta 5005. (Recomendado reservar esse IP no roteador,
   como foi feito com o Nest, para nao mudar.)

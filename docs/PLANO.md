@@ -398,3 +398,10 @@ Material de controle do Nest Mini pela rede local, uso legitimo, sem firmware/ro
 - Robustez: nextor.py falar() agora limpa a sessao do Nest e tenta de novo se o cast falhar
   (o Nest travava preso em cast anterior).
 - Descoberta: NAO era o Docker/Firewall; o Nest ficava preso em cast anterior. "catt stop" resolve.
+
+### Reestruturacao em pacote + personas - 31/10/2026 (develop)
+- Codigo virou o pacote nextor/ (config, personas, voz, cerebro, agenda, noticias, roteador,
+  rotina, servico) com entrypoint python -m nextor. Scripts em scripts/, docs em docs/.
+- Personas selecionaveis (NEXTOR_PERSONA): assistente, companheiro, profissional, amigo, coach.
+- docs/ARQUITETURA.md explica a estrutura e como adicionar habilidades.
+- Testado: pacote importa, rotas ok, /comando falou no Nest.
