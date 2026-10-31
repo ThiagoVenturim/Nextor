@@ -32,12 +32,22 @@ FRASE_PADRAO = (
 )
 
 
+def _catt() -> str:
+    return str(CATT) if CATT.exists() else "catt"
+
+
 def falar(texto: str) -> None:
     print(f"Nextor diz: {texto}")
     gTTS(text=texto, lang="pt", tld="com.br").save(str(ARQUIVO_MP3))
-    print(f"Audio gerado em {ARQUIVO_MP3}")
-    catt = str(CATT) if CATT.exists() else "catt"
-    subprocess.run([catt, "-d", DISPOSITIVO, "cast", str(ARQUIVO_MP3)], check=True)
+    catt = _catt()
+    try:
+        subprocess.run([catt, "-d", DISPOSITIVO, "cast", str(ARQUIVO_MP3)],
+                       check=True, capture_output=True, text=True, timeout=90)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        # Nest pode ter ficado preso num cast anterior: limpa e tenta de novo.
+        subprocess.run([catt, "-d", DISPOSITIVO, "stop"], capture_output=True, timeout=30)
+        subprocess.run([catt, "-d", DISPOSITIVO, "cast", str(ARQUIVO_MP3)],
+                       check=True, capture_output=True, text=True, timeout=90)
     print("Enviado ao Nest.")
 
 

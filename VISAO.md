@@ -110,3 +110,22 @@ Objetivo: o assistente so obedecer a voz do Thiago. Pontos honestos:
 ### Escopo (importante)
 A lista cresceu bastante. Sugestao de ordem: STT local -> comandos por intencao -> cerebro
 Claude via API -> um MCP -> verificacao de voz por embedding (o mais dificil, por ultimo).
+
+## Ideias para depois (31/10/2026) - assistente do dia a dia completo
+
+Pensamento do Thiago: o Nextor como assistente de verdade, com:
+- Conexao com comunicacao: e-mail (Outlook, Gmail), Teams, WhatsApp - ler, resumir, avisar
+  e, com confirmacao, responder. (WhatsApp nao tem API pessoal oficial; caminho realista e a
+  API de negocios ou automacao no proprio celular; avaliar limites e termos.)
+- Dar voz a qualquer assistente: Claude (API), agentes do Maestri (agy) ou outro, usando o
+  Nextor como boca e ouvido. Padrao: o Nextor roteia o pedido para o "cerebro" escolhido.
+- Ferramentas (habilidades) sob demanda: "conte uma historia", "escreva um livro/capitulo",
+  "traduza este artigo", "resuma este texto", "leia para mim". Cada uma e uma skill que chama
+  o cerebro (local para simples, Claude para as longas/dificeis) e entrega em voz e/ou arquivo.
+- Entregar textos longos: quando a resposta e grande (historia, traducao), falar um resumo no
+  Nest e salvar o texto completo em arquivo/Obsidian para ler no celular.
+
+Ordem sugerida (do mais util e simples ao mais complexo): cerebro Claude via API -> skills de
+texto (traduzir/resumir/historia) com saida em arquivo -> leitura de e-mail (Gmail primeiro,
+tem API boa) -> Teams -> WhatsApp (por ultimo, pelas limitacoes). Tudo com confirmacao antes
+de enviar algo em nome do Thiago, e segredos sempre no .env, nunca no git.

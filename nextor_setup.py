@@ -21,6 +21,8 @@ CAMPOS = [
     ("NEXTOR_FUSO", "Fuso horario (IANA)", "America/Sao_Paulo"),
     ("NEXTOR_AGENDA_ICAL", "Endereco secreto iCal da Google Agenda (opcional)", ""),
     ("NEXTOR_NOTICIAS_ASSUNTO", "Assunto das noticias", "inteligencia artificial generativa"),
+    ("NEXTOR_ROTINA_HORA", "Hora da rotina matinal (HH:MM)", "07:00"),
+    ("NEXTOR_ROTINA_ASSUNTO", "Assunto das noticias na rotina (vazio = usa o padrao)", ""),
 ]
 
 

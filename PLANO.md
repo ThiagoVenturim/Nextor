@@ -388,3 +388,13 @@ Material de controle do Nest Mini pela rede local, uso legitimo, sem firmware/ro
 - Gatilho de voz pelo Nest exige expor o HA ao Google (Nabu Casa ou manual). Webhook e
   rotinas por horario ja funcionam sem custo.
 - Docker Desktop estava instalado mas parado; iniciado nesta sessao, imagem do HA baixando.
+
+### Rotina matinal configuravel - 31/10/2026 (develop)
+- nextor_rotina.py: fala "bom dia" + agenda de hoje + resumo de noticias do assunto escolhido.
+- Configuravel no .env/setup: NEXTOR_ROTINA_HORA (padrao 07:00) e NEXTOR_ROTINA_ASSUNTO.
+- agendar_rotina.ps1: cria a tarefa diaria "NextorBomDia" no Windows na hora do .env (sem app,
+  sem Home Assistant). A criacao da tarefa precisa ser rodada pelo Thiago (politica de seguranca
+  bloqueia a persistencia a partir do agente).
+- Robustez: nextor.py falar() agora limpa a sessao do Nest e tenta de novo se o cast falhar
+  (o Nest travava preso em cast anterior).
+- Descoberta: NAO era o Docker/Firewall; o Nest ficava preso em cast anterior. "catt stop" resolve.

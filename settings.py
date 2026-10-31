@@ -27,3 +27,6 @@ FUSO = os.getenv("NEXTOR_FUSO", "America/Sao_Paulo")
 NOME = os.getenv("NEXTOR_NOME", "")
 # Assunto padrao das noticias.
 NOTICIAS_ASSUNTO = os.getenv("NEXTOR_NOTICIAS_ASSUNTO", "inteligencia artificial generativa")
+# Rotina matinal: hora (HH:MM) e assunto das noticias (vazio = usa o padrao acima).
+ROTINA_HORA = os.getenv("NEXTOR_ROTINA_HORA", "07:00")
+ROTINA_ASSUNTO = os.getenv("NEXTOR_ROTINA_ASSUNTO", "")
