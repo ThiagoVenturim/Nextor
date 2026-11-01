@@ -98,6 +98,13 @@ class TestRotasIdentidade(unittest.TestCase):
             self.c.post("/comando", json={"texto": "modo normal"}, headers=self.h)
         self.assertEqual(abrir.call_count, 1)
 
+    def test_comando_responde_mesmo_sem_nest(self):
+        with mock.patch.object(servico, "falar", side_effect=RuntimeError("sem nest")),                 mock.patch.object(roteador, "_registra"), mock.patch.object(ambiente, "aplicar", return_value=[]):
+            r = self.c.post("/comando", json={"texto": "modo leitura"}, headers=self.h)
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("Nest", r.get_json()["aviso"])
+        self.assertEqual(companheiro.ver()["ultima_resposta"], r.get_json()["resposta"])
+
 
 if __name__ == "__main__":
     unittest.main()

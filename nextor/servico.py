@@ -62,8 +62,10 @@ def comando():
         from .janela import abrir_rosto
         abrir_rosto()
     r = rotear(texto)
-    falar(r["resposta"])
-    return jsonify(ok=True, intencao=r["intencao"], resposta=r["resposta"])
+    from .companheiro import companheiro
+    companheiro.atualizar(ultima_mensagem=texto, ultima_resposta=r["resposta"])
+    aviso = _falar_sem_quebrar(r["resposta"])
+    return jsonify(ok=True, intencao=r["intencao"], resposta=r["resposta"], aviso=aviso)
 
 
 @app.post("/anotar")
