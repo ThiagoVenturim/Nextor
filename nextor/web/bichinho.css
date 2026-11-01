@@ -1,0 +1,46 @@
+/* Painel de LEDs do bichinho. As cores mudam por modo; as variaveis podem ser redefinidas. */
+.bichinho {
+  --px-cor: #4cc3ff;
+  --px-acento: #ffffff;
+  --px-apagado: rgba(120, 160, 220, 0.07);
+  --px-painel: #070b14;
+  width: 100%;
+  height: 100%;
+}
+.bichinho.modo-estudo { --px-cor: #5ee38d; --px-acento: #ffc65c; }
+.bichinho.modo-trabalho { --px-cor: #9ec3ff; --px-acento: #ff6b6b; }
+.bichinho.modo-tranquilidade { --px-cor: #b79cff; --px-acento: #e3d8ff; }
+.bichinho.modo-leitura { --px-cor: #ffb45c; --px-acento: #ffe2b8; }
+.bichinho.ident-claude { --px-cor: #e8875f; }
+.bichinho.ident-agy { --px-cor: #6fb7ff; }
+
+.px-painel { fill: var(--px-painel); stroke: rgba(255, 255, 255, 0.06); stroke-width: 0.15; }
+.px-off { fill: var(--px-apagado); }
+.px-on { fill: var(--px-cor); filter: drop-shadow(0 0 0.35px var(--px-cor)) drop-shadow(0 0 1.1px var(--px-cor)); }
+.px-acento { fill: var(--px-acento); filter: drop-shadow(0 0 0.8px var(--px-acento)); }
+.px-suave { opacity: 0.7; }
+.px-rec { fill: #ff4d4d; filter: drop-shadow(0 0 1px #ff4d4d); }
+
+/* Sem animacao: olhos abertos e boca aberta visiveis. */
+.px-olho-fechado, .px-boca-b { opacity: 0; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .px-olho-aberto { animation: px-pisca-aberto 5s steps(1) infinite; }
+  .px-olho-fechado { animation: px-pisca-fechado 5s steps(1) infinite; }
+  .px-boca-a { animation: px-fala-a 0.36s steps(1) infinite; }
+  .px-boca-b { animation: px-fala-b 0.36s steps(1) infinite; }
+  .px-onda-1 { animation: px-pulso 0.9s ease-in-out infinite; }
+  .px-onda-2 { animation: px-pulso 0.9s ease-in-out 0.3s infinite; }
+  .px-pensa { animation: px-pulso 1.4s ease-in-out infinite; }
+  .px-flutua { animation: px-pulso 3s ease-in-out infinite; }
+  .px-rec { animation: px-pulso 1s ease-in-out infinite; }
+  .px-simbolo { animation: px-pulso 4s ease-in-out infinite; }
+  .px-simbolo.px-falando { animation-duration: 0.5s; }
+}
+
+/* Piscar: 96% do tempo aberto, um instante fechado. */
+@keyframes px-pisca-aberto { 0%, 95% { opacity: 1; } 96%, 100% { opacity: 0; } }
+@keyframes px-pisca-fechado { 0%, 95% { opacity: 0; } 96%, 100% { opacity: 1; } }
+@keyframes px-fala-a { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+@keyframes px-fala-b { 0%, 49% { opacity: 0; } 50%, 100% { opacity: 1; } }
+@keyframes px-pulso { 50% { opacity: 0.35; } }

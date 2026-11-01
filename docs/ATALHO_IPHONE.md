@@ -4,7 +4,7 @@ Faz voce ditar uma nota pela Siri; o notebook salva e o Nextor confirma falando 
 
 Pre-requisitos:
 - O servico do Nextor rodando no notebook: na pasta estudo-nest-mini, rodar
-  `.venv/Scripts/python.exe nextor_service.py` e deixar a janela aberta.
+  `.venv/Scripts/python.exe -m nextor` e deixar a janela aberta.
 - iPhone e notebook na mesma rede Wi-Fi de casa (<SUA_REDE_WIFI>).
 - Notebook no IP <IP_DO_NOTEBOOK>, porta 5005. (Recomendado reservar esse IP no roteador,
   como foi feito com o Nest, para nao mudar.)
@@ -37,3 +37,11 @@ Assim o Nextor so fala o que voce ditar, sem salvar como nota.
   usar uma VPN privada (Tailscale).
 - Se der erro de conexao: confira se a janela do servico esta aberta no notebook e se o
   Firewall do Windows liberou o Python na rede privada (costuma perguntar na primeira vez).
+
+## Atalho unico "Nextor" (recomendado)
+
+Um so atalho que entende qualquer pedido (anotar, agenda, noticias, conversar):
+- Acao "Ditar texto" -> acao "Obter conteudo de URL":
+  - URL: http://<IP_DO_NOTEBOOK>:5005/comando?token=SEU-TOKEN
+  - Metodo POST, corpo Formulario, campo texto = Texto Ditado
+- Renomeie para "Nextor". Use com "E ai Siri, Nextor" e fale o pedido.

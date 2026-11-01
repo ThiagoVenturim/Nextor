@@ -361,3 +361,91 @@ Material de controle do Nest Mini pela rede local, uso legitimo, sem firmware/ro
 ### Proximo: V2 - personalidade e memoria (Ollama)
 - Dar ao Nestor um modelo de IA local (qwen2.5:3b ou llama3.2:3b) que le as anotacoes
   e conversa. Endpoint /conversar: Thiago fala pelo iPhone, Nestor responde no Nest.
+
+### V3 (parcial) - Google Agenda - 31/10/2026 (branch develop)
+- Modulo nextor_agenda.py: le a Google Agenda por endereco privado iCal (sem Google Cloud),
+  expande eventos repetidos, monta frase curta para falar.
+- Endpoint /agenda (hoje / proximos) e agenda ligada ao cerebro (/conversar conhece a semana).
+- Config por .env: NEXTOR_AGENDA_ICAL e NEXTOR_FUSO.
+- Testado com a agenda real: Nextor falou os compromissos da semana no Nest.
+- Pendencia: Thiago colar o endereco iCal privado no .env para o modo autonomo.
+
+### V3 (continuacao) - noticias, nome, roteador - 31/10/2026 (develop)
+- Nome do usuario no .env (NEXTOR_NOME) e setup de primeira vez (nextor_setup.py).
+- Noticias: nextor_noticias.py (Google News RSS + resumo com IA local), endpoint /noticias.
+- Roteador de intencoes: nextor_router.py decide anotar/agenda/noticias/conversar a partir de
+  uma frase livre (tira saudacao e nome tipo "ei Nextor"); endpoint unico /comando. Log de
+  comandos em comandos.log (ignorado no git) para analise de uso futura.
+- Gatilho "ei Nextor" no Google Home: so chega ao servico via Home Assistant (webhook); a
+  rotina do Google sozinha nao faz chamada HTTP. Por enquanto, gatilho pela Siri/iPhone.
+- Reconhecer so a voz do dono: tratado como pesquisa; DTW nao e a tecnica certa (ver VISAO.md).
+
+### V4 (inicio) - Home Assistant - 31/10/2026 (develop)
+- Pasta home_assistant/: docker-compose.yml (HA em container), packages/nextor.yaml
+  (rest_command para /comando, /agenda, /noticias; automacoes: gatilho de voz via
+  input_boolean exposto ao Google, webhook para frase livre, rotina "bom dia" 7h) e HOWTO.md.
+- config/ do HA fica fora do git (segredos). host.docker.internal liga o HA ao Nextor.
+- Gatilho de voz pelo Nest exige expor o HA ao Google (Nabu Casa ou manual). Webhook e
+  rotinas por horario ja funcionam sem custo.
+- Docker Desktop estava instalado mas parado; iniciado nesta sessao, imagem do HA baixando.
+
+### Rotina matinal configuravel - 31/10/2026 (develop)
+- nextor_rotina.py: fala "bom dia" + agenda de hoje + resumo de noticias do assunto escolhido.
+- Configuravel no .env/setup: NEXTOR_ROTINA_HORA (padrao 07:00) e NEXTOR_ROTINA_ASSUNTO.
+- agendar_rotina.ps1: cria a tarefa diaria "NextorBomDia" no Windows na hora do .env (sem app,
+  sem Home Assistant). A criacao da tarefa precisa ser rodada pelo Thiago (politica de seguranca
+  bloqueia a persistencia a partir do agente).
+- Robustez: nextor.py falar() agora limpa a sessao do Nest e tenta de novo se o cast falhar
+  (o Nest travava preso em cast anterior).
+- Descoberta: NAO era o Docker/Firewall; o Nest ficava preso em cast anterior. "catt stop" resolve.
+
+### Reestruturacao em pacote + personas - 31/10/2026 (develop)
+- Codigo virou o pacote nextor/ (config, personas, voz, cerebro, agenda, noticias, roteador,
+  rotina, servico) com entrypoint python -m nextor. Scripts em scripts/, docs em docs/.
+- Personas selecionaveis (NEXTOR_PERSONA): assistente, companheiro, profissional, amigo, coach.
+- docs/ARQUITETURA.md explica a estrutura e como adicionar habilidades.
+- Testado: pacote importa, rotas ok, /comando falou no Nest.
+
+### Cerebro plugavel (local/Claude/agy) + servidor MCP - 31/10/2026 (develop)
+- Cerebro escolhido por NEXTOR_CEREBRO: local (Ollama), claude (API, nextor/claude_cerebro.py,
+  padrao claude-haiku-5-5) ou agy (nextor/agy_cerebro.py, via maestri ask). Cai para local se falhar.
+- Chave do Claude em ANTHROPIC_API_KEY (.env, fora do git). Testado: modo claude sem chave cai
+  para local sem quebrar.
+- Servidor MCP (nextor/mcp_server.py, MCP 2.x / MCPServer) expoe anotar, listar_notas, agenda,
+  noticias e falar para o Claude ou outro assistente se conectar. 5 ferramentas registradas.
+- Noticias e conversa agora passam pelo cerebro escolhido (podem usar Claude).
+
+### Perfis (agentes casa/escritorio) + verdade do "ei Nextor" - 31/10/2026 (develop)
+- Perfis: cada .env.<nome> e um Nextor proprio (persona, cerebro, agenda, noticias, dispositivo).
+  Ativo por NEXTOR_PERFIL ou pelo arquivo .perfil. Exemplos: .env.casa (companheiro),
+  .env.escritorio (profissional). .env.* e .perfil ignorados; .env.example versionado.
+- "ei Nextor" no Nest NAO e possivel (Google tranca a palavra de ativacao). Palavra propria so
+  com satelite de voz (HA Voice/ESP32/openWakeWord). Documentado em docs/PERFIS_E_VOZ.md.
+
+### Nosso "Home Assistant": automacoes + painel - 31/10/2026 (develop)
+- nextor/automacoes.py: agendador proprio dentro do servico (thread, checa a cada 30s),
+  automacoes por horario em automacoes.json (ignorado). Acoes: rotina, agenda, noticias,
+  falar, comando. Semente: bom dia as 7h. Resolve o agendamento sem Agendador do Windows.
+- servico.py: painel web /painel (falar, anotar, agenda, noticias, criar/remover automacoes)
+  e API /automacoes (GET/POST/DELETE). Agendador inicia junto com o servico.
+- Testado ao vivo: automacao criada para o minuto seguinte disparou sozinha e falou no Nest.
+- Sem apps de terceiros (sem Docker/HA/Nabu Casa) para automacoes e painel.
+
+### Skill de texto + pesquisa do gatilho Google Home - 31/10/2026 (develop)
+- nextor/texto.py: traduzir, resumir e escrever usando o cerebro escolhido; salva o texto
+  completo em arquivo (NEXTOR_TEXTOS_DIR, dica: cofre do Obsidian) e o Nest fala um aviso curto.
+- Roteador entende "traduz ... para <idioma>", "resume ...", "escreve/conta uma historia ...".
+  Endpoint /texto (acao=traduzir|resumir|escrever). Testado: poema escrito, salvo e falado.
+- Cerebro.responder ganhou limite de tokens (textos longos). Pasta textos/ ignorada no git.
+- Gatilho pelo Google Home: pesquisa confirmou que NAO e possivel acionar nosso servico por voz
+  no Nest; o Google Assistente sera desligado em 04/09/2026. Caminho real para "ei Nextor":
+  microfone proprio (notebook) com palavra de ativacao - proximo passo.
+
+### Controle do Nest pela rede + gatilho fisico - 31/10/2026 (develop)
+- nextor/nest.py (pychromecast, sem token/nuvem): Nextor controla o proprio Nest - volume,
+  parar, status. Roteador entende "coloca o volume em N", "aumenta/diminui volume", "para a
+  musica". Endpoint /nest (acao=status|volume|parar). Testado: status e volume 40 ok.
+- Gatilho fisico experimental (vigia): observa o volume do Nest e dispara um comando quando
+  chega ao nivel alvo (ex.: deslizar o volume ao maximo no topo do Nest). Opt-in por
+  NEXTOR_NEST_VIGIA_ACAO. E a unica forma honesta de "comando atraves do Nest" na rede local;
+  nao e voz (microfone fechado), e um botao fisico.

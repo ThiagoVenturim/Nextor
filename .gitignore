@@ -9,3 +9,16 @@ anotacoes.md
 
 # Audio gerado
 *.mp3
+comandos.log
+
+# Dados locais do Home Assistant (contem segredos)
+home_assistant/config/
+.env.*
+.perfil
+!.env.example
+automacoes.json
+textos/
+
+# Modelos locais (vozes Piper, Vosk)
+models/
+voz_dono.npy

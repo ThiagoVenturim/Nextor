@@ -1,0 +1,78 @@
+# Pacote Home Assistant para integrar com o Nextor.
+# Copie este arquivo para config/packages/nextor.yaml do Home Assistant e ative
+# pacotes em configuration.yaml:
+#
+#   homeassistant:
+#     packages: !include_dir_named packages
+#
+# E crie em config/secrets.yaml:
+#   nextor_token: "SEU-TOKEN"   (o mesmo do .env do Nextor)
+#
+# host.docker.internal = a maquina Windows onde o servico do Nextor roda (porta 5005).
+
+rest_command:
+  nextor_comando:
+    url: "http://host.docker.internal:5005/comando?token={{ token }}"
+    method: POST
+    content_type: "application/x-www-form-urlencoded"
+    payload: "texto={{ texto | urlencode }}"
+  nextor_agenda:
+    url: "http://host.docker.internal:5005/agenda?token={{ token }}&quando={{ quando | default('hoje') }}"
+    method: POST
+  nextor_noticias:
+    url: "http://host.docker.internal:5005/noticias?token={{ token }}"
+    method: POST
+
+# Dispositivo virtual que pode ser exposto ao Google Assistant (via Nabu Casa).
+# Ao dizer "Ok Google, ativar Nextor", o Google liga este boolean e a automacao
+# abaixo chama o Nextor. E a ponte real para a voz pelo Nest.
+input_boolean:
+  nextor_gatilho:
+    name: Nextor
+    icon: mdi:robot-happy
+
+automation:
+  # 1) Gatilho por voz do Google: boolean ligado -> Nextor fala a agenda de hoje.
+  - alias: "Nextor - gatilho de voz (agenda)"
+    trigger:
+      - platform: state
+        entity_id: input_boolean.nextor_gatilho
+        to: "on"
+    action:
+      - service: rest_command.nextor_agenda
+        data:
+          token: !secret nextor_token
+          quando: "hoje"
+      - delay: "00:00:02"
+      - service: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.nextor_gatilho
+
+  # 2) Webhook: manda uma frase livre para o Nextor (celular, tablet, HTTP).
+  #    POST http://<ip-do-HA>:8123/api/webhook/nextor_comando  body JSON {"texto": "..."}
+  - alias: "Nextor - comando por webhook"
+    trigger:
+      - platform: webhook
+        webhook_id: nextor_comando
+        local_only: true
+        allowed_methods: [POST]
+    action:
+      - service: rest_command.nextor_comando
+        data:
+          token: !secret nextor_token
+          texto: "{{ trigger.json.texto }}"
+
+  # 3) Exemplo de rotina matinal: 7h, Nextor fala agenda e noticias.
+  - alias: "Nextor - bom dia"
+    trigger:
+      - platform: time
+        at: "07:00:00"
+    action:
+      - service: rest_command.nextor_agenda
+        data:
+          token: !secret nextor_token
+          quando: "hoje"
+      - delay: "00:00:08"
+      - service: rest_command.nextor_noticias
+        data:
+          token: !secret nextor_token

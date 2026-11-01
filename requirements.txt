@@ -2,3 +2,8 @@ gTTS
 catt
 flask
 python-dotenv
+icalendar
+recurring_ical_events
+feedparser
+anthropic
+mcp[cli]
