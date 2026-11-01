@@ -124,6 +124,20 @@ O Nextor le a agenda por um endereco privado iCal, sem projeto no Google Cloud:
 Depois, `/agenda` fala os compromissos e o `/conversar` passa a responder "o que tenho
 amanha". Sem o endereco, o resto do Nextor funciona normalmente.
 
+## NexDeck (stream deck no celular)
+
+O [NexDeck](https://github.com/ThiagoVenturim/NexDeck) transforma o celular em um
+stream deck do PC e conversa com o Nextor nos dois sentidos:
+
+- Do deck para o Nextor: botoes e a barra "Fale com o Nextor" mandam texto para
+  `/comando`, `/falar`, `/anotar` ou `/conversar`.
+- Do Nextor para o deck: diga "no computador, bloquear" ou "deck play" e o Nextor
+  aperta o botao com esse nome. Acoes que pedem confirmacao (desligar, suspender)
+  nao rodam por voz.
+
+Configure `NEXTOR_DECK_URL` e `NEXTOR_DECK_TOKEN` no `.env` (o token esta em
+`data/secret.json` do NexDeck).
+
 ## Seguranca
 
 - So responde na rede local, protegido por um token.
