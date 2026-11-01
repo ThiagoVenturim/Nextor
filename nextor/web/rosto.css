@@ -24,6 +24,7 @@ button, input { font: inherit; color: inherit; }
   line-height: 1.5;
   font-size: 1.05rem;
 }
+.nome { margin: 0; font-weight: 600; letter-spacing: 0.04em; color: var(--suave); }
 .humor { margin: 0; min-height: 1.4em; color: var(--suave); font-size: 0.95rem; }
 
 .modos { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }

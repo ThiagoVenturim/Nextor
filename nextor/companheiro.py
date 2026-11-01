@@ -8,6 +8,8 @@ import threading
 import time
 import unicodedata
 
+from . import config
+
 
 MODOS = {
     "normal": {"nome": "Normal", "acessorio": None, "frase": "Voltei ao normal."},
@@ -25,6 +27,18 @@ APELIDOS_MODO = {
     "leitura": "leitura", "ler": "leitura",
     "normal": "normal", "padrao": "normal",
 }
+
+# Quem responde: a persona do Nextor ou outro assistente, cada um com o seu simbolo no rosto.
+IDENTIDADES = {
+    "nextor": {"nome": "Nextor", "cerebro": None, "frase": "Voltei. Aqui e o Nextor."},
+    "claude": {"nome": "Claude", "cerebro": "claude", "frase": "Agora quem responde e o Claude."},
+    "agy": {"nome": "agy", "cerebro": "agy", "frase": "Agora quem responde e o agy."},
+}
+SISTEMA_IDENTIDADE = {
+    "claude": "Voce e o Claude, respondendo por voz e pela tela do Nextor. Responda em portugues do Brasil, curto e util.",
+    "agy": "Voce e o agy, respondendo por voz e pela tela do Nextor. Responda em portugues do Brasil, curto e util.",
+}
+CEREBRO_PADRAO = config.CEREBRO
 
 # Palavras que indicam como a pessoa esta. Lista curta e explicavel de proposito:
 # e um palpite pelo texto, nao um diagnostico.
@@ -84,6 +98,17 @@ def detectar_emocao(texto: str) -> str:
     return max(pontos, key=pontos.get)
 
 
+def identidade_pedida(frase: str) -> str | None:
+    """Reconhece "usar o Claude", "troca para o agy", "volta para o Nextor", "quero falar com o Claude"."""
+    from .chamado import NOMES
+    base = _normaliza(frase)
+    m = re.search(r"\b(usa|usar|use|troca|trocar|muda|mudar|volta|voltar|falar com|chama|chamar)\b"
+                  r"(?: (?:para|pra|pro|com|de))?(?: (?:o|a))? (\w+)", base)
+    if m and m.group(2) in NOMES:
+        return NOMES[m.group(2)]
+    return None
+
+
 def modo_pedido(frase: str) -> str | None:
     """Reconhece "modo estudo", "ativa o modo leitura", "quero relaxar" etc."""
     base = _normaliza(frase)
@@ -100,6 +125,7 @@ class Companheiro:
         self._trava = threading.Lock()
         self._ouvintes: list[queue.Queue] = []
         self.estado = {
+            "identidade": "nextor",
             "modo": "normal",
             "acessorio": None,
             "expressao": "neutro",
@@ -150,6 +176,19 @@ class Companheiro:
         return {"estado": estado, "frase": info["frase"], "avisos": avisos}
 
 
+    def definir_identidade(self, nome: str) -> dict:
+        if nome not in IDENTIDADES:
+            raise ValueError(f"Identidade desconhecida: {nome}")
+        info = IDENTIDADES[nome]
+        config.CEREBRO = info["cerebro"] or CEREBRO_PADRAO
+        estado = self.atualizar(identidade=nome, expressao="feliz")
+        return {"estado": estado, "frase": info["frase"]}
+
+    def ouvintes(self) -> int:
+        with self._trava:
+            return len(self._ouvintes)
+
+
 companheiro = Companheiro()
 
 
@@ -160,8 +199,13 @@ def conversar_com_humor(texto: str, conversar) -> dict:
                           expressao=REACAO[emocao], ultima_mensagem=texto)
     dica = DICA_PARA_O_CEREBRO.get(emocao)
     pergunta = f"{texto}\n\n({dica})" if dica else texto
+    identidade = companheiro.ver().get("identidade", "nextor")
     try:
-        resposta = conversar(pergunta)
+        if identidade in SISTEMA_IDENTIDADE:
+            from .cerebro import responder
+            resposta = responder(pergunta, sistema=SISTEMA_IDENTIDADE[identidade], tokens=300)
+        else:
+            resposta = conversar(pergunta)
     finally:
         companheiro.atualizar(atividade="ocioso")
     estado = companheiro.atualizar(ultima_resposta=resposta, expressao=REACAO[emocao])

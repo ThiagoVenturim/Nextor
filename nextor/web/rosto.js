@@ -38,9 +38,13 @@
 
   function desenhar(estado) {
     window.Bichinho.render($('bichinho'), estado);
-    document.querySelectorAll('.modos button').forEach(function (b) {
+    document.querySelectorAll('[data-modo]').forEach(function (b) {
       b.setAttribute('aria-pressed', String(b.dataset.modo === estado.modo));
     });
+    document.querySelectorAll('[data-identidade]').forEach(function (b) {
+      b.setAttribute('aria-pressed', String(b.dataset.identidade === (estado.identidade || 'nextor')));
+    });
+    $('nome').textContent = { nextor: 'Nextor', claude: 'Claude', agy: 'agy' }[estado.identidade || 'nextor'];
     $('humor').textContent = FRASE_HUMOR[estado.emocao_usuario] || '';
     if (estado.ultima_resposta) {
       $('balao').textContent = estado.ultima_resposta;
@@ -54,7 +58,16 @@
     fonte.onerror = function () { fonte.close(); setTimeout(ouvirEventos, 3000); };
   }
 
-  document.querySelectorAll('.modos button').forEach(function (b) {
+  document.querySelectorAll('[data-identidade]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      api('/identidade', { identidade: b.dataset.identidade }).then(function (d) {
+        $('balao').textContent = d.frase;
+        $('balao').hidden = false;
+      }).catch(function (err) { $('humor').textContent = err.message; });
+    });
+  });
+
+  document.querySelectorAll('[data-modo]').forEach(function (b) {
     b.addEventListener('click', function () {
       api('/modo', { modo: b.dataset.modo }).then(function (d) {
         $('balao').textContent = [d.frase].concat(d.avisos || []).join(' ');

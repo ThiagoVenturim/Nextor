@@ -1,6 +1,7 @@
 /* Bichinho do Nextor: um rosto em painel de LEDs (pixel art) desenhado em SVG.
  * Usado pela pagina /rosto do Nextor e pelo NexDeck (mesmo arquivo nos dois projetos).
- * Estado: { modo, acessorio, expressao, atividade }.
+ * Estado: { identidade, modo, acessorio, expressao, atividade }.
+ *   identidade: nextor (rosto) | claude | agy (simbolo proprio em pixels)
  *   acessorio: null | "mochila" | "gravata" | "relaxado" | "oculos"
  *   expressao: neutro | feliz | carinho | calmo | sonolento
  *   atividade: ocioso | ouvindo | pensando | falando | gravando
@@ -32,6 +33,14 @@
   };
   var MOCHILA = ['.##.', '#..#', '####', '#..#', '####'];
   var GRAVATA = ['##....##', '###..###', '########', '###..###', '##....##'];  // gravata borboleta
+
+  // Simbolos de outras identidades (desenhos originais em pixels).
+  var SIMBOLO = {
+    claude: ['.....#.....', '.#...#...#.', '..#..#..#..', '...#.#.#...', '....###....', '###########',
+             '....###....', '...#.#.#...', '..#..#..#..', '.#...#...#.', '.....#.....'],
+    agy: ['.....#.....', '....###....', '...##.##...', '..##...##..', '.##.....##.', '...........',
+          '.....#.....', '....###....', '...##.##...', '..##...##..', '.##.....##.'],
+  };
 
   function el(tag, attrs, parent) {
     var node = document.createElementNS(NS, tag);
@@ -128,9 +137,10 @@
     var acessorio = estado.acessorio || null;
     var atividade = estado.atividade || 'ocioso';
 
+    var identidade = SIMBOLO[estado.identidade] ? estado.identidade : 'nextor';
     var svg = el('svg', {
       viewBox: '-1 -1 ' + (W + 2) + ' ' + (H + 2),
-      class: 'bichinho modo-' + (estado.modo || 'normal') + ' atividade-' + atividade,
+      class: 'bichinho modo-' + (estado.modo || 'normal') + ' atividade-' + atividade + ' ident-' + identidade,
       role: 'img',
       'aria-label': descrever(estado),
     });
@@ -142,9 +152,14 @@
       for (var x = 0; x < W; x++) el('circle', { cx: x + 0.5, cy: y + 0.5, r: 0.42 }, apagados);
     }
 
-    olhos(svg, expressao, acessorio, atividade);
-    boca(svg, expressao, atividade);
-    acessorios(svg, acessorio);
+    if (identidade === 'nextor') {
+      olhos(svg, expressao, acessorio, atividade);
+      boca(svg, expressao, atividade);
+      acessorios(svg, acessorio);
+    } else {
+      var classe = 'px-on px-simbolo' + (atividade === 'falando' ? ' px-falando' : '');
+      desenho(camada(svg, classe), SIMBOLO[identidade], 7, 4);
+    }
     atividades(svg, atividade);
 
     container.replaceChildren(svg);
@@ -160,6 +175,8 @@
     var e = NOMES.expressao[estado.expressao] || 'tranquilo';
     var a = NOMES.atividade[estado.atividade] || '';
     var m = estado.modo && estado.modo !== 'normal' ? ' no modo ' + estado.modo : '';
+    var nomes = { claude: 'Claude', agy: 'agy' };
+    if (nomes[estado.identidade]) return nomes[estado.identidade] + ' respondendo pelo Nextor' + a;
     return 'Nextor ' + e + a + m;
   }
 

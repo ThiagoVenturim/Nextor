@@ -30,8 +30,25 @@ def _registra(frase: str, intencao: str) -> None:
 
 
 def rotear(frase: str) -> dict:
+    from .chamado import entender
+    from .companheiro import companheiro, identidade_pedida
+    # "ei Nextor", "meu amigo Nextor", "ola Claude"...: quem foi chamado responde e o rosto acorda.
+    chamado = entender(frase)
+    if chamado["chamado"]:
+        if chamado["nome"] != companheiro.ver().get("identidade"):
+            companheiro.definir_identidade(chamado["nome"])
+        companheiro.atualizar(atividade="ouvindo")
+        if not chamado["comando"].strip():
+            _registra(frase, "chamado")
+            return {"intencao": "chamado", "resposta": "Oi, pode falar."}
+        frase = chamado["comando"]
     limpa = _limpa(frase)
     base = _sem_acento(limpa)
+
+    identidade = identidade_pedida(limpa)
+    if identidade:
+        _registra(frase, "identidade")
+        return {"intencao": "identidade", "resposta": companheiro.definir_identidade(identidade)["frase"]}
 
     # Skill de texto (traduzir / resumir / escrever) - antes das outras intencoes.
     if "traduz" in base:

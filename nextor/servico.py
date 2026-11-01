@@ -29,7 +29,7 @@ app = Flask(__name__)
 PROTEGIDOS = ("anotar", "falar_endpoint", "conversar_endpoint", "notas",
               "agenda", "noticias", "comando", "automacoes_endpoint", "texto_endpoint",
               "nest_endpoint", "estado_endpoint", "modo_endpoint", "eventos_endpoint",
-              "conversa_endpoint")
+              "conversa_endpoint", "identidade_endpoint")
 WEB = Path(__file__).resolve().parent / "web"
 
 
@@ -57,6 +57,10 @@ def comando():
     texto = pega_texto()
     if not texto:
         return jsonify(erro="texto vazio"), 400
+    from .chamado import entender
+    if entender(texto)["chamado"]:
+        from .janela import abrir_rosto
+        abrir_rosto()
     r = rotear(texto)
     falar(r["resposta"])
     return jsonify(ok=True, intencao=r["intencao"], resposta=r["resposta"])
@@ -244,6 +248,17 @@ def modo_endpoint():
     if str(dados.get("falar", "")).lower() in ("1", "true", "sim"):
         _falar_sem_quebrar(r["frase"])
     return jsonify(ok=True, modo=modo, frase=r["frase"], avisos=r["avisos"], estado=r["estado"])
+
+
+@app.post("/identidade")
+def identidade_endpoint():
+    from .companheiro import IDENTIDADES, companheiro
+    dados = request.get_json(silent=True) or request.values
+    nome = (dados.get("identidade") or "").strip().lower()
+    if nome not in IDENTIDADES:
+        return jsonify(erro=f"identidade invalida; use {', '.join(IDENTIDADES)}"), 400
+    r = companheiro.definir_identidade(nome)
+    return jsonify(ok=True, identidade=nome, frase=r["frase"], estado=r["estado"])
 
 
 @app.get("/eventos")

@@ -11,6 +11,8 @@
 .bichinho.modo-trabalho { --px-cor: #9ec3ff; --px-acento: #ff6b6b; }
 .bichinho.modo-tranquilidade { --px-cor: #b79cff; --px-acento: #e3d8ff; }
 .bichinho.modo-leitura { --px-cor: #ffb45c; --px-acento: #ffe2b8; }
+.bichinho.ident-claude { --px-cor: #e8875f; }
+.bichinho.ident-agy { --px-cor: #6fb7ff; }
 
 .px-painel { fill: var(--px-painel); stroke: rgba(255, 255, 255, 0.06); stroke-width: 0.15; }
 .px-off { fill: var(--px-apagado); }
@@ -32,6 +34,8 @@
   .px-pensa { animation: px-pulso 1.4s ease-in-out infinite; }
   .px-flutua { animation: px-pulso 3s ease-in-out infinite; }
   .px-rec { animation: px-pulso 1s ease-in-out infinite; }
+  .px-simbolo { animation: px-pulso 4s ease-in-out infinite; }
+  .px-simbolo.px-falando { animation-duration: 0.5s; }
 }
 
 /* Piscar: 96% do tempo aberto, um instante fechado. */
