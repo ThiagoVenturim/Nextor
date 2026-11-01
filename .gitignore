@@ -18,3 +18,7 @@ home_assistant/config/
 !.env.example
 automacoes.json
 textos/
+
+# Modelos locais (vozes Piper, Vosk)
+models/
+voz_dono.npy

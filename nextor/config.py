@@ -49,6 +49,14 @@ TEXTOS_DIR = os.getenv("NEXTOR_TEXTOS_DIR", "")
 NEST_VIGIA_ACAO = os.getenv("NEXTOR_NEST_VIGIA_ACAO", "")  # ex.: "o que tenho hoje"
 NEST_VIGIA_VOLUME = int(os.getenv("NEXTOR_NEST_VIGIA_VOLUME", "100"))
 
+# Ouvinte de voz no microfone (offline, Vosk). As frases de chamada ficam em nextor/chamado.py.
+VOSK_MODELO = os.getenv("NEXTOR_VOSK_MODELO", str(RAIZ / "models" / "vosk-pt"))
+# Segundos que o ouvinte espera um comando depois de "ei Nextor" sem precisar chamar de novo.
+JANELA_ESCUTA = float(os.getenv("NEXTOR_JANELA_ESCUTA", "8"))
+# Verificar que a voz e a do dono (opcional; precisa de resemblyzer e cadastro).
+VERIFICAR_VOZ = os.getenv("NEXTOR_VERIFICAR_VOZ", "false").lower() in ("1", "true", "sim")
+VOZ_DONO = RAIZ / "voz_dono.npy"
+
 # Agenda e fuso
 AGENDA_ICAL = os.getenv("NEXTOR_AGENDA_ICAL", "")
 FUSO = os.getenv("NEXTOR_FUSO", "America/Sao_Paulo")

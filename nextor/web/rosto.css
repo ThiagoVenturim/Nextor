@@ -42,6 +42,7 @@ button, input { font: inherit; color: inherit; }
 .conversa { display: flex; gap: 8px; align-items: center; max-width: 720px; width: 100%; margin: 0 auto; }
 .conversa #texto { flex: 1; min-height: 48px; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--linha); background: var(--painel); }
 .nest { display: flex; align-items: center; gap: 6px; color: var(--suave); font-size: 0.9rem; white-space: nowrap; }
+.idioma { min-height: 48px; padding: 0 8px; border-radius: 12px; border: 1px solid var(--linha); background: var(--painel); color: var(--texto); }
 .enviar { min-height: 48px; padding: 0 18px; border: 0; border-radius: 14px; background: var(--acento); color: #1b1300; font-weight: 600; }
 .enviar:disabled { opacity: 0.6; }
 .aviso { text-align: center; color: var(--suave); }

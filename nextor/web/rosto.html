@@ -32,7 +32,11 @@
 
   <form id="conversa" class="conversa">
     <input id="texto" type="text" maxlength="500" autocomplete="off" placeholder="Fale com o Nextor..." aria-label="Mensagem para o Nextor">
-    <label class="nest"><input id="no-nest" type="checkbox"> no Nest</label>
+    <label class="nest"><input id="com-voz" type="checkbox" checked> Voz</label>
+    <select id="idioma" class="idioma" aria-label="Idioma da voz">
+      <option value="pt-BR">PT</option><option value="en-US">EN</option>
+      <option value="es-ES">ES</option><option value="fr-FR">FR</option>
+    </select>
     <button class="enviar">Enviar</button>
   </form>
 

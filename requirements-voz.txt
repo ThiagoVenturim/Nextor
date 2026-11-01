@@ -1,0 +1,8 @@
+# Opcional: voz natural no PC e ouvinte de microfone.
+#   .venv/Scripts/python.exe -m pip install -r requirements-voz.txt
+#   .venv/Scripts/python.exe scripts/baixar_vozes.py
+piper-tts
+vosk
+sounddevice
+numpy
+# Verificar a voz do dono (opcional, pesado): resemblyzer

@@ -17,4 +17,4 @@ $navegadores = @(
 )
 $exe = $navegadores | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $exe) { Start-Process $url; exit 0 }
-Start-Process $exe -ArgumentList "--app=$url", "--window-size=460,720"
+Start-Process $exe -ArgumentList "--app=$url", "--window-size=460,720", "--autoplay-policy=no-user-gesture-required"

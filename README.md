@@ -150,6 +150,34 @@ O Nextor entende o jeito natural de chamar, com erros de digitacao ou de reconhe
 "Oi, pode falar"). Quando chamado, o rosto acorda em modo ouvindo e, no Windows, abre numa janela se nenhuma tela
 estiver mostrando (desligue com `NEXTOR_ROSTO_AUTO=nao`).
 
+### Voz no computador
+
+O Nextor fala pelas caixas de som do PC com uma voz natural, gerada localmente pelo [Piper](https://github.com/rhasspy/piper)
+(codigo aberto, sem nuvem), em portugues, ingles, espanhol ou frances. Com o rosto aberto, a boca acompanha a fala.
+
+```powershell
+.venv/Scripts/python.exe -m pip install -r requirements-voz.txt
+.venv/Scripts/python.exe scripts/baixar_vozes.py
+```
+
+| Variavel | Padrao | Para que serve |
+|---|---|---|
+| `NEXTOR_IDIOMA` | `pt-BR` | Idioma da voz e das respostas: `pt-BR`, `en-US`, `es-ES`, `fr-FR` (tambem no seletor do rosto) |
+| `NEXTOR_VOZ_SAIDA` | `pc` | Onde falar: `pc`, `nest` ou `ambos` |
+| `NEXTOR_VOZ_MOTOR` | `auto` | `piper` (natural, local), `sapi` (vozes do Windows) ou `gtts` (internet); `auto` tenta nessa ordem |
+| `NEXTOR_VOZ_PT_BR` etc. | uma voz por idioma | Troque por outra voz do Piper, ex.: `pt_BR-edresson-low` |
+
+### Falar "ei Nextor" no microfone
+
+```powershell
+.venv/Scripts/python.exe -m nextor            # servico (um terminal)
+.venv/Scripts/python.exe -m nextor.ouvinte    # ouvinte do microfone (outro terminal)
+```
+
+O ouvinte usa o Vosk, offline (modelo em `models/vosk-pt`, configuravel em `NEXTOR_VOSK_MODELO`). Ao ouvir uma frase de
+chamada, o rosto abre e o comando e executado; se voce so chamar, ele espera o comando por `NEXTOR_JANELA_ESCUTA`
+segundos (padrao 8).
+
 ### Quem responde: Nextor, Claude ou agy
 
 Quem nao quiser a persona do Nextor pode falar direto com o Claude ou com o agy. O rosto troca para o simbolo de cada um
