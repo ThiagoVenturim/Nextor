@@ -29,6 +29,10 @@ PERSONA = os.getenv("NEXTOR_PERSONA", "assistente")
 TOKEN = os.getenv("NEXTOR_TOKEN", "troque-este-token")
 PORTA = int(os.getenv("NEXTOR_PORTA", "5005"))
 
+# Ponte com o NexDeck (stream deck no celular). Vazio = desligado.
+DECK_URL = os.getenv("NEXTOR_DECK_URL", "").rstrip("/")
+DECK_TOKEN = os.getenv("NEXTOR_DECK_TOKEN", "")
+
 # Cerebro: "local" (Ollama) ou "claude" (API Anthropic). Claude cai para local se falhar.
 CEREBRO = os.getenv("NEXTOR_CEREBRO", "local").lower()
 # Cerebro local (Ollama)

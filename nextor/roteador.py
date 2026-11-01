@@ -9,6 +9,8 @@ PREFIXOS = r"^(ei|ola|oi|opa|fala|bom dia|boa tarde|boa noite|e ai)?[, ]*(nextor
 PALAVRAS_AGENDA = ("agenda", "compromisso", "reuniao", "audiencia", "prazo", "calendario")
 PALAVRAS_NOTICIA = ("noticia", "noticias", "novidade", "novidades", "manchete", "manchetes")
 PALAVRAS_ANOTAR = ("anota", "anotar", "anote", "lembra", "lembrar", "lembrete")
+# "no computador, bloquear" / "no pc play" / "deck volume mais" -> aperta um botao do NexDeck.
+GATILHO_DECK = r"^(no computador|no pc|no notebook|deck)[,: ]+(.+)$"
 
 
 def _sem_acento(s: str) -> str:
@@ -49,6 +51,11 @@ def rotear(frase: str) -> dict:
         pedido = re.sub(r".*?escrev\w*\s+", "", limpa, count=1, flags=re.IGNORECASE).strip() or limpa
         _registra(frase, "escrever")
         return {"intencao": "escrever", "resposta": _fazer_texto("escrever", pedido)}
+
+    m = re.match(GATILHO_DECK, base)
+    if m:
+        _registra(frase, "deck")
+        return {"intencao": "deck", "resposta": _fazer_deck(m.group(2).strip(" ?."))}
 
     for p in PALAVRAS_ANOTAR:
         if base.startswith(p) or f" {p} " in f" {base} ":
@@ -108,6 +115,14 @@ def _fazer_noticias(assunto: str) -> str:
         return resumir(assunto)
     except Exception:
         return "Nao consegui buscar as noticias agora."
+
+
+def _fazer_deck(nome: str) -> str:
+    try:
+        from . import deck
+        return deck.apertar(nome)
+    except Exception:
+        return "Nao consegui falar com o NexDeck agora."
 
 
 def _fazer_nest(acao: str, nivel: int = 50) -> str:
