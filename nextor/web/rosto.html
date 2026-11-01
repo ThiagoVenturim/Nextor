@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#10141f">
+  <title>Nextor</title>
+  <link rel="stylesheet" href="web/bichinho.css">
+  <link rel="stylesheet" href="web/rosto.css">
+</head>
+<body>
+  <main class="palco">
+    <p id="balao" class="balao" aria-live="polite" hidden></p>
+    <div id="bichinho" class="bichinho-area"></div>
+    <p id="humor" class="humor" aria-live="polite"></p>
+  </main>
+
+  <nav class="modos" aria-label="Modos">
+    <button data-modo="normal">Normal</button>
+    <button data-modo="estudo">Estudo</button>
+    <button data-modo="trabalho">Trabalho</button>
+    <button data-modo="tranquilidade">Tranquilidade</button>
+    <button data-modo="leitura">Leitura</button>
+  </nav>
+
+  <form id="conversa" class="conversa">
+    <input id="texto" type="text" maxlength="500" autocomplete="off" placeholder="Fale com o Nextor..." aria-label="Mensagem para o Nextor">
+    <label class="nest"><input id="no-nest" type="checkbox"> no Nest</label>
+    <button class="enviar">Enviar</button>
+  </form>
+
+  <p id="aviso" class="aviso" hidden>Abra esta pagina com o link que o Nextor mostra ao iniciar (ele leva o token).</p>
+
+  <script src="web/bichinho.js"></script>
+  <script src="web/rosto.js"></script>
+</body>
+</html>

@@ -52,6 +52,12 @@ def rotear(frase: str) -> dict:
         _registra(frase, "escrever")
         return {"intencao": "escrever", "resposta": _fazer_texto("escrever", pedido)}
 
+    from .companheiro import modo_pedido
+    modo = modo_pedido(limpa)
+    if modo:
+        _registra(frase, "modo")
+        return {"intencao": "modo", "resposta": _fazer_modo(modo)}
+
     m = re.match(GATILHO_DECK, base)
     if m:
         _registra(frase, "deck")
@@ -115,6 +121,15 @@ def _fazer_noticias(assunto: str) -> str:
         return resumir(assunto)
     except Exception:
         return "Nao consegui buscar as noticias agora."
+
+
+def _fazer_modo(modo: str) -> str:
+    try:
+        from .companheiro import companheiro
+        r = companheiro.definir_modo(modo)
+        return " ".join([r["frase"], *r["avisos"]])
+    except Exception:
+        return "Nao consegui mudar de modo agora."
 
 
 def _fazer_deck(nome: str) -> str:
