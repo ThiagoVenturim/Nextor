@@ -1,54 +1,42 @@
-/* Cores e animacoes do bichinho. As variaveis podem ser redefinidas por quem usa. */
+/* Painel de LEDs do bichinho. As cores mudam por modo; as variaveis podem ser redefinidas. */
 .bichinho {
-  --b-corpo: #5b8def;
-  --b-barriga: #a9c4fa;
-  --b-traco: #1b2440;
-  --b-bochecha: #f49cb3;
-  --b-acento: #ffb547;
+  --px-cor: #4cc3ff;
+  --px-acento: #ffffff;
+  --px-apagado: rgba(120, 160, 220, 0.07);
+  --px-painel: #070b14;
   width: 100%;
   height: 100%;
-  overflow: visible;
 }
-.bichinho.modo-estudo { --b-corpo: #4fa37e; --b-barriga: #a5d8be; }
-.bichinho.modo-trabalho { --b-corpo: #5a6b8c; --b-barriga: #b4bfd6; }
-.bichinho.modo-tranquilidade { --b-corpo: #8c7ae6; --b-barriga: #cdc4f6; }
-.bichinho.modo-leitura { --b-corpo: #c98a4b; --b-barriga: #ecc9a3; }
+.bichinho.modo-estudo { --px-cor: #5ee38d; --px-acento: #ffc65c; }
+.bichinho.modo-trabalho { --px-cor: #9ec3ff; --px-acento: #ff6b6b; }
+.bichinho.modo-tranquilidade { --px-cor: #b79cff; --px-acento: #e3d8ff; }
+.bichinho.modo-leitura { --px-cor: #ffb45c; --px-acento: #ffe2b8; }
 
-.b-corpo { fill: var(--b-corpo); }
-.b-barriga { fill: var(--b-barriga); }
-.b-sombra { fill: rgba(0, 0, 0, 0.18); }
-.b-olho { fill: var(--b-traco); }
-.b-brilho { fill: #fff; }
-.b-traco { fill: none; stroke: var(--b-traco); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
-.b-fino { stroke-width: 3; }
-.b-boca { fill: var(--b-traco); }
-.b-bochecha { fill: var(--b-bochecha); opacity: 0.75; }
-.b-antena { stroke-width: 3.5; }
-.b-antena-ponta { fill: var(--b-acento); }
-.b-oculos { fill: rgba(255, 255, 255, 0.18); stroke: var(--b-traco); stroke-width: 3.5; }
-.b-gola { fill: #f4f6fb; stroke: var(--b-traco); stroke-width: 2; stroke-linejoin: round; }
-.b-gravata { fill: #c0392b; stroke: var(--b-traco); stroke-width: 2; stroke-linejoin: round; }
-.b-mochila { fill: #e8833a; stroke: var(--b-traco); stroke-width: 3; }
-.b-mochila-bolso { fill: #c96a25; }
-.b-alca { fill: none; stroke: #b85a1b; stroke-width: 7; stroke-linecap: round; }
-.b-pensamento { fill: #e8ecf6; stroke: var(--b-traco); stroke-width: 2; }
-.b-onda { stroke: var(--b-acento); }
-.b-rec { fill: #e53935; }
+.px-painel { fill: var(--px-painel); stroke: rgba(255, 255, 255, 0.06); stroke-width: 0.15; }
+.px-off { fill: var(--px-apagado); }
+.px-on { fill: var(--px-cor); filter: drop-shadow(0 0 0.35px var(--px-cor)) drop-shadow(0 0 1.1px var(--px-cor)); }
+.px-acento { fill: var(--px-acento); filter: drop-shadow(0 0 0.8px var(--px-acento)); }
+.px-suave { opacity: 0.7; }
+.px-rec { fill: #ff4d4d; filter: drop-shadow(0 0 1px #ff4d4d); }
+
+/* Sem animacao: olhos abertos e boca aberta visiveis. */
+.px-olho-fechado, .px-boca-b { opacity: 0; }
 
 @media (prefers-reduced-motion: no-preference) {
-  .b-corpo-grupo { animation: b-respira 4s ease-in-out infinite; transform-origin: 100px 170px; }
-  .b-pisca { animation: b-pisca 5s infinite; transform-origin: 100px 98px; }
-  .b-falando { animation: b-fala 0.32s ease-in-out infinite alternate; transform-origin: 100px 124px; }
-  .atividade-ouvindo .b-antena-ponta { animation: b-pulsa 1.2s ease-in-out infinite; transform-origin: 100px 32px; }
-  .b-pensamento { animation: b-sobe 1.6s ease-in-out infinite; }
-  .b-pensamento-1 { animation-delay: 0.2s; }
-  .b-pensamento-2 { animation-delay: 0.4s; }
-  .b-rec { animation: b-pulsa 1s ease-in-out infinite; transform-origin: 24px 24px; }
-  .modo-tranquilidade .b-corpo-grupo { animation-duration: 6s; }
+  .px-olho-aberto { animation: px-pisca-aberto 5s steps(1) infinite; }
+  .px-olho-fechado { animation: px-pisca-fechado 5s steps(1) infinite; }
+  .px-boca-a { animation: px-fala-a 0.36s steps(1) infinite; }
+  .px-boca-b { animation: px-fala-b 0.36s steps(1) infinite; }
+  .px-onda-1 { animation: px-pulso 0.9s ease-in-out infinite; }
+  .px-onda-2 { animation: px-pulso 0.9s ease-in-out 0.3s infinite; }
+  .px-pensa { animation: px-pulso 1.4s ease-in-out infinite; }
+  .px-flutua { animation: px-pulso 3s ease-in-out infinite; }
+  .px-rec { animation: px-pulso 1s ease-in-out infinite; }
 }
 
-@keyframes b-respira { 50% { transform: scaleY(0.97) translateY(2px); } }
-@keyframes b-pisca { 0%, 94%, 100% { transform: scaleY(1); } 97% { transform: scaleY(0.1); } }
-@keyframes b-fala { from { transform: scaleY(0.4); } to { transform: scaleY(1.15); } }
-@keyframes b-pulsa { 50% { transform: scale(1.35); } }
-@keyframes b-sobe { 50% { transform: translateY(-3px); } }
+/* Piscar: 96% do tempo aberto, um instante fechado. */
+@keyframes px-pisca-aberto { 0%, 95% { opacity: 1; } 96%, 100% { opacity: 0; } }
+@keyframes px-pisca-fechado { 0%, 95% { opacity: 0; } 96%, 100% { opacity: 1; } }
+@keyframes px-fala-a { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+@keyframes px-fala-b { 0%, 49% { opacity: 0; } 50%, 100% { opacity: 1; } }
+@keyframes px-pulso { 50% { opacity: 0.35; } }

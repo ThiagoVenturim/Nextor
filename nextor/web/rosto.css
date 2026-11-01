@@ -13,7 +13,7 @@ body { display: flex; flex-direction: column; min-height: 100dvh; padding: 16px;
 button, input { font: inherit; color: inherit; }
 
 .palco { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; min-height: 0; }
-.bichinho-area { width: min(62vmin, 420px); aspect-ratio: 1; }
+.bichinho-area { width: min(80vw, 62vmin * 1.18, 520px); aspect-ratio: 26 / 22; }
 .balao {
   max-width: min(640px, 92vw);
   margin: 0;
