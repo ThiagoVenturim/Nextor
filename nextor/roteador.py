@@ -30,8 +30,25 @@ def _registra(frase: str, intencao: str) -> None:
 
 
 def rotear(frase: str) -> dict:
+    from .chamado import entender
+    from .companheiro import companheiro, identidade_pedida
+    # "ei Nextor", "meu amigo Nextor", "ola Claude"...: quem foi chamado responde e o rosto acorda.
+    chamado = entender(frase)
+    if chamado["chamado"]:
+        if chamado["nome"] != companheiro.ver().get("identidade"):
+            companheiro.definir_identidade(chamado["nome"])
+        companheiro.atualizar(atividade="ouvindo")
+        if not chamado["comando"].strip():
+            _registra(frase, "chamado")
+            return {"intencao": "chamado", "resposta": "Oi, pode falar."}
+        frase = chamado["comando"]
     limpa = _limpa(frase)
     base = _sem_acento(limpa)
+
+    identidade = identidade_pedida(limpa)
+    if identidade:
+        _registra(frase, "identidade")
+        return {"intencao": "identidade", "resposta": companheiro.definir_identidade(identidade)["frase"]}
 
     # Skill de texto (traduzir / resumir / escrever) - antes das outras intencoes.
     if "traduz" in base:
@@ -51,6 +68,12 @@ def rotear(frase: str) -> dict:
         pedido = re.sub(r".*?escrev\w*\s+", "", limpa, count=1, flags=re.IGNORECASE).strip() or limpa
         _registra(frase, "escrever")
         return {"intencao": "escrever", "resposta": _fazer_texto("escrever", pedido)}
+
+    from .companheiro import modo_pedido
+    modo = modo_pedido(limpa)
+    if modo:
+        _registra(frase, "modo")
+        return {"intencao": "modo", "resposta": _fazer_modo(modo)}
 
     m = re.match(GATILHO_DECK, base)
     if m:
@@ -115,6 +138,15 @@ def _fazer_noticias(assunto: str) -> str:
         return resumir(assunto)
     except Exception:
         return "Nao consegui buscar as noticias agora."
+
+
+def _fazer_modo(modo: str) -> str:
+    try:
+        from .companheiro import companheiro
+        r = companheiro.definir_modo(modo)
+        return " ".join([r["frase"], *r["avisos"]])
+    except Exception:
+        return "Nao consegui mudar de modo agora."
 
 
 def _fazer_deck(nome: str) -> str:

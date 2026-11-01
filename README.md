@@ -124,6 +124,50 @@ O Nextor le a agenda por um endereco privado iCal, sem projeto no Google Cloud:
 Depois, `/agenda` fala os compromissos e o `/conversar` passa a responder "o que tenho
 amanha". Sem o endereco, o resto do Nextor funciona normalmente.
 
+## Rosto e modos
+
+O Nextor tem um rosto: um bichinho que reage ao que voce escreve e muda de visual com o modo.
+
+- Abra `http://localhost:5005/rosto?token=SEU_TOKEN` ou rode `scriptsosto.ps1`, que abre o rosto numa janela propria.
+- No NexDeck, o botao de carinha no topo abre o mesmo bichinho no celular.
+- Converse pela tela; marque "no Nest" se quiser ouvir a resposta no alto-falante.
+
+| Modo | Visual | Ambiente |
+|---|---|---|
+| Estudo | Mochila | Luzes brancas fortes |
+| Trabalho | Gravata | Luzes neutras |
+| Tranquilidade | Olhos relaxados | Tela a 40%, luzes quentes e baixas |
+| Leitura | Oculos | Tela a 30%, luz quente |
+| Normal | Sem acessorio | Devolve o brilho de antes |
+
+Por voz ou texto: "modo estudo", "ativa o modo leitura", "quero relaxar".
+
+### Como chamar
+
+O Nextor entende o jeito natural de chamar, com erros de digitacao ou de reconhecimento de voz:
+"ei Nextor", "ola Nextor", "fala Nextor", "meu bom Nextor", "meu amigo Nextor", "bom Nextor", "e ai Nestor",
+"fala enxtor". O comando pode vir junto ("meu amigo Nextor, modo leitura") ou depois ("ei Nextor" e ele responde
+"Oi, pode falar"). Quando chamado, o rosto acorda em modo ouvindo e, no Windows, abre numa janela se nenhuma tela
+estiver mostrando (desligue com `NEXTOR_ROSTO_AUTO=nao`).
+
+### Quem responde: Nextor, Claude ou agy
+
+Quem nao quiser a persona do Nextor pode falar direto com o Claude ou com o agy. O rosto troca para o simbolo de cada um
+(desenhos proprios em pixels) e o cerebro muda junto:
+
+- "ei Claude, ...", "usar o Claude", "quero falar com o Claude" -> Claude (precisa de `ANTHROPIC_API_KEY`);
+- "oi agy, ...", "troca para o agy" -> agy (pelo Maestri);
+- "volta pro Nextor" -> persona do Nextor com o cerebro padrao do `.env`.
+
+Tambem da para trocar pelos botoes Nextor / Claude / agy no rosto e no NexDeck. Se o cerebro escolhido estiver fora do
+ar, a resposta vem do modelo local.
+
+O humor e um palpite pelas palavras da mensagem (feliz, triste, ansioso, cansado, irritado). O bichinho reage e o
+cerebro recebe uma dica para responder no tom certo. Nada de camera ou analise de voz.
+
+Luzes inteligentes passam pelo Home Assistant (qualquer marca que ele suporte): configure `NEXTOR_HA_URL`,
+`NEXTOR_HA_TOKEN` e `NEXTOR_HA_LUZES`, ou uma cena por modo em `NEXTOR_HA_CENA_<MODO>`. Sem isso, so o brilho da tela muda.
+
 ## NexDeck (stream deck no celular)
 
 O [NexDeck](https://github.com/ThiagoVenturim/NexDeck) transforma o celular em um

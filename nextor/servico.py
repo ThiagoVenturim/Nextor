@@ -1,7 +1,9 @@
 """Servico HTTP local do Nextor: recebe comandos pela rede de casa e responde em voz."""
+import json
 from datetime import datetime
+from pathlib import Path
 
-from flask import Flask, request, jsonify
+from flask import Flask, Response, request, jsonify, send_from_directory
 
 from . import config
 from .voz import falar
@@ -26,7 +28,9 @@ except Exception:
 app = Flask(__name__)
 PROTEGIDOS = ("anotar", "falar_endpoint", "conversar_endpoint", "notas",
               "agenda", "noticias", "comando", "automacoes_endpoint", "texto_endpoint",
-              "nest_endpoint")
+              "nest_endpoint", "estado_endpoint", "modo_endpoint", "eventos_endpoint",
+              "conversa_endpoint", "identidade_endpoint")
+WEB = Path(__file__).resolve().parent / "web"
 
 
 def autorizado() -> bool:
@@ -53,9 +57,15 @@ def comando():
     texto = pega_texto()
     if not texto:
         return jsonify(erro="texto vazio"), 400
+    from .chamado import entender
+    if entender(texto)["chamado"]:
+        from .janela import abrir_rosto
+        abrir_rosto()
     r = rotear(texto)
-    falar(r["resposta"])
-    return jsonify(ok=True, intencao=r["intencao"], resposta=r["resposta"])
+    from .companheiro import companheiro
+    companheiro.atualizar(ultima_mensagem=texto, ultima_resposta=r["resposta"])
+    aviso = _falar_sem_quebrar(r["resposta"])
+    return jsonify(ok=True, intencao=r["intencao"], resposta=r["resposta"], aviso=aviso)
 
 
 @app.post("/anotar")
@@ -211,6 +221,100 @@ def nest_endpoint():
         return jsonify(erro=str(e)), 503
 
 
+# --- Rosto do Nextor (bichinho), modos e conversa pela tela ---------------------
+
+@app.get("/rosto")
+def rosto():
+    return send_from_directory(WEB, "rosto.html")
+
+
+@app.get("/web/<path:nome>")
+def web_arquivo(nome):
+    return send_from_directory(WEB, nome)
+
+
+@app.get("/estado")
+def estado_endpoint():
+    from .companheiro import companheiro
+    return jsonify(companheiro.ver())
+
+
+@app.post("/modo")
+def modo_endpoint():
+    from .companheiro import MODOS, companheiro
+    dados = request.get_json(silent=True) or request.values
+    modo = (dados.get("modo") or "").strip().lower()
+    if modo not in MODOS:
+        return jsonify(erro=f"modo invalido; use {', '.join(MODOS)}"), 400
+    r = companheiro.definir_modo(modo)
+    if str(dados.get("falar", "")).lower() in ("1", "true", "sim"):
+        _falar_sem_quebrar(r["frase"])
+    return jsonify(ok=True, modo=modo, frase=r["frase"], avisos=r["avisos"], estado=r["estado"])
+
+
+@app.post("/identidade")
+def identidade_endpoint():
+    from .companheiro import IDENTIDADES, companheiro
+    dados = request.get_json(silent=True) or request.values
+    nome = (dados.get("identidade") or "").strip().lower()
+    if nome not in IDENTIDADES:
+        return jsonify(erro=f"identidade invalida; use {', '.join(IDENTIDADES)}"), 400
+    r = companheiro.definir_identidade(nome)
+    return jsonify(ok=True, identidade=nome, frase=r["frase"], estado=r["estado"])
+
+
+@app.get("/eventos")
+def eventos_endpoint():
+    from .companheiro import companheiro
+    fila = companheiro.assinar()
+
+    def fluxo():
+        try:
+            yield f"data: {json.dumps(companheiro.ver())}\n\n"
+            while True:
+                try:
+                    estado = fila.get(timeout=15)
+                    yield f"data: {json.dumps(estado)}\n\n"
+                except Exception:
+                    yield ": ping\n\n"
+        finally:
+            companheiro.cancelar(fila)
+
+    return Response(fluxo(), mimetype="text/event-stream", headers={"Cache-Control": "no-cache"})
+
+
+@app.post("/conversa")
+def conversa_endpoint():
+    """Conversa pela tela (rosto, NexDeck). So fala no Nest se pedirem."""
+    from .companheiro import conversar_com_humor
+    if conversar is None:
+        return jsonify(erro="cerebro indisponivel"), 503
+    dados = request.get_json(silent=True) or request.values
+    texto = (dados.get("texto") or "").strip()
+    if not texto:
+        return jsonify(erro="texto vazio"), 400
+    if len(texto) > 2000:
+        return jsonify(erro="texto longo demais"), 400
+    r = conversar_com_humor(texto, conversar)
+    aviso = None
+    if str(dados.get("falar", "")).lower() in ("1", "true", "sim"):
+        aviso = _falar_sem_quebrar(r["resposta"])
+    return jsonify(ok=True, resposta=r["resposta"], emocao=r["emocao"], estado=r["estado"], aviso=aviso)
+
+
+def _falar_sem_quebrar(texto: str) -> str | None:
+    """Fala no Nest mostrando a boca mexendo; se o Nest nao responder, devolve o aviso."""
+    from .companheiro import companheiro
+    companheiro.atualizar(atividade="falando")
+    try:
+        falar(texto)
+        return None
+    except Exception as e:
+        return f"Nao consegui falar no Nest ({e.__class__.__name__})."
+    finally:
+        companheiro.atualizar(atividade="ocioso")
+
+
 def main():
     from .automacoes import iniciar_agendador
     iniciar_agendador()
@@ -221,6 +325,7 @@ def main():
         print(f"[nest] vigia nao iniciou: {e}")
     print(f"Nextor ouvindo na porta {config.PORTA}. Persona: {config.PERSONA}. Perfil: {config.PERFIL or 'padrao'}.")
     print(f"Painel: http://localhost:{config.PORTA}/painel?token=SEU_TOKEN")
+    print(f"Rosto:  http://localhost:{config.PORTA}/rosto?token=SEU_TOKEN")
     app.run(host="0.0.0.0", port=config.PORTA)
 
 
