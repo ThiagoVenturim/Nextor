@@ -124,8 +124,11 @@ class Companheiro:
     def __init__(self):
         self._trava = threading.Lock()
         self._ouvintes: list[queue.Queue] = []
+        from .fala import idioma_inicial
         self.estado = {
             "identidade": "nextor",
+            "idioma": idioma_inicial(),
+            "fala": None,  # {"id": ..., "duracao": ...} do ultimo audio para as telas tocarem
             "modo": "normal",
             "acessorio": None,
             "expressao": "neutro",
@@ -184,6 +187,12 @@ class Companheiro:
         estado = self.atualizar(identidade=nome, expressao="feliz")
         return {"estado": estado, "frase": info["frase"]}
 
+    def definir_idioma(self, idioma: str) -> dict:
+        from .fala import IDIOMAS
+        if idioma not in IDIOMAS:
+            raise ValueError(f"Idioma desconhecido: {idioma}")
+        return self.atualizar(idioma=idioma)
+
     def ouvintes(self) -> int:
         with self._trava:
             return len(self._ouvintes)
@@ -197,8 +206,13 @@ def conversar_com_humor(texto: str, conversar) -> dict:
     emocao = detectar_emocao(texto)
     companheiro.atualizar(atividade="pensando", emocao_usuario=emocao,
                           expressao=REACAO[emocao], ultima_mensagem=texto)
-    dica = DICA_PARA_O_CEREBRO.get(emocao)
-    pergunta = f"{texto}\n\n({dica})" if dica else texto
+    from .fala import IDIOMAS
+    dicas = [DICA_PARA_O_CEREBRO.get(emocao)]
+    idioma = companheiro.ver().get("idioma", "pt-BR")
+    if idioma != "pt-BR":
+        dicas.append(IDIOMAS[idioma]["instrucao"])
+    dicas = [d for d in dicas if d]
+    pergunta = f"{texto}\n\n({' '.join(dicas)})" if dicas else texto
     identidade = companheiro.ver().get("identidade", "nextor")
     try:
         if identidade in SISTEMA_IDENTIDADE:

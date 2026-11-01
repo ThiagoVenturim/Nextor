@@ -5,6 +5,8 @@ import os
 import unittest
 from unittest import mock
 
+os.environ["NEXTOR_VOZ_SAIDA"] = "nenhuma"  # testes nunca tocam audio
+
 from nextor import ambiente, config, servico
 from nextor.companheiro import Companheiro, companheiro, conversar_com_humor, detectar_emocao, modo_pedido
 
@@ -147,7 +149,7 @@ class TestRotas(unittest.TestCase):
 
     def test_conversa_falha_no_nest_vira_aviso(self):
         with mock.patch.object(servico, "conversar", lambda t: "Oi."), \
-                mock.patch.object(servico, "falar", side_effect=RuntimeError("sem nest")):
+                mock.patch.dict(os.environ, {"NEXTOR_VOZ_SAIDA": "nest"}), mock.patch.object(servico, "falar", side_effect=RuntimeError("sem nest")):
             r = self.c.post("/conversa", json={"texto": "oi", "falar": True}, headers=self.h)
         self.assertEqual(r.status_code, 200)
         self.assertIn("Nest", r.get_json()["aviso"])

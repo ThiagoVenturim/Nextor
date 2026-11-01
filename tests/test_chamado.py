@@ -1,6 +1,9 @@
 """Testes das frases de chamada e da troca de identidade (Nextor, Claude, agy). Sem rede."""
+import os
 import unittest
 from unittest import mock
+
+os.environ["NEXTOR_VOZ_SAIDA"] = "nenhuma"  # testes nunca tocam audio
 
 from nextor import ambiente, config, roteador, servico
 from nextor.chamado import entender
@@ -99,7 +102,8 @@ class TestRotasIdentidade(unittest.TestCase):
         self.assertEqual(abrir.call_count, 1)
 
     def test_comando_responde_mesmo_sem_nest(self):
-        with mock.patch.object(servico, "falar", side_effect=RuntimeError("sem nest")),                 mock.patch.object(roteador, "_registra"), mock.patch.object(ambiente, "aplicar", return_value=[]):
+        with mock.patch.dict(os.environ, {"NEXTOR_VOZ_SAIDA": "nest"}), mock.patch.object(servico, "falar", side_effect=RuntimeError("sem nest")), \
+                mock.patch.object(roteador, "_registra"), mock.patch.object(ambiente, "aplicar", return_value=[]):
             r = self.c.post("/comando", json={"texto": "modo leitura"}, headers=self.h)
         self.assertEqual(r.status_code, 200)
         self.assertIn("Nest", r.get_json()["aviso"])

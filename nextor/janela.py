@@ -26,6 +26,6 @@ def abrir_rosto(forcar: bool = False) -> bool:
     if exe is None:
         os.startfile(url)  # noqa: S606 - navegador padrao
         return True
-    subprocess.Popen([str(exe), f"--app={url}", "--window-size=460,720"],  # noqa: S603
+    subprocess.Popen([str(exe), f"--app={url}", "--window-size=460,720", "--autoplay-policy=no-user-gesture-required"],  # noqa: S603
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     return True

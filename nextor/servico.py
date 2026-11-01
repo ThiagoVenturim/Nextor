@@ -29,7 +29,7 @@ app = Flask(__name__)
 PROTEGIDOS = ("anotar", "falar_endpoint", "conversar_endpoint", "notas",
               "agenda", "noticias", "comando", "automacoes_endpoint", "texto_endpoint",
               "nest_endpoint", "estado_endpoint", "modo_endpoint", "eventos_endpoint",
-              "conversa_endpoint", "identidade_endpoint")
+              "conversa_endpoint", "identidade_endpoint", "voz_endpoint", "fala_endpoint")
 WEB = Path(__file__).resolve().parent / "web"
 
 
@@ -303,16 +303,69 @@ def conversa_endpoint():
 
 
 def _falar_sem_quebrar(texto: str) -> str | None:
-    """Fala no Nest mostrando a boca mexendo; se o Nest nao responder, devolve o aviso."""
+    """Da voz ao Nextor conforme NEXTOR_VOZ_SAIDA: "pc" (padrao), "nest" ou "ambos".
+
+    No PC, se alguma tela do rosto estiver aberta ela toca o audio e mexe a boca; senao o som sai
+    direto pelas caixas do computador. Falhas viram aviso, nunca erro.
+    """
+    import os
+    import threading
+    from . import fala
     from .companheiro import companheiro
-    companheiro.atualizar(atividade="falando")
-    try:
-        falar(texto)
-        return None
-    except Exception as e:
-        return f"Nao consegui falar no Nest ({e.__class__.__name__})."
-    finally:
-        companheiro.atualizar(atividade="ocioso")
+    saida = os.getenv("NEXTOR_VOZ_SAIDA", "pc").strip().lower()
+    avisos = []
+    if saida in ("pc", "tela", "ambos"):
+        try:
+            dados, mime, _motor = fala.sintetizar(texto, companheiro.ver().get("idioma", "pt-BR"))
+            dur = fala.duracao(dados, mime, texto)
+            if companheiro.ouvintes() > 0:
+                fala_id = fala.guardar(dados, mime)
+                companheiro.atualizar(atividade="falando", fala={"id": fala_id, "duracao": dur})
+                threading.Timer(dur + 0.3, lambda: companheiro.atualizar(atividade="ocioso")).start()
+            else:
+                companheiro.atualizar(atividade="falando")
+
+                def tocar():
+                    try:
+                        fala.tocar_no_pc(dados, mime)
+                    except Exception as e:
+                        print(f"[fala] nao tocou no PC: {e}")
+                    finally:
+                        companheiro.atualizar(atividade="ocioso")
+                threading.Thread(target=tocar, daemon=True).start()
+        except Exception as e:
+            avisos.append(f"Sem voz no PC ({e.__class__.__name__}).")
+    if saida in ("nest", "ambos"):
+        try:
+            falar(texto)
+        except Exception as e:
+            avisos.append(f"Nao consegui falar no Nest ({e.__class__.__name__}).")
+    return " ".join(avisos) or None
+
+
+@app.route("/voz", methods=["GET", "POST"])
+def voz_endpoint():
+    from . import fala
+    from .companheiro import companheiro
+    if request.method == "POST":
+        dados = request.get_json(silent=True) or request.values
+        idioma = (dados.get("idioma") or "").strip()
+        if idioma not in fala.IDIOMAS:
+            return jsonify(erro=f"idioma invalido; use {', '.join(fala.IDIOMAS)}"), 400
+        companheiro.definir_idioma(idioma)
+    disponiveis = {i: (fala.pasta_piper() / f"{fala.voz_piper(i)}.onnx").is_file() for i in fala.IDIOMAS}
+    return jsonify(idioma=companheiro.ver()["idioma"],
+                   idiomas={i: v["nome"] for i, v in fala.IDIOMAS.items()},
+                   voz_natural=disponiveis)
+
+
+@app.get("/fala/<fala_id>")
+def fala_endpoint(fala_id):
+    from . import fala
+    audio = fala.pegar(fala_id)
+    if audio is None:
+        return jsonify(erro="audio expirou"), 404
+    return Response(audio[0], mimetype=audio[1], headers={"Cache-Control": "no-store"})
 
 
 def main():

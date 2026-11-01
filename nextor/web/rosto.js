@@ -36,8 +36,34 @@
     });
   }
 
+  var ultimaFala = null;
+  var tocando = false;
+  var estadoAtual = {};
+
+  function tocarFala(fala) {
+    if (!fala || fala.id === ultimaFala) return;
+    var primeira = ultimaFala === null;
+    ultimaFala = fala.id;
+    if (primeira || !$('com-voz').checked) return; // nao repete a ultima fala ao abrir a pagina
+    fetch('/fala/' + encodeURIComponent(fala.id), { headers: { 'X-Nextor-Token': token } })
+      .then(function (r) { if (!r.ok) throw new Error('audio ' + r.status); return r.blob(); })
+      .then(function (blob) {
+        var audio = new Audio(URL.createObjectURL(blob));
+        tocando = true;
+        desenhar(estadoAtual);
+        audio.onended = audio.onerror = function () { tocando = false; desenhar(estadoAtual); };
+        return audio.play();
+      })
+      .catch(function () { tocando = false; });
+  }
+
   function desenhar(estado) {
-    window.Bichinho.render($('bichinho'), estado);
+    estadoAtual = estado;
+    var visto = Object.assign({}, estado);
+    if (tocando) visto.atividade = 'falando';
+    else if (estado.atividade === 'falando') visto.atividade = 'ocioso';
+    window.Bichinho.render($('bichinho'), visto);
+    if (estado.idioma) $('idioma').value = estado.idioma;
     document.querySelectorAll('[data-modo]').forEach(function (b) {
       b.setAttribute('aria-pressed', String(b.dataset.modo === estado.modo));
     });
@@ -54,7 +80,11 @@
 
   function ouvirEventos() {
     var fonte = new EventSource('/eventos?token=' + encodeURIComponent(token));
-    fonte.onmessage = function (e) { desenhar(JSON.parse(e.data)); };
+    fonte.onmessage = function (e) {
+      var estado = JSON.parse(e.data);
+      desenhar(estado);
+      tocarFala(estado.fala);
+    };
     fonte.onerror = function () { fonte.close(); setTimeout(ouvirEventos, 3000); };
   }
 
@@ -82,12 +112,16 @@
     if (!texto) return;
     var botao = document.querySelector('.enviar');
     botao.disabled = true;
-    api('/conversa', { texto: texto, falar: $('no-nest').checked }).then(function () {
+    api('/conversa', { texto: texto, falar: $('com-voz').checked }).then(function () {
       $('texto').value = '';
     }).catch(function (err) {
       $('balao').textContent = err.message;
       $('balao').hidden = false;
     }).then(function () { botao.disabled = false; $('texto').focus(); });
+  });
+
+  $('idioma').addEventListener('change', function () {
+    api('/voz', { idioma: $('idioma').value }).catch(function (err) { $('humor').textContent = err.message; });
   });
 
   if (!token) {
