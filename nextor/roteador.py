@@ -11,6 +11,8 @@ PALAVRAS_NOTICIA = ("noticia", "noticias", "novidade", "novidades", "manchete", 
 PALAVRAS_ANOTAR = ("anota", "anotar", "anote", "lembra", "lembrar", "lembrete")
 # "no computador, bloquear" / "no pc play" / "deck volume mais" -> aperta um botao do NexDeck.
 GATILHO_DECK = r"^(no computador|no pc|no notebook|deck)[,: ]+(.+)$"
+# "mostra na tv", "continua no celular", "passa pro pc" -> hand-off entre aparelhos.
+GATILHO_DISPOSITIVO = r"^(mostra|mostrar|continua|continuar|passa|passar|manda|mandar)\s+(na|no|pra|pro)\s+([a-z0-9_-]+)(?:[:,\s]+(.*))?$"
 
 
 def _sem_acento(s: str) -> str:
@@ -29,7 +31,7 @@ def _registra(frase: str, intencao: str) -> None:
         pass
 
 
-def rotear(frase: str) -> dict:
+def rotear(frase: str, id_dispositivo: str | None = None) -> dict:
     from .chamado import entender
     from .companheiro import companheiro, identidade_pedida
     # "ei Nextor", "meu amigo Nextor", "ola Claude"...: quem foi chamado responde e o rosto acorda.
@@ -75,8 +77,20 @@ def rotear(frase: str) -> dict:
         _registra(frase, "modo")
         return {"intencao": "modo", "resposta": _fazer_modo(modo)}
 
+    m_disp = re.match(GATILHO_DISPOSITIVO, base)
+    if m_disp:
+        alvo = m_disp.group(3)
+        resto = (m_disp.group(4) or "").strip()
+        _registra(frase, "dispositivo")
+        return {"intencao": "dispositivo", "resposta": _fazer_dispositivo(alvo, resto)}
+
     m = re.match(GATILHO_DECK, base)
     if m:
+        if id_dispositivo:
+            from . import dispositivos
+            if not dispositivos.tem_permissao(id_dispositivo, "executar"):
+                _registra(frase, "deck_negado")
+                return {"intencao": "deck", "resposta": "Este aparelho nao tem permissao para executar acoes no computador."}
         _registra(frase, "deck")
         return {"intencao": "deck", "resposta": _fazer_deck(m.group(2).strip(" ?."))}
 
@@ -147,6 +161,30 @@ def _fazer_modo(modo: str) -> str:
         return " ".join([r["frase"], *r["avisos"]])
     except Exception:
         return "Nao consegui mudar de modo agora."
+
+
+def _fazer_dispositivo(alvo: str, resto: str = "") -> str:
+    try:
+        from . import dispositivos
+        from .companheiro import companheiro
+        disp = dispositivos.buscar_por_tipo_ou_nome(alvo)
+        if not disp:
+            return f"Nao encontrei o aparelho {alvo}."
+        if not disp.get("ativo", True):
+            return f"O aparelho {disp['nome']} esta desativado ou revogado."
+
+        if resto:
+            r = rotear(resto)
+            conteudo = r.get("resposta", resto)
+        else:
+            estado = companheiro.ver()
+            conteudo = estado.get("ultima_resposta") or "Pronto para continuar aqui."
+
+        dispositivos.enviar_resposta_dispositivo(disp["id"], conteudo)
+        artigo = "na" if disp["tipo"] == "tv" else "no"
+        return f"Mostrando {artigo} {disp['nome']}."
+    except Exception:
+        return f"Nao consegui enviar para {alvo} agora."
 
 
 def _fazer_deck(nome: str) -> str:
