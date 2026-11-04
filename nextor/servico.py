@@ -29,7 +29,8 @@ app = Flask(__name__)
 PROTEGIDOS = ("anotar", "falar_endpoint", "conversar_endpoint", "notas",
               "agenda", "noticias", "comando", "automacoes_endpoint", "texto_endpoint",
               "nest_endpoint", "estado_endpoint", "modo_endpoint", "eventos_endpoint",
-              "conversa_endpoint", "identidade_endpoint", "voz_endpoint", "fala_endpoint")
+              "conversa_endpoint", "identidade_endpoint", "voz_endpoint", "fala_endpoint",
+              "estudos_disciplinas_endpoint", "estudos_materiais_endpoint", "estudos_buscar_endpoint")
 WEB = Path(__file__).resolve().parent / "web"
 
 
@@ -384,7 +385,66 @@ def fala_endpoint(fala_id):
     if audio is None:
         return jsonify(erro="audio expirou"), 404
     return Response(audio[0], mimetype=audio[1], headers={"Cache-Control": "no-store"})
+@app.route("/estudos/disciplinas", methods=["GET", "POST"])
+def estudos_disciplinas_endpoint():
+    from . import estudos
+    if request.method == "POST":
+        dados = request.get_json(silent=True) or request.form
+        nome = (dados.get("nome") or "").strip()
+        if not nome:
+            return jsonify(erro="nome da disciplina obrigatorio"), 400
+        res = estudos.criar_disciplina(nome)
+        return jsonify(res), 200 if res.get("ok") else 400
+    return jsonify(ok=True, disciplinas=estudos.listar_disciplinas())
 
+
+@app.route("/estudos/disciplinas/<nome_disciplina>/materiais", methods=["GET", "POST"])
+def estudos_materiais_endpoint(nome_disciplina):
+    from . import estudos
+    if request.method == "POST":
+        if "arquivo" in request.files:
+            arq = request.files["arquivo"]
+            if not arq.filename:
+                return jsonify(erro="arquivo sem nome"), 400
+            nome_seguro = Path(arq.filename).name
+            pasta_disc = estudos.obter_pasta_disciplina(nome_disciplina)
+            destino = pasta_disc / nome_seguro
+            arq.save(str(destino))
+            res = estudos.importar_material(
+                nome_disciplina,
+                destino,
+                titulo=request.form.get("titulo", ""),
+                pastas_autorizadas=[pasta_disc],
+                canal="local",
+            )
+            return jsonify(res), 200 if res.get("ok") else 400
+
+        dados = request.get_json(silent=True) or request.form
+        origem = (dados.get("origem") or "").strip()
+        if not origem:
+            return jsonify(erro="origem do material (arquivo ou url) obrigatoria"), 400
+        res = estudos.importar_material(
+            nome_disciplina,
+            origem,
+            titulo=(dados.get("titulo") or "").strip(),
+            tipo=(dados.get("tipo") or "").strip(),
+            canal="local",
+        )
+        return jsonify(res), 200 if res.get("ok") else 400
+
+    return jsonify(ok=True, materiais=estudos.listar_materiais(nome_disciplina))
+
+
+@app.get("/estudos/buscar")
+def estudos_buscar_endpoint():
+    from . import estudos
+    termo = (request.args.get("q") or "").strip()
+    disciplina = (request.args.get("disciplina") or "").strip()
+    if not termo:
+        return jsonify(erro="parametro q obrigatorio"), 400
+    limite = int(request.args.get("limite") or 10)
+    resultados = estudos.buscar_materiais(termo, disciplina_nome=disciplina, limite=limite)
+    return jsonify(ok=True, termo=termo, disciplina=disciplina, resultados=resultados)
 
 # --- Assistentes externos (Siri, Alexa, Telegram, etc) -------------------------
 
@@ -436,7 +496,7 @@ def assistente_endpoint():
         disp_atual = dispositivos.buscar_por_token(token_atual) if token_atual else None
         if disp_atual:
             id_disp = disp_atual["id"]
-    r = rotear(texto, id_dispositivo=id_disp)
+    r = rotear(texto, canal="remoto", id_dispositivo=id_disp)
     from .companheiro import companheiro
     companheiro.atualizar(ultima_mensagem=texto, ultima_resposta=r.get("resposta", ""))
 
@@ -686,6 +746,7 @@ setInterval(checar, 2500);
 checar();
 </script></html>"""
     return html, 200, {"Content-Type": "text/html; charset=utf-8"}
+
 
 
 def main():

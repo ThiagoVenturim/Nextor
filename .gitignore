@@ -21,6 +21,7 @@ adaptadores.json
 assistentes.log
 dispositivos.json
 textos/
+dados_estudos/
 
 # Modelos locais (vozes Piper, Vosk)
 models/

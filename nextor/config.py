@@ -68,6 +68,22 @@ NOTICIAS_ASSUNTO = os.getenv("NEXTOR_NOTICIAS_ASSUNTO", "inteligencia artificial
 ROTINA_HORA = os.getenv("NEXTOR_ROTINA_HORA", "07:00")
 ROTINA_ASSUNTO = os.getenv("NEXTOR_ROTINA_ASSUNTO", "")
 
+# Modo Estudos: biblioteca de disciplinas e materiais locais
+ESTUDOS_DIR = Path(os.getenv("NEXTOR_ESTUDOS_DIR", "")) if os.getenv("NEXTOR_ESTUDOS_DIR") else (RAIZ / "dados_estudos")
+ESTUDOS_DB = Path(os.getenv("NEXTOR_ESTUDOS_DB", "")) if os.getenv("NEXTOR_ESTUDOS_DB") else (ESTUDOS_DIR / "indice_estudos.db")
+
+
+def obter_pastas_importacao_estudos():
+    env_pastas = os.getenv("NEXTOR_ESTUDOS_IMPORTAR_DE", "")
+    if env_pastas:
+        return [Path(p.strip()).resolve() for p in env_pastas.split(";") if p.strip()]
+    home = Path.home()
+    padroes = [home / "Downloads", home / "Documents", home / "Documentos"]
+    return [p.resolve() for p in padroes if p.exists()] or [home.resolve()]
+
+
+ESTUDOS_IMPORTAR_DE = obter_pastas_importacao_estudos()
+
 # Caminhos de dados (ficam na raiz, fora do git)
 ANOTACOES = RAIZ / "anotacoes.md"
 MP3 = RAIZ / "nextor_fala.mp3"
