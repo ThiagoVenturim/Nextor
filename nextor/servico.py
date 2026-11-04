@@ -85,7 +85,14 @@ def pega_texto() -> str:
 
 @app.before_request
 def checa_token():
-    if request.endpoint in PROTEGIDOS and not autorizado():
+    if request.endpoint in PROTEGIDOS:
+        if autorizado():
+            return
+        if request.endpoint == "comando":
+            from . import dispositivos
+            disp = dispositivos.buscar_por_token(_obter_token())
+            if disp and disp.get("ativo", True):
+                return
         return jsonify(erro="token invalido"), 401
 
 
