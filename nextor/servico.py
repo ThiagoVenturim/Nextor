@@ -525,13 +525,13 @@ def assistente_endpoint():
         return jsonify(ok=False, erro="texto vazio"), 400
 
     from . import dispositivos
-token_atual = _obter_token()
+    token_atual = _obter_token()
     disp_atual = dispositivos.buscar_por_token(token_atual) if token_atual else None
     if disp_atual:
         id_disp = disp_atual["id"]
     else:
         id_disp = (request.is_json and (request.get_json(silent=True) or {}).get("dispositivo")) or request.values.get("dispositivo")
-r = rotear(texto, canal="remoto", id_dispositivo=id_disp)
+    r = rotear(texto, canal="remoto", id_dispositivo=id_disp)
     from .companheiro import companheiro
     companheiro.atualizar(ultima_mensagem=texto, ultima_resposta=r.get("resposta", ""))
 
