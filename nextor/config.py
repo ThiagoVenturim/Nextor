@@ -89,6 +89,11 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 TELEGRAM_USUARIOS_AUTORIZADOS = os.getenv("TELEGRAM_USUARIOS_AUTORIZADOS", "").strip()
 TELEGRAM_ADAPTADOR_TOKEN = os.getenv("TELEGRAM_ADAPTADOR_TOKEN", "").strip()
 
+# Alexa
+ALEXA_SKILL_ID = os.getenv("ALEXA_SKILL_ID", "").strip()
+ALEXA_ADAPTADOR_TOKEN = os.getenv("ALEXA_ADAPTADOR_TOKEN", "").strip()
+ALEXA_VERIFICAR_ASSINATURA = os.getenv("ALEXA_VERIFICAR_ASSINATURA", "1").strip().lower() not in ("0", "false", "nao")
+
 # Caminhos de dados (ficam na raiz, fora do git)
 ANOTACOES = RAIZ / "anotacoes.md"
 MP3 = RAIZ / "nextor_fala.mp3"
