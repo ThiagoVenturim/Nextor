@@ -1,8 +1,10 @@
 """Modulo de estudos: biblioteca de materias por disciplina com indexacao FTS5."""
 import html
+import ipaddress
 import os
 import re
 import shutil
+import socket
 import sqlite3
 import unicodedata
 import urllib.parse
@@ -19,6 +21,9 @@ try:
     import pypdf
 except ImportError:
     pypdf = None
+
+EXTENSOES_PERMITIDAS = {".pdf", ".docx", ".txt", ".md"}
+LIMITE_DOWNLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
 
 
 def normalizar_slug(texto: str) -> str:
@@ -80,6 +85,115 @@ def conectar_db(caminho_db: Optional[Path] = None) -> sqlite3.Connection:
     return con
 
 
+def validar_caminho_local(
+    caminho: Path | str,
+    pastas_autorizadas: Optional[List[Path]] = None,
+) -> Path:
+    """Valida se o arquivo local tem extensao permitida, nao e oculto/sensivel e esta em pasta autorizada."""
+    p = Path(caminho).resolve()
+    nome = p.name
+
+    if nome.startswith("."):
+        raise ValueError("Arquivos ocultos nao sao permitidos.")
+
+    extensao = p.suffix.lower()
+    if extensao not in EXTENSOES_PERMITIDAS:
+        raise ValueError(
+            f"Extensao '{extensao}' nao permitida. Apenas arquivos de estudo (.pdf, .docx, .txt, .md) sao aceitos."
+        )
+
+    nome_lower = nome.lower()
+    if (
+        nome_lower.startswith(".env")
+        or nome_lower.startswith("secret")
+        or nome_lower.startswith("token")
+        or any(nome_lower.endswith(suf) for suf in (".key", ".pem", ".crt", ".cer", ".pfx", ".p12"))
+    ):
+        raise ValueError(f"Arquivo '{nome}' recusado por regras de seguranca.")
+
+    if not p.is_file():
+        raise ValueError(f"Arquivo nao encontrado ou nao e um arquivo regular: {p}")
+
+    autorizadas = (
+        pastas_autorizadas
+        if pastas_autorizadas is not None
+        else config.obter_pastas_importacao_estudos()
+    )
+    permitido = False
+    for aut in autorizadas:
+        try:
+            if p.is_relative_to(aut.resolve()):
+                permitido = True
+                break
+        except (ValueError, AttributeError):
+            pass
+
+    if not permitido:
+        raise ValueError(f"Acesso negado: o arquivo '{nome}' esta fora das pastas autorizadas para importacao.")
+
+    return p
+
+
+def validar_url_segura(url: str) -> None:
+    """Valida esquema e bloqueia SSRF (IPs privados, loopback, link-local e localhost)."""
+    parsed = urllib.parse.urlparse(url)
+    esquema = parsed.scheme.lower()
+    if esquema not in ("http", "https"):
+        raise ValueError("Apenas protocolos HTTP e HTTPS sao permitidos.")
+
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError("URL invalida: hostname ausente.")
+
+    hostname_lower = hostname.lower()
+    if hostname_lower in ("localhost", "localhost.localdomain", "broadcasthost"):
+        raise ValueError("Acesso bloqueado: host local nao permitido (prevencao de SSRF).")
+
+    # Verifica se o proprio hostname e um endereco IP literal (ex: 127.0.0.1, 192.168.1.1)
+    try:
+        ip_obj = ipaddress.ip_address(hostname)
+        if (
+            ip_obj.is_private
+            or ip_obj.is_loopback
+            or ip_obj.is_link_local
+            or ip_obj.is_reserved
+            or ip_obj.is_multicast
+            or ip_obj.is_unspecified
+        ):
+            raise ValueError(
+                f"Acesso bloqueado ao IP {hostname}: enderecos privados, loopback e reservados sao proibidos (prevencao de SSRF)."
+            )
+        return
+    except ValueError as e:
+        if "Acesso bloqueado" in str(e):
+            raise
+        pass
+
+    porta = parsed.port or (443 if esquema == "https" else 80)
+    try:
+        enderecos = socket.getaddrinfo(hostname, porta, proto=socket.IPPROTO_TCP)
+        for item in enderecos:
+            sockaddr = item[4]
+            ip_str = sockaddr[0]
+            try:
+                ip_obj = ipaddress.ip_address(ip_str)
+            except ValueError:
+                continue
+            if (
+                ip_obj.is_private
+                or ip_obj.is_loopback
+                or ip_obj.is_link_local
+                or ip_obj.is_reserved
+                or ip_obj.is_multicast
+                or ip_obj.is_unspecified
+            ):
+                raise ValueError(
+                    f"Acesso bloqueado ao IP {ip_str}: enderecos privados, loopback e reservados sao proibidos (prevencao de SSRF)."
+                )
+    except socket.gaierror:
+        pass
+
+
 def extrair_texto_pdf(caminho: Path) -> str:
     if pypdf is None:
         return ""
@@ -134,18 +248,50 @@ def extrair_texto_html(conteudo_html: str) -> Tuple[str, str]:
     return titulo, texto_limpo
 
 
-def baixar_link(url: str, timeout: float = 10.0) -> Tuple[str, str]:
+def baixar_link(
+    url: str,
+    timeout: float = 10.0,
+    max_bytes: int = LIMITE_DOWNLOAD_BYTES,
+) -> Tuple[str, str]:
+    validar_url_segura(url)
+
     req = urllib.request.Request(
         url,
         headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Nextor/1.0"}
     )
     with urllib.request.urlopen(req, timeout=timeout) as resp:
+        ct_header = resp.headers.get("Content-Type")
+        if ct_header is not None and isinstance(ct_header, str):
+            content_type = ct_header.lower()
+            if not any(
+                ct in content_type for ct in ("text/", "application/xhtml+xml", "application/xml", "application/json")
+            ):
+                raise ValueError(f"Tipo de conteudo nao suportado: '{content_type}'. Apenas texto e HTML sao aceitos.")
+
+        content_length = resp.headers.get("Content-Length")
+        if content_length and isinstance(content_length, (int, str)):
+            try:
+                if int(content_length) > max_bytes:
+                    raise ValueError(f"Download recusado: tamanho de {content_length} bytes excede o limite de 10 MB.")
+            except (ValueError, TypeError):
+                pass
+
         charset = resp.headers.get_content_charset() or "utf-8"
-        raw = resp.read()
+        buffer = bytearray()
+        chunk_size = 65536
+        while True:
+            bloco = resp.read(chunk_size)
+            if not bloco:
+                break
+            buffer.extend(bloco)
+            if len(buffer) > max_bytes:
+                raise ValueError("Download interrompido: o conteudo excedeu o limite maximo de 10 MB.")
+
         try:
-            texto_html = raw.decode(charset, errors="replace")
+            texto_html = buffer.decode(charset, errors="replace")
         except Exception:
-            texto_html = raw.decode("utf-8", errors="replace")
+            texto_html = buffer.decode("utf-8", errors="replace")
+
     return extrair_texto_html(texto_html)
 
 
@@ -231,22 +377,37 @@ def importar_material(
     tipo: str = "",
     base_dir: Optional[Path] = None,
     caminho_db: Optional[Path] = None,
+    pastas_autorizadas: Optional[List[Path]] = None,
+    canal: str = "local",
+    apenas_links: bool = False,
 ) -> Dict[str, Any]:
+    origem_str = str(origem).strip()
+    eh_url = origem_str.startswith("http://") or origem_str.startswith("https://")
+
+    if canal == "remoto" or apenas_links:
+        if not eh_url:
+            return {
+                "ok": False,
+                "erro": "Canal remoto aceita apenas links (http/https), nunca caminhos locais.",
+            }
+
     disc = obter_disciplina(disciplina_nome, caminho_db=caminho_db)
     if not disc:
         disc = criar_disciplina(disciplina_nome, base_dir=base_dir, caminho_db=caminho_db)
 
     pasta_disc = Path(disc["pasta"])
     pasta_disc.mkdir(parents=True, exist_ok=True)
-    origem_str = str(origem).strip()
-    eh_url = origem_str.startswith("http://") or origem_str.startswith("https://")
     conteudo_texto = ""
     tipo_resolvido = tipo.lower().strip()
     caminho_destino = ""
 
     if eh_url:
         tipo_resolvido = tipo_resolvido or "link"
-        tit_url, texto = baixar_link(origem_str)
+        try:
+            tit_url, texto = baixar_link(origem_str)
+        except ValueError as e:
+            return {"ok": False, "erro": str(e)}
+
         conteudo_texto = texto
         titulo_final = titulo.strip() or tit_url or origem_str
         slug_tit = normalizar_slug(titulo_final)
@@ -254,9 +415,16 @@ def importar_material(
         arquivo_local.write_text(f"URL: {origem_str}\n\n{conteudo_texto}", encoding="utf-8")
         caminho_destino = str(arquivo_local)
     else:
-        origem_path = Path(origem)
-        if not origem_path.exists():
-            return {"ok": False, "erro": f"Arquivo nao encontrado: {origem_str}"}
+        autorizadas = pastas_autorizadas
+        if autorizadas is None:
+            autorizadas = config.obter_pastas_importacao_estudos()
+            if base_dir:
+                b_path = Path(base_dir).resolve()
+                autorizadas = list(autorizadas) + [b_path, b_path.parent]
+        try:
+            origem_path = validar_caminho_local(origem, pastas_autorizadas=autorizadas)
+        except ValueError as e:
+            return {"ok": False, "erro": str(e)}
 
         sufixo = origem_path.suffix.lower()
         if not tipo_resolvido:
@@ -272,7 +440,7 @@ def importar_material(
                 tipo_resolvido = sufixo.lstrip(".") or "documento"
 
         titulo_final = titulo.strip() or origem_path.name
-        arquivo_destino = pasta_disc / origem_path.name
+        arquivo_destino = pasta_disc / Path(origem_path).name
         if origem_path.resolve() != arquivo_destino.resolve():
             shutil.copy2(origem_path, arquivo_destino)
         caminho_destino = str(arquivo_destino)

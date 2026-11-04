@@ -386,18 +386,28 @@ def estudos_disciplinas_endpoint():
 def estudos_materiais_endpoint(nome_disciplina):
     from . import estudos
     if request.method == "POST":
+        canal = request.headers.get("X-Nextor-Canal") or request.args.get("canal")
         if "arquivo" in request.files:
+            if canal == "remoto":
+                return jsonify(erro="canal remoto nao permite upload ou caminhos locais; envie apenas links"), 400
             arq = request.files["arquivo"]
             if not arq.filename:
                 return jsonify(erro="arquivo sem nome"), 400
-            pasta_disc = estudos.obter_pasta_disciplina(nome_disciplina)
             nome_seguro = Path(arq.filename).name
+            pasta_disc = estudos.obter_pasta_disciplina(nome_disciplina)
             destino = pasta_disc / nome_seguro
             arq.save(str(destino))
-            res = estudos.importar_material(nome_disciplina, destino, titulo=request.form.get("titulo", ""))
+            res = estudos.importar_material(
+                nome_disciplina,
+                destino,
+                titulo=request.form.get("titulo", ""),
+                pastas_autorizadas=[pasta_disc],
+                canal=canal or "local",
+            )
             return jsonify(res), 200 if res.get("ok") else 400
 
         dados = request.get_json(silent=True) or request.form
+        canal = canal or (dados.get("canal") if hasattr(dados, "get") else None) or "local"
         origem = (dados.get("origem") or "").strip()
         if not origem:
             return jsonify(erro="origem do material (arquivo ou url) obrigatoria"), 400
@@ -405,7 +415,8 @@ def estudos_materiais_endpoint(nome_disciplina):
             nome_disciplina,
             origem,
             titulo=(dados.get("titulo") or "").strip(),
-            tipo=(dados.get("tipo") or "").strip()
+            tipo=(dados.get("tipo") or "").strip(),
+            canal=canal,
         )
         return jsonify(res), 200 if res.get("ok") else 400
 

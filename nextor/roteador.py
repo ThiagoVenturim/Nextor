@@ -29,7 +29,7 @@ def _registra(frase: str, intencao: str) -> None:
         pass
 
 
-def rotear(frase: str) -> dict:
+def rotear(frase: str, canal: str = "local") -> dict:
     from .chamado import entender
     from .companheiro import companheiro, identidade_pedida
     # "ei Nextor", "meu amigo Nextor", "ola Claude"...: quem foi chamado responde e o rosto acorda.
@@ -117,6 +117,8 @@ def rotear(frase: str) -> dict:
         if m:
             origem_mat, disc_mat = m.group(1).strip(), m.group(2).strip(" ?.")
             _registra(frase, "estudos_adicionar")
+            if canal != "local":
+                return {"intencao": "estudos_adicionar", "resposta": _fazer_estudos_adicionar(disc_mat, origem_mat, canal=canal)}
             return {"intencao": "estudos_adicionar", "resposta": _fazer_estudos_adicionar(disc_mat, origem_mat)}
 
     m_mat = re.search(r"(?:o que (?:eu )?tenho de material (?:de|em)\s+|listar materiais? (?:de|em)\s+|materiais? (?:de|em)\s+)(.+)$", limpa, flags=re.IGNORECASE)
@@ -225,12 +227,12 @@ def _fazer_estudos_criar_disciplina(nome: str) -> str:
         return "Nao consegui criar a disciplina agora."
 
 
-def _fazer_estudos_adicionar(disciplina: str, origem: str) -> str:
+def _fazer_estudos_adicionar(disciplina: str, origem: str, canal: str = "local") -> str:
     if not origem:
         return f"Informe o arquivo ou link para adicionar em {disciplina}."
     try:
         from . import estudos
-        res = estudos.importar_material(disciplina, origem)
+        res = estudos.importar_material(disciplina, origem, canal=canal)
         return res.get("aviso") or res.get("erro", "Erro ao adicionar material.")
     except Exception:
         return f"Nao consegui adicionar o material em {disciplina} agora."
