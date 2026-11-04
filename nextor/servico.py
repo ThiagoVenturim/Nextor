@@ -34,13 +34,17 @@ PROTEGIDOS = ("anotar", "falar_endpoint", "conversar_endpoint", "notas",
 WEB = Path(__file__).resolve().parent / "web"
 
 
-def autorizado() -> bool:
+def _obter_token() -> str:
     enviado = request.args.get("token") or request.headers.get("X-Nextor-Token")
     if not enviado:
         auth = request.headers.get("Authorization", "")
         if auth.lower().startswith("bearer "):
             enviado = auth[7:].strip()
-    return enviado == config.TOKEN
+    return enviado or ""
+
+
+def autorizado() -> bool:
+    return _obter_token() == config.TOKEN
 
 
 def pega_texto() -> str:
@@ -69,7 +73,14 @@ def comando():
     if entender(texto)["chamado"]:
         from .janela import abrir_rosto
         abrir_rosto()
-    r = rotear(texto)
+    from . import dispositivos
+    id_disp = (request.is_json and (request.get_json(silent=True) or {}).get("dispositivo")) or request.values.get("dispositivo")
+    if not id_disp:
+        token_atual = _obter_token()
+        disp_atual = dispositivos.buscar_por_token(token_atual) if token_atual else None
+        if disp_atual:
+            id_disp = disp_atual["id"]
+    r = rotear(texto, id_dispositivo=id_disp)
     from .companheiro import companheiro
     companheiro.atualizar(ultima_mensagem=texto, ultima_resposta=r["resposta"])
     aviso = _falar_sem_quebrar(r["resposta"])
@@ -478,7 +489,14 @@ def assistente_endpoint():
         adaptadores.registrar_log(adaptador["id"], "", intencao="", status_http=400, detalhe="texto vazio")
         return jsonify(ok=False, erro="texto vazio"), 400
 
-    r = rotear(texto, canal="remoto")
+    from . import dispositivos
+    id_disp = (request.is_json and (request.get_json(silent=True) or {}).get("dispositivo")) or request.values.get("dispositivo")
+    if not id_disp:
+        token_atual = _obter_token()
+        disp_atual = dispositivos.buscar_por_token(token_atual) if token_atual else None
+        if disp_atual:
+            id_disp = disp_atual["id"]
+    r = rotear(texto, canal="remoto", id_dispositivo=id_disp)
     from .companheiro import companheiro
     companheiro.atualizar(ultima_mensagem=texto, ultima_resposta=r.get("resposta", ""))
 
@@ -542,6 +560,195 @@ def assistente_logs_endpoint():
     from . import adaptadores
     limite = int(request.args.get("limite", 50))
     return jsonify(ok=True, logs=adaptadores.ler_logs(limite=limite))
+
+
+# --- Dispositivos e telas (celular, tablet, notebook, PC, TV) ------------------
+
+@app.route("/v1/dispositivos", methods=["GET", "POST"])
+def dispositivos_endpoint():
+    from . import dispositivos
+    token = _obter_token()
+    eh_mestre = (token == config.TOKEN)
+
+    if request.method == "POST":
+        if not eh_mestre:
+            return jsonify(ok=False, erro="token mestre invalido"), 401
+        dados = request.get_json(silent=True) or request.values
+        id_disp = (dados.get("id") or "").strip()
+        nome = (dados.get("nome") or "").strip()
+        tipo = (dados.get("tipo") or "").strip()
+        token_custom = (dados.get("token") or "").strip() or None
+        perms = dados.get("permissoes")
+        if isinstance(perms, str):
+            perms = [p.strip() for p in perms.split(",") if p.strip()]
+        try:
+            item = dispositivos.cadastrar(id_disp, nome, tipo, permissoes=perms, token=token_custom)
+            host = request.host.split(":")[0] if request.host else "localhost"
+            token_puro = item.get("token", "")
+            url_parear = dispositivos.gerar_url_pareamento(item["id"], token_puro=token_puro, host=host, porta=config.PORTA)
+            return jsonify(ok=True, dispositivo=item, url_pareamento=url_parear), 201
+        except ValueError as e:
+            return jsonify(ok=False, erro=str(e)), 400
+
+    disp_solicitante = dispositivos.buscar_por_token(token) if not eh_mestre else None
+    if not eh_mestre and not disp_solicitante:
+        return jsonify(ok=False, erro="nao autorizado"), 401
+
+    revelar = eh_mestre and str(request.args.get("revelar", "")).lower() in ("1", "true", "sim")
+    return jsonify(ok=True, dispositivos=dispositivos.listar(mascarar=not revelar))
+
+
+@app.post("/v1/dispositivos/<id_dispositivo>/revogar")
+def dispositivo_revogar_endpoint(id_dispositivo):
+    if not autorizado():
+        return jsonify(ok=False, erro="token mestre invalido"), 401
+    from . import dispositivos
+    ok = dispositivos.revogar(id_dispositivo)
+    if not ok:
+        return jsonify(ok=False, erro="dispositivo nao encontrado"), 404
+    return jsonify(ok=True, id=id_dispositivo, revogado=True)
+
+
+@app.post("/v1/dispositivos/<id_dispositivo>/ativar")
+def dispositivo_ativar_endpoint(id_dispositivo):
+    if not autorizado():
+        return jsonify(ok=False, erro="token mestre invalido"), 401
+    from . import dispositivos
+    ok = dispositivos.ativar(id_dispositivo)
+    if not ok:
+        return jsonify(ok=False, erro="dispositivo nao encontrado"), 404
+    return jsonify(ok=True, id=id_dispositivo, ativo=True)
+
+
+@app.post("/v1/dispositivos/<id_dispositivo>/presenca")
+def dispositivo_presenca_endpoint(id_dispositivo):
+    from . import dispositivos
+    token = _obter_token()
+    disp = dispositivos.buscar_por_id(id_dispositivo)
+    if not disp:
+        return jsonify(ok=False, erro="dispositivo nao encontrado"), 404
+    disp_autenticado = dispositivos.buscar_por_token(token)
+    eh_proprio = (disp_autenticado and disp_autenticado.get("id") == disp["id"] and disp.get("ativo", True))
+    if not (token == config.TOKEN or eh_proprio):
+        return jsonify(ok=False, erro="nao autorizado"), 401
+
+    ip = request.remote_addr
+    ua = request.headers.get("User-Agent")
+    atualizado = dispositivos.registrar_presenca(id_dispositivo, ip=ip, user_agent=ua)
+    dispositivos.definir_ativo(id_dispositivo)
+    return jsonify(ok=True, dispositivo=atualizado)
+
+
+@app.get("/v1/dispositivos/ativo")
+def dispositivo_ativo_endpoint():
+    from . import dispositivos
+    token = _obter_token()
+    disp = dispositivos.buscar_por_token(token)
+    if token != config.TOKEN and not disp:
+        return jsonify(ok=False, erro="nao autorizado"), 401
+    ativo = dispositivos.dispositivo_ativo()
+    return jsonify(ok=True, ativo=ativo)
+
+
+@app.post("/v1/dispositivos/hand-off")
+def dispositivo_handoff_endpoint():
+    """Encaminha uma resposta ou continuacao para outro aparelho ('mostra na TV', etc)."""
+    from . import dispositivos
+    token = _obter_token()
+    disp_origem = dispositivos.buscar_por_token(token)
+    if token != config.TOKEN and not disp_origem:
+        return jsonify(ok=False, erro="nao autorizado"), 401
+
+    dados = request.get_json(silent=True) or request.values
+    alvo = (dados.get("alvo") or dados.get("dispositivo") or "").strip()
+    texto = (dados.get("texto") or "").strip()
+    titulo = (dados.get("titulo") or "Nextor").strip()
+
+    if not alvo:
+        return jsonify(ok=False, erro="alvo nao especificado"), 400
+    if not texto:
+        return jsonify(ok=False, erro="texto vazio"), 400
+
+    disp_alvo = dispositivos.buscar_por_tipo_ou_nome(alvo)
+    if not disp_alvo:
+        return jsonify(ok=False, erro=f"dispositivo alvo '{alvo}' nao encontrado"), 404
+    if not disp_alvo.get("ativo", True):
+        return jsonify(ok=False, erro=f"dispositivo alvo '{disp_alvo['nome']}' esta desativado ou revogado"), 403
+
+    msg = dispositivos.enviar_resposta_dispositivo(disp_alvo["id"], texto, titulo=titulo)
+    return jsonify(ok=True, mensagem=msg, dispositivo_alvo=disp_alvo["id"])
+
+
+@app.get("/v1/dispositivos/<id_dispositivo>/mensagens")
+def dispositivo_mensagens_endpoint(id_dispositivo):
+    from . import dispositivos
+    token = _obter_token()
+    disp = dispositivos.buscar_por_id(id_dispositivo)
+    if not disp:
+        return jsonify(ok=False, erro="dispositivo nao encontrado"), 404
+    disp_autenticado = dispositivos.buscar_por_token(token)
+    eh_proprio = (disp_autenticado and disp_autenticado.get("id") == disp["id"] and disp.get("ativo", True))
+    if not (token == config.TOKEN or eh_proprio):
+        return jsonify(ok=False, erro="nao autorizado"), 401
+
+    limpar = str(request.args.get("limpar", "")).lower() in ("1", "true", "sim")
+    mensagens = dispositivos.obter_mensagens_pendentes(id_dispositivo, limpar=limpar)
+    return jsonify(ok=True, id=id_dispositivo, mensagens=mensagens)
+
+
+@app.get("/dispositivo/conectar")
+def dispositivo_conectar_pagina():
+    """Tela simples para aparelhos pareados (TV, celular, tablet) exibirem respostas."""
+    from . import dispositivos
+    id_disp = request.args.get("id", "").strip()
+    token = request.args.get("token", "").strip()
+    disp = dispositivos.buscar_por_id(id_disp)
+    disp_token = dispositivos.buscar_por_token(token)
+    if not disp or not disp_token or disp["id"] != disp_token["id"] or not disp.get("ativo", True):
+        return "Dispositivo nao encontrado ou token invalido.", 401, {"Content-Type": "text/plain; charset=utf-8"}
+
+    dispositivos.registrar_presenca(id_disp, ip=request.remote_addr, user_agent=request.headers.get("User-Agent"))
+    dispositivos.definir_ativo(id_disp)
+
+    html = f"""<!doctype html><html lang=pt-BR><meta charset=utf-8>
+<meta name=viewport content="width=device-width, initial-scale=1">
+<title>Nextor - {disp['nome']}</title>
+<style>
+:root{{color-scheme:light dark;--a:#4f46e5}}
+body{{font-family:system-ui,sans-serif;max-width:720px;margin:0 auto;padding:24px;background:Canvas;color:CanvasText;text-align:center}}
+.card{{border:1px solid #8884;border-radius:16px;padding:24px;margin:20px 0;background:Canvas}}
+h1{{margin:0 0 8px 0;font-size:1.8rem}}
+.tipo{{opacity:.7;font-size:1rem;margin-bottom:16px}}
+#resposta{{font-size:1.4rem;line-height:1.5;min-height:80px;white-space:pre-wrap;padding:16px}}
+.status{{font-size:.85rem;opacity:.6}}
+</style>
+<div class=card>
+  <h1>Nextor</h1>
+  <div class=tipo>{disp['nome']} ({disp['tipo']})</div>
+  <div id=resposta>Aparelho conectado e pronto.</div>
+  <div class=status id=status>Online</div>
+</div>
+<script>
+const id = {json.dumps(disp['id'])};
+const tk = {json.dumps(token)};
+async function checar(){{
+  try{{
+    const r = await fetch('/v1/dispositivos/' + encodeURIComponent(id) + '/mensagens?limpar=1&token=' + encodeURIComponent(tk));
+    const d = await r.json();
+    if(d.ok && d.mensagens && d.mensagens.length > 0){{
+      const ultima = d.mensagens[d.mensagens.length - 1];
+      document.getElementById('resposta').textContent = ultima.texto;
+      document.getElementById('status').textContent = 'Atualizado ' + ultima.quando;
+    }}
+  }}catch(e){{}}
+}}
+setInterval(checar, 2500);
+checar();
+</script></html>"""
+    return html, 200, {"Content-Type": "text/html; charset=utf-8"}
+
+
+
 def main():
     from .automacoes import iniciar_agendador
     iniciar_agendador()
