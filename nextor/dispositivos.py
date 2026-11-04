@@ -142,17 +142,18 @@ def buscar_por_tipo_ou_nome(termo: str) -> dict[str, Any] | None:
     t = termo.strip().lower()
     if not t:
         return None
-    dispositivos = [d for d in carregar() if d.get("ativo", True)]
-    # Match exato de id ou nome
-    for d in dispositivos:
+    todos = carregar()
+    # Match exato de id ou nome (permite encontrar desativados para checagem)
+    for d in todos:
         if d["id"] == t or d["nome"].lower() == t:
             return d
-    # Match por tipo
-    por_tipo = [d for d in dispositivos if d["tipo"] == t]
+    # Match por tipo (prioriza ativos)
+    por_tipo = [d for d in todos if d["tipo"] == t]
     if por_tipo:
-        return por_tipo[0]
+        ativos = [d for d in por_tipo if d.get("ativo", True)]
+        return ativos[0] if ativos else por_tipo[0]
     # Match parcial de nome
-    for d in dispositivos:
+    for d in todos:
         if t in d["nome"].lower():
             return d
     return None
