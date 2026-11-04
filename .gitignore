@@ -17,6 +17,9 @@ home_assistant/config/
 .perfil
 !.env.example
 automacoes.json
+adaptadores.json
+assistentes.log
+dispositivos.json
 textos/
 
 # Modelos locais (vozes Piper, Vosk)
