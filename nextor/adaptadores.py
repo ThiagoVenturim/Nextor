@@ -243,17 +243,17 @@ def ler_logs(limite: int = 50) -> list[dict[str, Any]]:
         if not ARQUIVO_LOG.exists():
             return []
         try:
-            linhas = ARQUIVO_LOG.read_text(encoding="utf-8").strip().splitlines()
+            linhas = [l for l in ARQUIVO_LOG.read_text(encoding="utf-8").splitlines() if l.strip()]
             resultado = []
             for linha in reversed(linhas[-limite:]):
                 partes = linha.split("\t")
-                if len(partes) >= 5:
+                if len(partes) >= 4:
                     item = {
                         "quando": partes[0],
                         "adaptador": partes[1],
                         "status": int(partes[2]) if partes[2].isdigit() else 200,
                         "intencao": partes[3],
-                        "texto": partes[4],
+                        "texto": partes[4] if len(partes) > 4 else "",
                         "detalhe": partes[5] if len(partes) > 5 else "",
                     }
                     resultado.append(item)

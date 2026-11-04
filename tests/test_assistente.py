@@ -1,7 +1,10 @@
 """Testes unitarios offline do endpoint /v1/assistente e gestao de adaptadores.
 
 Sem rede, sem hardware real, sem audio, sem chamada externa.
+Cobre hash sha256 de tokens, comparacao constant-time, sanitizacao de log,
+revogacao estrita por id e ausencia de efeito colateral de audio.
 """
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -36,16 +39,22 @@ class TestAdaptadoresModel(BaseAdaptadoresTestCase):
         item = adaptadores.cadastrar("siri", "Siri Apple", token="token-siri", limite_por_minuto=30)
         self.assertEqual(item["id"], "siri")
         self.assertEqual(item["nome"], "Siri Apple")
+        # Token puro retornado apenas uma unica vez no retorno do cadastrar
         self.assertEqual(item["token"], "token-siri")
+        self.assertEqual(item["prefixo"], "token-si...")
         self.assertEqual(item["limite_por_minuto"], 30)
         self.assertTrue(item["ativo"])
 
         todos = adaptadores.listar(mascarar=False)
         self.assertEqual(len(todos), 1)
-        self.assertEqual(todos[0]["token"], "token-siri")
+        self.assertNotIn("token", todos[0])
+        self.assertIn("token_hash", todos[0])
+        self.assertEqual(todos[0]["prefixo"], "token-si...")
 
         mascarados = adaptadores.listar(mascarar=True)
-        self.assertEqual(mascarados[0]["token"], "toke...siri")
+        self.assertNotIn("token", mascarados[0])
+        self.assertNotIn("token_hash", mascarados[0])
+        self.assertEqual(mascarados[0]["prefixo"], "token-si...")
 
     def test_cadastrar_id_vazio_ou_duplicado(self):
         with self.assertRaises(ValueError):
@@ -66,27 +75,59 @@ class TestAdaptadoresModel(BaseAdaptadoresTestCase):
 
         por_id = adaptadores.buscar_por_id("TELEGRAM")
         self.assertIsNotNone(por_id)
-        self.assertEqual(por_id["token"], "token-tg-123")
+        self.assertNotIn("token", por_id)
+        self.assertEqual(por_id["prefixo"], "token-tg...")
+        self.assertIn("token_hash", por_id)
         self.assertIsNone(adaptadores.buscar_por_id("inexistente"))
 
-    def test_revogar_e_reativar(self):
-        adaptadores.cadastrar("siri", "Siri", token="token-siri")
-        self.assertTrue(adaptadores.revogar("siri"))
+    def test_token_puro_nao_aparece_no_arquivo_json(self):
+        token_secreto = "nxt_segredo_super_confidencial_98765"
+        adaptadores.cadastrar("segredo", "Dispositivo Secreto", token=token_secreto)
 
+        conteudo_disco = adaptadores.ARQUIVO.read_text(encoding="utf-8")
+        self.assertNotIn(token_secreto, conteudo_disco)
+        self.assertIn(adaptadores._hash_token(token_secreto), conteudo_disco)
+        self.assertIn("nxt_segr...", conteudo_disco)
+
+    def test_autenticacao_hmac_tempo_constante_e_token_incorreto_mesmo_tamanho(self):
+        token_valido = "nxt_1234567890abcdef12345678"
+        token_invalido_mesmo_tamanho = "nxt_1234567890abcdef12345679"
+        adaptadores.cadastrar("hmac_test", "HMAC Test", token=token_valido)
+
+        self.assertIsNotNone(adaptadores.buscar_por_token(token_valido))
+        self.assertIsNone(adaptadores.buscar_por_token(token_invalido_mesmo_tamanho))
+        self.assertIsNone(adaptadores.buscar_por_token("nxt_outro_tamanho"))
+        self.assertIsNone(adaptadores.buscar_por_token(""))
+
+    def test_revogacao_e_ativacao_estrita_por_id(self):
+        adaptadores.cadastrar("siri", "Siri", token="token-siri")
+
+        # Passar token puro nao revoga (aceita estritamente o id)
+        self.assertFalse(adaptadores.revogar("token-siri"))
+        self.assertTrue(adaptadores.buscar_por_id("siri")["ativo"])
+
+        # Revogar com id funciona
+        self.assertTrue(adaptadores.revogar("siri"))
         adaptador = adaptadores.buscar_por_id("siri")
         self.assertFalse(adaptador["ativo"])
         self.assertIn("revogado_em", adaptador)
 
-        # Listar apenas ativos nao deve trazer o revogado
+        # Listar apenas ativos nao traz o revogado
         self.assertEqual(len(adaptadores.listar(apenas_ativos=True)), 0)
 
+        # Passar token puro nao reativa
+        self.assertFalse(adaptadores.ativar("token-siri"))
+        self.assertFalse(adaptadores.buscar_por_id("siri")["ativo"])
+
+        # Ativar com id funciona
         self.assertTrue(adaptadores.ativar("siri"))
         adaptador_reativado = adaptadores.buscar_por_id("siri")
         self.assertTrue(adaptador_reativado["ativo"])
         self.assertIn("reativado_em", adaptador_reativado)
 
-    def test_remover(self):
+    def test_remover_estrito_por_id(self):
         adaptadores.cadastrar("siri", "Siri", token="token-siri")
+        self.assertFalse(adaptadores.remover("token-siri"))
         self.assertTrue(adaptadores.remover("siri"))
         self.assertIsNone(adaptadores.buscar_por_id("siri"))
         self.assertFalse(adaptadores.remover("siri"))
@@ -113,17 +154,42 @@ class TestAdaptadoresModel(BaseAdaptadoresTestCase):
         self.assertEqual(item["total_requisicoes"], 1)
         self.assertIsNotNone(item["ultimo_uso"])
 
-    def test_logs_unitarios(self):
-        adaptadores.registrar_log("siri", "que horas sao", intencao="horas", status_http=200)
-        adaptadores.registrar_log("siri", "comando invalido", status_http=400, detalhe="erro")
+    def test_sanitizacao_log_quebras_de_linha_e_tabs(self):
+        adaptadores.registrar_log(
+            "siri",
+            "linha 1\nlinha 2\r\nlinha 3\tcom tab",
+            intencao="comando",
+            status_http=200,
+            detalhe="detalhe\ncom\tquebra",
+        )
+        conteudo = adaptadores.ARQUIVO_LOG.read_text(encoding="utf-8")
+        linhas = conteudo.strip().split("\n")
+        self.assertEqual(len(linhas), 1)
+        self.assertIn("linha 1\\nlinha 2 linha 3\\tcom tab", linhas[0])
+        self.assertIn("detalhe\\ncom\\tquebra", linhas[0])
+        self.assertNotIn("\r", conteudo)
 
-        logs = adaptadores.ler_logs(limite=10)
-        self.assertEqual(len(logs), 2)
-        # Mais recente primeiro
-        self.assertEqual(logs[0]["texto"], "comando invalido")
-        self.assertEqual(logs[0]["status"], 400)
-        self.assertEqual(logs[1]["texto"], "que horas sao")
-        self.assertEqual(logs[1]["status"], 200)
+    def test_sanitizacao_log_truncamento_120_caracteres(self):
+        texto_longo = "X" * 200
+        adaptadores.registrar_log("siri", texto_longo, status_http=200)
+        logs = adaptadores.ler_logs(limite=1)
+        self.assertEqual(len(logs[0]["texto"]), 120)
+        self.assertEqual(logs[0]["texto"], "X" * 120)
+
+    def test_respeito_variavel_ambiente_nextor_log_assistentes(self):
+        with mock.patch.dict(os.environ, {"NEXTOR_LOG_ASSISTENTES": "0"}):
+            adaptadores.registrar_log("siri", "deve ser ignorado", status_http=200)
+        self.assertFalse(adaptadores.ARQUIVO_LOG.exists())
+        self.assertEqual(len(adaptadores.ler_logs()), 0)
+
+    def test_respeito_variavel_ambiente_nextor_log_texto_nao(self):
+        with mock.patch.dict(os.environ, {"NEXTOR_LOG_TEXTO": "nao"}):
+            adaptadores.registrar_log("siri", "texto estritamente privado", intencao="privada", status_http=200)
+        logs = adaptadores.ler_logs(limite=1)
+        self.assertEqual(len(logs), 1)
+        self.assertEqual(logs[0]["texto"], "")
+        self.assertEqual(logs[0]["adaptador"], "siri")
+        self.assertEqual(logs[0]["intencao"], "privada")
 
 
 class TestAssistenteEndpoint(BaseAdaptadoresTestCase):
@@ -254,18 +320,18 @@ class TestAssistenteEndpoint(BaseAdaptadoresTestCase):
         self.assertEqual(resp.status_code, 400)
         self.assertIn("vazio", resp.get_json()["erro"])
 
-    def test_chamada_registra_log(self):
+    def test_chamada_registra_log_sanitizado(self):
         with mock.patch("nextor.servico.rotear", return_value={"resposta": "resp", "intencao": "tempo"}):
             self.client.post(
                 "/v1/assistente",
-                json={"texto": "vai chover hoje?"},
+                json={"texto": "vai chover hoje?\nOu amanha?"},
                 headers={"Authorization": "Bearer token-siri-valido"},
             )
         logs = adaptadores.ler_logs()
         self.assertEqual(len(logs), 1)
         self.assertEqual(logs[0]["adaptador"], "siri")
         self.assertEqual(logs[0]["intencao"], "tempo")
-        self.assertEqual(logs[0]["texto"], "vai chover hoje?")
+        self.assertEqual(logs[0]["texto"], "vai chover hoje?\\nOu amanha?")
         self.assertEqual(logs[0]["status"], 200)
 
 
@@ -291,19 +357,24 @@ class TestAssistenteAdminEndpoints(BaseAdaptadoresTestCase):
         cad_dados = cad_resp.get_json()
         self.assertTrue(cad_dados["ok"])
         self.assertEqual(cad_dados["adaptador"]["id"], "alexa")
+        # Token puro retornado na criacao
+        self.assertTrue(cad_dados["adaptador"]["token"].startswith("nxt_"))
 
-        # Listagem padrao mascara token
+        # Listagem padrao mascara: sem token puro e sem token_hash
         list_resp = self.client.get("/v1/assistente/adaptadores", headers=self.h_mestre)
         self.assertEqual(list_resp.status_code, 200)
         itens = list_resp.get_json()["adaptadores"]
         self.assertEqual(len(itens), 1)
-        self.assertIn("...", itens[0]["token"])
+        self.assertIn("...", itens[0]["prefixo"])
+        self.assertNotIn("token", itens[0])
+        self.assertNotIn("token_hash", itens[0])
 
-        # Listagem com revelar=1 exibe token completo
+        # Listagem com revelar=1 exibe token_hash, mas nunca o token puro
         rev_resp = self.client.get("/v1/assistente/adaptadores?revelar=1", headers=self.h_mestre)
         self.assertEqual(rev_resp.status_code, 200)
         itens_rev = rev_resp.get_json()["adaptadores"]
-        self.assertEqual(itens_rev[0]["token"], cad_dados["adaptador"]["token"])
+        self.assertIn("token_hash", itens_rev[0])
+        self.assertNotIn("token", itens_rev[0])
 
     def test_revogar_e_ativar_via_admin(self):
         adaptadores.cadastrar("alexa", "Alexa")
