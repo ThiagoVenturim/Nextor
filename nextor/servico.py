@@ -391,7 +391,8 @@ def estudos_materiais_endpoint(nome_disciplina):
             if not arq.filename:
                 return jsonify(erro="arquivo sem nome"), 400
             pasta_disc = estudos.obter_pasta_disciplina(nome_disciplina)
-            destino = pasta_disc / arq.filename
+            nome_seguro = Path(arq.filename).name
+            destino = pasta_disc / nome_seguro
             arq.save(str(destino))
             res = estudos.importar_material(nome_disciplina, destino, titulo=request.form.get("titulo", ""))
             return jsonify(res), 200 if res.get("ok") else 400
