@@ -248,6 +248,21 @@ def extrair_texto_html(conteudo_html: str) -> Tuple[str, str]:
     return titulo, texto_limpo
 
 
+class SSRFSafeRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Handler de redirecionamento que valida cada salto contra SSRF e limita a 3 saltos."""
+    max_redirections = 3
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        url_destino = urllib.parse.urljoin(req.full_url, newurl)
+        validar_url_segura(url_destino)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def abrir_url_segura(req: urllib.request.Request, timeout: float = 10.0):
+    opener = urllib.request.build_opener(SSRFSafeRedirectHandler)
+    return opener.open(req, timeout=timeout)
+
+
 def baixar_link(
     url: str,
     timeout: float = 10.0,
@@ -259,7 +274,7 @@ def baixar_link(
         url,
         headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Nextor/1.0"}
     )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
+    with abrir_url_segura(req, timeout=timeout) as resp:
         ct_header = resp.headers.get("Content-Type")
         if ct_header is not None and isinstance(ct_header, str):
             content_type = ct_header.lower()

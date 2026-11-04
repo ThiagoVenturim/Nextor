@@ -36,13 +36,20 @@ WEB = Path(__file__).resolve().parent / "web"
 
 def autorizado() -> bool:
     enviado = request.args.get("token") or request.headers.get("X-Nextor-Token")
+    if not enviado:
+        auth = request.headers.get("Authorization", "")
+        if auth.lower().startswith("bearer "):
+            enviado = auth[7:].strip()
     return enviado == config.TOKEN
 
 
 def pega_texto() -> str:
     if request.is_json:
-        return ((request.get_json(silent=True) or {}).get("texto") or "").strip()
-    return (request.form.get("texto") or request.args.get("texto") or "").strip()
+        dados = request.get_json(silent=True) or {}
+        return (dados.get("texto") or dados.get("pergunta") or dados.get("comando") or "").strip()
+    return (request.form.get("texto") or request.args.get("texto") or
+            request.form.get("pergunta") or request.args.get("pergunta") or
+            request.form.get("comando") or request.args.get("comando") or "").strip()
 
 
 @app.before_request
@@ -367,8 +374,6 @@ def fala_endpoint(fala_id):
     if audio is None:
         return jsonify(erro="audio expirou"), 404
     return Response(audio[0], mimetype=audio[1], headers={"Cache-Control": "no-store"})
-
-
 @app.route("/estudos/disciplinas", methods=["GET", "POST"])
 def estudos_disciplinas_endpoint():
     from . import estudos
@@ -386,10 +391,7 @@ def estudos_disciplinas_endpoint():
 def estudos_materiais_endpoint(nome_disciplina):
     from . import estudos
     if request.method == "POST":
-        canal = request.headers.get("X-Nextor-Canal") or request.args.get("canal")
         if "arquivo" in request.files:
-            if canal == "remoto":
-                return jsonify(erro="canal remoto nao permite upload ou caminhos locais; envie apenas links"), 400
             arq = request.files["arquivo"]
             if not arq.filename:
                 return jsonify(erro="arquivo sem nome"), 400
@@ -402,12 +404,11 @@ def estudos_materiais_endpoint(nome_disciplina):
                 destino,
                 titulo=request.form.get("titulo", ""),
                 pastas_autorizadas=[pasta_disc],
-                canal=canal or "local",
+                canal="local",
             )
             return jsonify(res), 200 if res.get("ok") else 400
 
         dados = request.get_json(silent=True) or request.form
-        canal = canal or (dados.get("canal") if hasattr(dados, "get") else None) or "local"
         origem = (dados.get("origem") or "").strip()
         if not origem:
             return jsonify(erro="origem do material (arquivo ou url) obrigatoria"), 400
@@ -416,7 +417,7 @@ def estudos_materiais_endpoint(nome_disciplina):
             origem,
             titulo=(dados.get("titulo") or "").strip(),
             tipo=(dados.get("tipo") or "").strip(),
-            canal=canal,
+            canal="local",
         )
         return jsonify(res), 200 if res.get("ok") else 400
 
@@ -434,7 +435,113 @@ def estudos_buscar_endpoint():
     resultados = estudos.buscar_materiais(termo, disciplina_nome=disciplina, limite=limite)
     return jsonify(ok=True, termo=termo, disciplina=disciplina, resultados=resultados)
 
+# --- Assistentes externos (Siri, Alexa, Telegram, etc) -------------------------
 
+@app.post("/v1/assistente")
+def assistente_endpoint():
+    """Ponto de entrada unico para assistentes externos.
+
+    Texto entra, texto sai, sem efeito colateral de tocar voz no Nest ou PC.
+    Requer token valido por adaptador (Bearer, X-Nextor-Token ou ?token=).
+    Aplica rate limiting e registra cada requisicao em log.
+    """
+    from . import adaptadores
+
+    token = request.args.get("token") or request.headers.get("X-Nextor-Token")
+    if not token:
+        auth = request.headers.get("Authorization", "")
+        if auth.lower().startswith("bearer "):
+            token = auth[7:].strip()
+
+    adaptador = adaptadores.buscar_por_token(token) if token else None
+    if not adaptador:
+        return jsonify(ok=False, erro="token de adaptador invalido"), 401
+    if not adaptador.get("ativo", True):
+        return jsonify(ok=False, erro="adaptador revogado"), 403
+
+    permitido, restantes, reset_em = adaptadores.verificar_limite(
+        adaptador["id"], adaptador.get("limite_por_minuto", 60)
+    )
+    if not permitido:
+        adaptadores.registrar_log(adaptador["id"], "", intencao="", status_http=429, detalhe="limite excedido")
+        resp = jsonify(ok=False, erro="limite de requisicoes excedido", reset_em_segundos=reset_em)
+        resp.status_code = 429
+        resp.headers["Retry-After"] = str(int(reset_em) + 1)
+        return resp
+
+    if rotear is None:
+        adaptadores.registrar_log(adaptador["id"], "", intencao="", status_http=503, detalhe="roteador indisponivel")
+        return jsonify(ok=False, erro="roteador indisponivel"), 503
+
+    texto = pega_texto()
+    if not texto:
+        adaptadores.registrar_log(adaptador["id"], "", intencao="", status_http=400, detalhe="texto vazio")
+        return jsonify(ok=False, erro="texto vazio"), 400
+
+    r = rotear(texto, canal="remoto")
+    from .companheiro import companheiro
+    companheiro.atualizar(ultima_mensagem=texto, ultima_resposta=r.get("resposta", ""))
+
+    adaptadores.registrar_uso(adaptador["id"])
+    adaptadores.registrar_log(adaptador["id"], texto, intencao=r.get("intencao", ""), status_http=200)
+
+    return jsonify(
+        ok=True,
+        resposta=r.get("resposta", ""),
+        intencao=r.get("intencao", ""),
+        adaptador=adaptador["id"],
+    )
+
+
+@app.route("/v1/assistente/adaptadores", methods=["GET", "POST"])
+def assistente_adaptadores_endpoint():
+    if not autorizado():
+        return jsonify(ok=False, erro="token mestre invalido"), 401
+    from . import adaptadores
+    if request.method == "POST":
+        dados = request.get_json(silent=True) or request.values
+        id_adaptador = (dados.get("id") or "").strip()
+        nome = (dados.get("nome") or "").strip()
+        token = (dados.get("token") or "").strip() or None
+        limite = int(dados.get("limite_por_minuto", 60))
+        try:
+            item = adaptadores.cadastrar(id_adaptador, nome, token=token, limite_por_minuto=limite)
+            return jsonify(ok=True, adaptador=item), 201
+        except ValueError as e:
+            return jsonify(ok=False, erro=str(e)), 400
+    revelar = str(request.args.get("revelar", "")).lower() in ("1", "true", "sim")
+    return jsonify(ok=True, adaptadores=adaptadores.listar(mascarar=not revelar))
+
+
+@app.post("/v1/assistente/adaptadores/<id_adaptador>/revogar")
+def assistente_revogar_endpoint(id_adaptador):
+    if not autorizado():
+        return jsonify(ok=False, erro="token mestre invalido"), 401
+    from . import adaptadores
+    ok = adaptadores.revogar(id_adaptador)
+    if not ok:
+        return jsonify(ok=False, erro="adaptador nao encontrado"), 404
+    return jsonify(ok=True, id=id_adaptador, revogado=True)
+
+
+@app.post("/v1/assistente/adaptadores/<id_adaptador>/ativar")
+def assistente_ativar_endpoint(id_adaptador):
+    if not autorizado():
+        return jsonify(ok=False, erro="token mestre invalido"), 401
+    from . import adaptadores
+    ok = adaptadores.ativar(id_adaptador)
+    if not ok:
+        return jsonify(ok=False, erro="adaptador nao encontrado"), 404
+    return jsonify(ok=True, id=id_adaptador, ativo=True)
+
+
+@app.get("/v1/assistente/logs")
+def assistente_logs_endpoint():
+    if not autorizado():
+        return jsonify(ok=False, erro="token mestre invalido"), 401
+    from . import adaptadores
+    limite = int(request.args.get("limite", 50))
+    return jsonify(ok=True, logs=adaptadores.ler_logs(limite=limite))
 def main():
     from .automacoes import iniciar_agendador
     iniciar_agendador()
