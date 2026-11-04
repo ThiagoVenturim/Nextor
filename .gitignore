@@ -22,3 +22,6 @@ textos/
 # Modelos locais (vozes Piper, Vosk)
 models/
 voz_dono.npy
+
+# Estado local do Maestri (canvas, roles)
+.maestri/
