@@ -31,7 +31,8 @@ PROTEGIDOS = ("anotar", "falar_endpoint", "conversar_endpoint", "notas",
               "agenda", "noticias", "comando", "automacoes_endpoint", "texto_endpoint",
               "nest_endpoint", "estado_endpoint", "modo_endpoint", "eventos_endpoint",
               "conversa_endpoint", "identidade_endpoint", "voz_endpoint", "fala_endpoint",
-              "estudos_disciplinas_endpoint", "estudos_materiais_endpoint", "estudos_buscar_endpoint")
+              "estudos_disciplinas_endpoint", "estudos_materiais_endpoint", "estudos_buscar_endpoint",
+              "estudos_aulas_gravar_endpoint", "estudos_aulas_parar_endpoint", "estudos_aulas_status_endpoint")
 WEB = Path(__file__).resolve().parent / "web"
 
 
@@ -480,6 +481,30 @@ def estudos_buscar_endpoint():
     limite = int(request.args.get("limite") or 10)
     resultados = estudos.buscar_materiais(termo, disciplina_nome=disciplina, limite=limite)
     return jsonify(ok=True, termo=termo, disciplina=disciplina, resultados=resultados)
+
+
+@app.post("/estudos/aulas/gravar")
+def estudos_aulas_gravar_endpoint():
+    from . import aulas
+    dados = request.get_json(silent=True) or request.form
+    disciplina = (dados.get("disciplina") or "").strip()
+    if not disciplina:
+        return jsonify(erro="disciplina obrigatoria"), 400
+    res = aulas.iniciar_gravacao(disciplina)
+    return jsonify(res), 200 if res.get("ok") else 400
+
+
+@app.post("/estudos/aulas/parar")
+def estudos_aulas_parar_endpoint():
+    from . import aulas
+    res = aulas.parar_gravacao()
+    return jsonify(res), 200 if res.get("ok") else 400
+
+
+@app.get("/estudos/aulas/status")
+def estudos_aulas_status_endpoint():
+    from . import aulas
+    return jsonify(ok=True, **aulas.status_gravacao())
 
 # --- Assistentes externos (Siri, Alexa, Telegram, etc) -------------------------
 

@@ -223,6 +223,17 @@ Configure `NEXTOR_DECK_URL` e `NEXTOR_DECK_TOKEN` no `.env` (o token esta em
 - Licenca MIT (ver arquivo LICENSE).
 - Nao abra porta no roteador. Para uso fora de casa, use uma VPN privada (ex.: Tailscale).
 - Gravar reunioes (recurso futuro) exige o consentimento dos participantes.
+- Gravacao de aulas (Modo Estudos): gravar aulas depende obrigatoriamente de autorizacao previa do professor e da instituicao de ensino. O assistente emite aviso previo de consentimento por voz e registra no cabecalho de cada transcricao gerada.
+
+## Modo Estudos: Biblioteca e Gravacao de Aulas
+
+O Nextor conta com biblioteca local por disciplina e recurso de gravacao e transcricao offline de aulas:
+
+- Comandos de biblioteca: "nova disciplina calculo", "adiciona este PDF em calculo", "o que tenho de material de fisica", "busca limites em calculo".
+- Comandos de gravacao: "Nextor, grava a aula de calculo" (inicia a gravacao) e "para a gravacao" (encerra e transcreve).
+- Transcricao offline dividida em trechos com carimbo de horario ([00:00 - 00:15] ...) salva diretamente na pasta da disciplina.
+- Indicador visual e de estado ativo durante a gravacao.
+- Aviso de consentimento mandatorio em todas as gravacoes.
 
 ## Estado
 
