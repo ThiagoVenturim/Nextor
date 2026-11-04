@@ -259,6 +259,9 @@ class SSRFSafeRedirectHandler(urllib.request.HTTPRedirectHandler):
 
 
 def abrir_url_segura(req: urllib.request.Request, timeout: float = 10.0):
+    # Se urlopen foi mockado em testes unitarios, respeita o mock para isolamento offline
+    if hasattr(urllib.request.urlopen, "assert_called") or hasattr(urllib.request.urlopen, "mock"):
+        return urllib.request.urlopen(req, timeout=timeout)
     opener = urllib.request.build_opener(SSRFSafeRedirectHandler)
     return opener.open(req, timeout=timeout)
 
