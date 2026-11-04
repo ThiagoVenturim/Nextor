@@ -84,6 +84,11 @@ def obter_pastas_importacao_estudos():
 
 ESTUDOS_IMPORTAR_DE = obter_pastas_importacao_estudos()
 
+# Telegram
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+TELEGRAM_USUARIOS_AUTORIZADOS = os.getenv("TELEGRAM_USUARIOS_AUTORIZADOS", "").strip()
+TELEGRAM_ADAPTADOR_TOKEN = os.getenv("TELEGRAM_ADAPTADOR_TOKEN", "").strip()
+
 # Caminhos de dados (ficam na raiz, fora do git)
 ANOTACOES = RAIZ / "anotacoes.md"
 MP3 = RAIZ / "nextor_fala.mp3"
