@@ -695,6 +695,30 @@ def telegram_webhook_endpoint():
     return jsonify(resultado), status_code
 
 
+# --- Adaptador Alexa ----------------------------------------------------------
+
+@app.post("/v1/alexa")
+def alexa_endpoint():
+    """Endpoint compativel com custom skill da Amazon Alexa."""
+    from . import alexa_skill
+    raw_body = request.get_data()
+    dados = request.get_json(silent=True)
+    if dados is None:
+        return jsonify(ok=False, erro="payload_invalido"), 400
+
+    headers_dict = dict(request.headers)
+    token_query = request.args.get("token")
+    if token_query and "x-nextor-token" not in {k.lower(): v for k, v in headers_dict.items()}:
+        headers_dict["x-nextor-token"] = token_query
+
+    resp_json, status_code = alexa_skill.processar_requisicao_alexa(
+        dados=dados,
+        raw_body=raw_body,
+        headers=headers_dict,
+    )
+    return jsonify(resp_json), status_code
+
+
 # --- Dispositivos e telas (celular, tablet, notebook, PC, TV) ------------------
 
 @app.route("/v1/dispositivos", methods=["GET", "POST"])
