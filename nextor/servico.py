@@ -1,4 +1,5 @@
 """Servico HTTP local do Nextor: recebe comandos pela rede de casa e responde em voz."""
+import hmac
 import json
 from datetime import datetime
 from pathlib import Path
@@ -33,6 +34,29 @@ PROTEGIDOS = ("anotar", "falar_endpoint", "conversar_endpoint", "notas",
 WEB = Path(__file__).resolve().parent / "web"
 
 
+TOKEN_PADRAO_INVALIDO = "troque-este-token"
+TAMANHO_MINIMO_TOKEN = 24
+
+
+def validar_token_mestre(token: str | None = None) -> bool:
+    tk = (token if token is not None else config.TOKEN) or ""
+    if tk == TOKEN_PADRAO_INVALIDO or len(tk) < TAMANHO_MINIMO_TOKEN:
+        return False
+    return True
+
+
+def exigir_token_mestre_valido() -> None:
+    if not validar_token_mestre():
+        msg = (
+            f"Erro de seguranca: NEXTOR_TOKEN invalido ou inseguro (deve ter no minimo {TAMANHO_MINIMO_TOKEN} "
+            f"caracteres e nao pode ser '{TOKEN_PADRAO_INVALIDO}').\n"
+            f"Gere um token seguro executando no terminal:\n"
+            f"  python -c \"import secrets; print(secrets.token_urlsafe(24))\"\n"
+            f"e configure-o no seu arquivo .env (campo NEXTOR_TOKEN)."
+        )
+        raise SystemExit(msg)
+
+
 def _obter_token() -> str:
     enviado = request.args.get("token") or request.headers.get("X-Nextor-Token")
     if not enviado:
@@ -43,7 +67,11 @@ def _obter_token() -> str:
 
 
 def autorizado() -> bool:
-    return _obter_token() == config.TOKEN
+    enviado = _obter_token()
+    mestre = config.TOKEN or ""
+    if not enviado or not mestre:
+        return False
+    return hmac.compare_digest(enviado, mestre)
 
 
 def pega_texto() -> str:
@@ -73,12 +101,12 @@ def comando():
         from .janela import abrir_rosto
         abrir_rosto()
     from . import dispositivos
-    id_disp = (request.is_json and (request.get_json(silent=True) or {}).get("dispositivo")) or request.values.get("dispositivo")
-    if not id_disp:
-        token_atual = _obter_token()
-        disp_atual = dispositivos.buscar_por_token(token_atual) if token_atual else None
-        if disp_atual:
-            id_disp = disp_atual["id"]
+    token_atual = _obter_token()
+    disp_atual = dispositivos.buscar_por_token(token_atual) if token_atual else None
+    if disp_atual:
+        id_disp = disp_atual["id"]
+    else:
+        id_disp = (request.is_json and (request.get_json(silent=True) or {}).get("dispositivo")) or request.values.get("dispositivo")
     r = rotear(texto, id_dispositivo=id_disp)
     from .companheiro import companheiro
     companheiro.atualizar(ultima_mensagem=texto, ultima_resposta=r["resposta"])
@@ -430,12 +458,12 @@ def assistente_endpoint():
         return jsonify(ok=False, erro="texto vazio"), 400
 
     from . import dispositivos
-    id_disp = (request.is_json and (request.get_json(silent=True) or {}).get("dispositivo")) or request.values.get("dispositivo")
-    if not id_disp:
-        token_atual = _obter_token()
-        disp_atual = dispositivos.buscar_por_token(token_atual) if token_atual else None
-        if disp_atual:
-            id_disp = disp_atual["id"]
+    token_atual = _obter_token()
+    disp_atual = dispositivos.buscar_por_token(token_atual) if token_atual else None
+    if disp_atual:
+        id_disp = disp_atual["id"]
+    else:
+        id_disp = (request.is_json and (request.get_json(silent=True) or {}).get("dispositivo")) or request.values.get("dispositivo")
     r = rotear(texto, id_dispositivo=id_disp)
     from .companheiro import companheiro
     companheiro.atualizar(ultima_mensagem=texto, ultima_resposta=r.get("resposta", ""))
@@ -641,14 +669,19 @@ def dispositivo_conectar_pagina():
     """Tela simples para aparelhos pareados (TV, celular, tablet) exibirem respostas."""
     from . import dispositivos
     id_disp = request.args.get("id", "").strip()
-    token = request.args.get("token", "").strip()
     disp = dispositivos.buscar_por_id(id_disp)
-    disp_token = dispositivos.buscar_por_token(token)
-    if not disp or not disp_token or disp["id"] != disp_token["id"] or not disp.get("ativo", True):
-        return "Dispositivo nao encontrado ou token invalido.", 401, {"Content-Type": "text/plain; charset=utf-8"}
+    if not disp:
+        return "Dispositivo nao encontrado.", 404, {"Content-Type": "text/plain; charset=utf-8"}
+    if not disp.get("ativo", True):
+        return "Dispositivo desativado ou revogado.", 403, {"Content-Type": "text/plain; charset=utf-8"}
 
-    dispositivos.registrar_presenca(id_disp, ip=request.remote_addr, user_agent=request.headers.get("User-Agent"))
-    dispositivos.definir_ativo(id_disp)
+    token = request.args.get("token", "").strip()
+    if token:
+        disp_token = dispositivos.buscar_por_token(token)
+        if not disp_token or disp["id"] != disp_token["id"]:
+            return "Token invalido.", 401, {"Content-Type": "text/plain; charset=utf-8"}
+        dispositivos.registrar_presenca(id_disp, ip=request.remote_addr, user_agent=request.headers.get("User-Agent"))
+        dispositivos.definir_ativo(id_disp)
 
     html = f"""<!doctype html><html lang=pt-BR><meta charset=utf-8>
 <meta name=viewport content="width=device-width, initial-scale=1">
@@ -666,19 +699,43 @@ h1{{margin:0 0 8px 0;font-size:1.8rem}}
   <h1>Nextor</h1>
   <div class=tipo>{disp['nome']} ({disp['tipo']})</div>
   <div id=resposta>Aparelho conectado e pronto.</div>
-  <div class=status id=status>Online</div>
+  <div class=status id=status>Conectando...</div>
 </div>
 <script>
 const id = {json.dumps(disp['id'])};
-const tk = {json.dumps(token)};
+const hashParams = new URLSearchParams(window.location.hash.slice(1));
+let tk = hashParams.get('token') || new URLSearchParams(window.location.search).get('token') || '';
+if (tk) {{
+  try {{
+    sessionStorage.setItem('nextor_disp_' + id, tk);
+    if (window.location.hash) {{
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+    }}
+  }} catch(e) {{}}
+}} else {{
+  try {{
+    tk = sessionStorage.getItem('nextor_disp_' + id) || '';
+  }} catch(e) {{}}
+}}
+
 async function checar(){{
+  if (!tk) {{
+    document.getElementById('status').textContent = 'Token nao informado';
+    return;
+  }}
   try{{
     const r = await fetch('/v1/dispositivos/' + encodeURIComponent(id) + '/mensagens?limpar=1&token=' + encodeURIComponent(tk));
+    if (r.status === 401 || r.status === 403) {{
+      document.getElementById('status').textContent = 'Token invalido ou revogado';
+      return;
+    }}
     const d = await r.json();
     if(d.ok && d.mensagens && d.mensagens.length > 0){{
       const ultima = d.mensagens[d.mensagens.length - 1];
       document.getElementById('resposta').textContent = ultima.texto;
       document.getElementById('status').textContent = 'Atualizado ' + ultima.quando;
+    }} else {{
+      document.getElementById('status').textContent = 'Online';
     }}
   }}catch(e){{}}
 }}
@@ -689,6 +746,7 @@ checar();
 
 
 def main():
+    exigir_token_mestre_valido()
     from .automacoes import iniciar_agendador
     iniciar_agendador()
     try:
