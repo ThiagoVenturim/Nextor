@@ -47,6 +47,20 @@ def rotear(frase: str, canal: str = "local", id_dispositivo: str | None = None) 
     limpa = _limpa(frase)
     base = _sem_acento(limpa)
 
+    # Resposta a quiz interativo pendente (Issue #6)
+    try:
+        from .quiz import sessao_quiz
+        if sessao_quiz.obter_ativa():
+            m_resp = re.search(r"^(?:letra\s+|opcao\s+)?([a-d]|verdadeiro|falso|v|f)$", base.strip(), flags=re.IGNORECASE)
+            if m_resp:
+                letra_ou_vf = m_resp.group(1).upper()
+                resultado = sessao_quiz.responder(letra_ou_vf)
+                if resultado and resultado.get("ok"):
+                    _registra(frase, "estudos_quiz_resposta")
+                    return {"intencao": "estudos_quiz_resposta", "resposta": resultado["mensagem"]}
+    except Exception:
+        pass
+
     identidade = identidade_pedida(limpa)
     if identidade:
         _registra(frase, "identidade")
@@ -62,6 +76,17 @@ def rotear(frase: str, canal: str = "local", id_dispositivo: str | None = None) 
             idioma = "ingles"
         _registra(frase, "traduzir")
         return {"intencao": "traduzir", "resposta": _fazer_texto("traduzir", conteudo, idioma)}
+
+    # Quizzes de estudos com repeticao espacada (Issue #6)
+    if base in ("quiz do dia", "quiz de hoje", "fazer o quiz do dia", "iniciar quiz do dia", "quiz diario", "quiz diário"):
+        _registra(frase, "estudos_quiz_do_dia")
+        return {"intencao": "estudos_quiz_do_dia", "resposta": _fazer_estudos_quiz_do_dia()}
+
+    m_quiz = re.search(r"^(?:me\s+faz\s+(?:um\s+)?|fazer\s+(?:um\s+)?|iniciar\s+(?:o\s+)?|comecar\s+(?:o\s+)?|quero\s+(?:um\s+)?)?quiz\s+(?:de\s+|da\s+|do\s+|em\s+)?(.+)$", limpa, flags=re.IGNORECASE)
+    if m_quiz and not any(k in base for k in ("dia", "hoje")):
+        disc_quiz = m_quiz.group(1).strip(" ?.")
+        _registra(frase, "estudos_quiz")
+        return {"intencao": "estudos_quiz", "resposta": _fazer_estudos_iniciar_quiz(disc_quiz)}
 
     # Resumos de estudos (Issue #4) e flashcards Anki
     m_flash = re.search(r"^(?:gerar\s+|criar\s+|fazer\s+)?flashcards\s+(?:de\s+|da\s+|do\s+|em\s+)?(.+)$", limpa, flags=re.IGNORECASE)
@@ -363,6 +388,23 @@ def _fazer_estudos_resumo(disciplina: str, alvo: str = "", gerar_cards: bool = T
         return res.get("aviso") or res.get("erro", "Nao consegui gerar o resumo agora.")
     except Exception:
         return "Nao consegui gerar o resumo dos estudos agora."
+
+
+def _fazer_estudos_quiz_do_dia() -> str:
+    try:
+        from . import quiz
+        res = quiz.quiz_do_dia()
+        return res.get("aviso") or res.get("erro", "Nao consegui iniciar o quiz do dia agora.")
+    except Exception:
+        return "Nao consegui preparar o quiz do dia agora."
+
+
+def _fazer_estudos_iniciar_quiz(disciplina: str) -> str:
+    try:
+        from . import quiz
+        return quiz.iniciar_quiz_por_voz(disciplina)
+    except Exception:
+        return f"Nao consegui iniciar o quiz de {disciplina} agora."
 
 
 if __name__ == "__main__":
