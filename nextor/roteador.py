@@ -162,6 +162,22 @@ def rotear(frase: str, canal: str = "local", id_dispositivo: str | None = None) 
         _registra(frase, "estudos_buscar")
         return {"intencao": "estudos_buscar", "resposta": _fazer_estudos_buscar(termo_busca, disc_busca)}
 
+    # Skill Organizador de Pastas (Issue #15)
+    if "desfaz organizacao" in base or "desfazer organizacao" in base or "desfaz a organizacao" in base or "desfazer a organizacao" in base:
+        _registra(frase, "organizador_desfazer")
+        return {"intencao": "organizador_desfazer", "resposta": _fazer_organizador_desfazer()}
+
+    if "confirma organizacao" in base or "confirmar organizacao" in base or "confirme a organizacao" in base or "confirmar a organizacao" in base:
+        _registra(frase, "organizador_confirmar")
+        return {"intencao": "organizador_confirmar", "resposta": _fazer_organizador_confirmar()}
+
+    m_org = re.search(r"(?:organiza|organizar)\s+(?:minha\s+|a\s+)?pasta\s+(.+?)(?:\s+por\s+(tipo|data|disciplina))?$", limpa, flags=re.IGNORECASE)
+    if m_org:
+        alvo_pasta = m_org.group(1).strip(" ?.")
+        criterio_pasta = (m_org.group(2) or "tipo").strip().lower()
+        _registra(frase, "organizador_previa")
+        return {"intencao": "organizador_previa", "resposta": _fazer_organizador_previa(alvo_pasta, criterio_pasta)}
+
     if any(w in base for w in PALAVRAS_AGENDA) or "o que tenho" in base or "o que eu tenho" in base:
         quando = "proximos" if any(k in base for k in ("amanha", "semana", "proxim")) else "hoje"
         _registra(frase, "agenda")
@@ -327,6 +343,30 @@ def _fazer_estudos_parar_gravacao() -> str:
         return res.get("aviso") or res.get("erro", "Erro ao encerrar gravacao.")
     except Exception:
         return "Nao consegui encerrar a gravacao agora."
+
+
+def _fazer_organizador_previa(alvo: str, criterio: str = "tipo") -> str:
+    try:
+        from . import organizador
+        return organizador.gerar_previa_por_frase(alvo, criterio=criterio)
+    except Exception as e:
+        return f"Nao consegui gerar a previa da organizacao: {e}"
+
+
+def _fazer_organizador_confirmar() -> str:
+    try:
+        from . import organizador
+        return organizador.confirmar_organizacao_pendente()
+    except Exception as e:
+        return f"Nao consegui executar a organizacao: {e}"
+
+
+def _fazer_organizador_desfazer(alvo: str | None = None) -> str:
+    try:
+        from . import organizador
+        return organizador.desfazer_organizacao_por_frase(alvo)
+    except Exception as e:
+        return f"Nao consegui desfazer a organizacao: {e}"
 
 
 if __name__ == "__main__":

@@ -32,7 +32,9 @@ PROTEGIDOS = ("anotar", "falar_endpoint", "conversar_endpoint", "notas",
               "nest_endpoint", "estado_endpoint", "modo_endpoint", "eventos_endpoint",
               "conversa_endpoint", "identidade_endpoint", "voz_endpoint", "fala_endpoint",
               "estudos_disciplinas_endpoint", "estudos_materiais_endpoint", "estudos_buscar_endpoint",
-              "estudos_aulas_gravar_endpoint", "estudos_aulas_parar_endpoint", "estudos_aulas_status_endpoint")
+              "estudos_aulas_gravar_endpoint", "estudos_aulas_parar_endpoint", "estudos_aulas_status_endpoint",
+              "organizador_previa_endpoint", "organizador_executar_endpoint",
+              "organizador_desfazer_endpoint", "organizador_historico_endpoint")
 WEB = Path(__file__).resolve().parent / "web"
 
 
@@ -658,6 +660,62 @@ def alexa_endpoint():
         headers=headers_dict,
     )
     return jsonify(resp_json), status_code
+
+
+# --- Organizador de Pastas (Issue #15) ----------------------------------------
+
+@app.post("/v1/organizador/previa")
+def organizador_previa_endpoint():
+    """Gera previa da organizacao de uma pasta sem mover arquivos."""
+    from . import organizador
+    dados = request.get_json(silent=True) or request.values
+    pasta = (dados.get("pasta") or "").strip()
+    criterio = (dados.get("criterio") or "tipo").strip()
+    if not pasta:
+        return jsonify(ok=False, erro="pasta_obrigatoria"), 400
+
+    try:
+        previa = organizador.gerar_previa(pasta, criterio=criterio)
+        return jsonify(previa), 200
+    except organizador.PastaNaoPermitidaError as e:
+        return jsonify(ok=False, erro="pasta_nao_permitida", mensagem=str(e)), 403
+    except Exception as e:
+        return jsonify(ok=False, erro=str(e)), 400
+
+
+@app.post("/v1/organizador/executar")
+def organizador_executar_endpoint():
+    """Executa as movimentacoes de uma previa pendente."""
+    from . import organizador
+    dados = request.get_json(silent=True) or request.values
+    id_sessao = (dados.get("id_sessao") or "").strip() or None
+    movs = dados.get("movimentacoes") if isinstance(dados.get("movimentacoes"), list) else None
+    pasta = (dados.get("pasta") or "").strip() or None
+
+    resultado = organizador.executar_organizacao(id_sessao=id_sessao, movimentacoes=movs, pasta=pasta)
+    status_code = 200 if resultado.get("ok") else 400
+    return jsonify(resultado), status_code
+
+
+@app.post("/v1/organizador/desfazer")
+def organizador_desfazer_endpoint():
+    """Desfaz a ultima operacao de organizacao ativa."""
+    from . import organizador
+    dados = request.get_json(silent=True) or request.values
+    pasta = (dados.get("pasta") or "").strip() or None
+
+    resultado = organizador.desfazer_ultima_organizacao(pasta=pasta)
+    status_code = 200 if resultado.get("ok") else 400
+    return jsonify(resultado), status_code
+
+
+@app.get("/v1/organizador/historico")
+def organizador_historico_endpoint():
+    """Retorna historico das operacoes de organizacao realizadas."""
+    from . import organizador
+    limite = int(request.args.get("limite", 10))
+    historico = organizador.listar_historico(limite=limite)
+    return jsonify(ok=True, historico=historico), 200
 
 
 # --- Dispositivos e telas (celular, tablet, notebook, PC, TV) ------------------

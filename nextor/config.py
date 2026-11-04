@@ -94,8 +94,25 @@ ALEXA_SKILL_ID = os.getenv("ALEXA_SKILL_ID", "").strip()
 ALEXA_ADAPTADOR_TOKEN = os.getenv("ALEXA_ADAPTADOR_TOKEN", "").strip()
 ALEXA_VERIFICAR_ASSINATURA = os.getenv("ALEXA_VERIFICAR_ASSINATURA", "1").strip().lower() not in ("0", "false", "nao")
 
+# Organizador de pastas
+def obter_pastas_organizacao_permitidas():
+    env_pastas = os.getenv("NEXTOR_ORGANIZAR_PASTAS_PERMITIDAS", "")
+    if env_pastas:
+        separadores = [";", ","]
+        texto = env_pastas
+        for s in separadores:
+            texto = texto.replace(s, ";")
+        return [Path(p.strip()).resolve() for p in texto.split(";") if p.strip()]
+    home = Path.home()
+    padroes = [home / "Downloads", home / "Documents", home / "Documentos"]
+    return [p.resolve() for p in padroes if p.exists()] or [home.resolve()]
+
+
+ORGANIZAR_PASTAS_PERMITIDAS = obter_pastas_organizacao_permitidas()
+
 # Caminhos de dados (ficam na raiz, fora do git)
 ANOTACOES = RAIZ / "anotacoes.md"
 MP3 = RAIZ / "nextor_fala.mp3"
 LOG_COMANDOS = RAIZ / "comandos.log"
+HISTORICO_ORGANIZACOES = RAIZ / "historico_organizacoes.json"
 CATT = RAIZ / ".venv" / "Scripts" / "catt.exe"
