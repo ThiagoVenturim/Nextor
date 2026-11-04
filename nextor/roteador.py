@@ -106,6 +106,35 @@ def rotear(frase: str) -> dict:
         _registra(frase, "nest_parar")
         return {"intencao": "nest", "resposta": _fazer_nest("parar")}
 
+    # Skill de Estudos (biblioteca de materias e busca FTS5)
+    if base.startswith("nova disciplina") or base.startswith("criar disciplina") or base.startswith("crie a disciplina"):
+        nome_disc = re.sub(r"^(nova disciplina|criar disciplina|crie a disciplina)\s+", "", limpa, flags=re.IGNORECASE).strip(" .:")
+        _registra(frase, "estudos_criar_disciplina")
+        return {"intencao": "estudos_criar_disciplina", "resposta": _fazer_estudos_criar_disciplina(nome_disc)}
+
+    if base.startswith("adiciona") or base.startswith("adicionar"):
+        m = re.search(r"adiciona\w*\s+(?:este\s+|o\s+)?(?:pdf|docx|arquivo|documento|texto|link)?\s*(.*?)\s+em\s+(.+)$", limpa, flags=re.IGNORECASE)
+        if m:
+            origem_mat, disc_mat = m.group(1).strip(), m.group(2).strip(" ?.")
+            _registra(frase, "estudos_adicionar")
+            return {"intencao": "estudos_adicionar", "resposta": _fazer_estudos_adicionar(disc_mat, origem_mat)}
+
+    m_mat = re.search(r"(?:o que (?:eu )?tenho de material (?:de|em)\s+|listar materiais? (?:de|em)\s+|materiais? (?:de|em)\s+)(.+)$", limpa, flags=re.IGNORECASE)
+    if m_mat:
+        disc_mat = m_mat.group(1).strip(" ?.")
+        _registra(frase, "estudos_listar_materiais")
+        return {"intencao": "estudos_listar_materiais", "resposta": _fazer_estudos_listar_materiais(disc_mat)}
+
+    if base in ("disciplinas", "minhas disciplinas", "listar disciplinas", "quais disciplinas eu tenho", "o que tenho de disciplinas"):
+        _registra(frase, "estudos_listar_disciplinas")
+        return {"intencao": "estudos_listar_disciplinas", "resposta": _fazer_estudos_listar_disciplinas()}
+
+    m_busca = re.search(r"(?:busca|buscar|pesquisa|pesquisar)\s+(?:material\s+)?(?:sobre\s+)?(.*?)\s+em\s+(.+)$", limpa, flags=re.IGNORECASE)
+    if m_busca:
+        termo_busca, disc_busca = m_busca.group(1).strip(), m_busca.group(2).strip(" ?.")
+        _registra(frase, "estudos_buscar")
+        return {"intencao": "estudos_buscar", "resposta": _fazer_estudos_buscar(termo_busca, disc_busca)}
+
     if any(w in base for w in PALAVRAS_AGENDA) or "o que tenho" in base or "o que eu tenho" in base:
         quando = "proximos" if any(k in base for k in ("amanha", "semana", "proxim")) else "hoje"
         _registra(frase, "agenda")
@@ -185,6 +214,50 @@ def _fazer_conversar(frase: str) -> str:
         return conversar(frase)
     except Exception:
         return "Estou aqui, mas meu cerebro esta fora do ar agora."
+
+
+def _fazer_estudos_criar_disciplina(nome: str) -> str:
+    try:
+        from . import estudos
+        res = estudos.criar_disciplina(nome)
+        return res.get("aviso") or res.get("erro", "Erro ao criar disciplina.")
+    except Exception:
+        return "Nao consegui criar a disciplina agora."
+
+
+def _fazer_estudos_adicionar(disciplina: str, origem: str) -> str:
+    if not origem:
+        return f"Informe o arquivo ou link para adicionar em {disciplina}."
+    try:
+        from . import estudos
+        res = estudos.importar_material(disciplina, origem)
+        return res.get("aviso") or res.get("erro", "Erro ao adicionar material.")
+    except Exception:
+        return f"Nao consegui adicionar o material em {disciplina} agora."
+
+
+def _fazer_estudos_listar_materiais(disciplina: str) -> str:
+    try:
+        from . import estudos
+        return estudos.resumo_materiais(disciplina)
+    except Exception:
+        return f"Nao consegui listar os materiais de {disciplina} agora."
+
+
+def _fazer_estudos_listar_disciplinas() -> str:
+    try:
+        from . import estudos
+        return estudos.resumo_disciplinas()
+    except Exception:
+        return "Nao consegui listar as disciplinas agora."
+
+
+def _fazer_estudos_buscar(termo: str, disciplina: str = "") -> str:
+    try:
+        from . import estudos
+        return estudos.resumo_busca(termo, disciplina_nome=disciplina)
+    except Exception:
+        return "Nao consegui buscar os materiais agora."
 
 
 if __name__ == "__main__":

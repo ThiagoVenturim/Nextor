@@ -7,3 +7,4 @@ recurring_ical_events
 feedparser
 anthropic
 mcp[cli]
+pypdf
