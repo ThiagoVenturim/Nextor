@@ -4,13 +4,14 @@ import os
 import socket
 import tempfile
 import unittest
+import urllib.request
 import zipfile
 from pathlib import Path
 from unittest import mock
 
 os.environ["NEXTOR_VOZ_SAIDA"] = "nenhuma"
 
-from nextor import config, estudos, roteador, servico
+from nextor import adaptadores, config, estudos, roteador, servico
 
 
 class TestSlugENomes(unittest.TestCase):
@@ -468,6 +469,34 @@ class TestSegurancaEstudos(unittest.TestCase):
             )
         self.assertTrue(res_link["ok"])
 
+    def test_ssrf_safe_redirect_handler(self):
+        handler = estudos.SSRFSafeRedirectHandler()
+        req = urllib.request.Request("https://exemplo.org/pagina")
+
+        # Redirect para 127.0.0.1 bloqueado
+        with self.assertRaises(ValueError) as ctx_loop:
+            handler.redirect_request(req, None, 302, "Found", {}, "http://127.0.0.1/admin")
+        self.assertIn("Acesso bloqueado ao IP 127.0.0.1", str(ctx_loop.exception))
+
+        # Redirect para IP privado 192.168.1.1 bloqueado
+        with self.assertRaises(ValueError) as ctx_priv:
+            handler.redirect_request(req, None, 302, "Found", {}, "http://192.168.1.1/config")
+        self.assertIn("Acesso bloqueado ao IP 192.168.1.1", str(ctx_priv.exception))
+
+        # Redirect para localhost bloqueado
+        with self.assertRaises(ValueError) as ctx_local:
+            handler.redirect_request(req, None, 301, "Moved", {}, "http://localhost:5005/notas")
+        self.assertIn("host local nao permitido", str(ctx_local.exception))
+
+        # Redirect seguro relativo ou absoluto retorna nova Request
+        with mock.patch("socket.getaddrinfo", return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))]):
+            nova_req = handler.redirect_request(req, None, 302, "Found", {}, "https://exemplo.org/destino_seguro.html")
+            self.assertIsNotNone(nova_req)
+            self.assertEqual(nova_req.full_url, "https://exemplo.org/destino_seguro.html")
+
+        # Limite maximo de 3 saltos
+        self.assertEqual(handler.max_redirections, 3)
+
 
 class TestRoteadorEstudos(unittest.TestCase):
     def test_rotear_criar_disciplina(self):
@@ -523,6 +552,8 @@ class TestServicoEstudosEndpoints(unittest.TestCase):
         self.p_edir = mock.patch.object(estudos.config, "ESTUDOS_DIR", self.base_dir)
         self.p_edb = mock.patch.object(estudos.config, "ESTUDOS_DB", self.db_path)
         self.p_env_importar = mock.patch.dict(os.environ, {"NEXTOR_ESTUDOS_IMPORTAR_DE": str(self.pasta_autorizada)})
+        self.p_arq_adaptadores = mock.patch.object(adaptadores, "ARQUIVO", self.base_dir / "adaptadores.json")
+        self.p_log_adaptadores = mock.patch.object(adaptadores, "ARQUIVO_LOG", self.base_dir / "assistentes.log")
 
         self.p_token.start()
         self.p_dir.start()
@@ -530,11 +561,17 @@ class TestServicoEstudosEndpoints(unittest.TestCase):
         self.p_edir.start()
         self.p_edb.start()
         self.p_env_importar.start()
+        self.p_arq_adaptadores.start()
+        self.p_log_adaptadores.start()
+        adaptadores.resetar_estado_testes()
 
         self.client = servico.app.test_client()
         self.headers = {"X-Nextor-Token": "token-teste"}
 
     def tearDown(self):
+        adaptadores.resetar_estado_testes()
+        self.p_log_adaptadores.stop()
+        self.p_arq_adaptadores.stop()
         self.p_env_importar.stop()
         self.p_edb.stop()
         self.p_edir.stop()
@@ -591,27 +628,33 @@ class TestServicoEstudosEndpoints(unittest.TestCase):
         self.assertEqual(len(r_list.get_json()["materiais"]), 1)
 
     def test_importar_material_canal_remoto_recusa_local_api(self):
-        self.client.post("/estudos/disciplinas", json={"nome": "Redes"}, headers=self.headers)
+        estudos.criar_disciplina("Redes", base_dir=self.base_dir, caminho_db=self.db_path)
+        adaptadores.cadastrar("siri", "Siri", token="token-siri-teste")
 
-        # Requisicao com canal remoto enviando caminho local
-        r_json = self.client.post(
-            "/estudos/disciplinas/Redes/materiais",
-            json={"origem": "C:/documentos/teste.txt", "canal": "remoto"},
-            headers=self.headers,
+        # Assistente externo tenta importar arquivo local via /v1/assistente
+        r_assistente = self.client.post(
+            "/v1/assistente",
+            json={"texto": "adicionar C:/documentos/teste.txt em Redes"},
+            headers={"Authorization": "Bearer token-siri-teste"},
         )
-        self.assertEqual(r_json.status_code, 400)
-        self.assertIn("Canal remoto aceita apenas links", r_json.get_json()["erro"])
+        self.assertEqual(r_assistente.status_code, 200)
+        dados = r_assistente.get_json()
+        self.assertTrue(dados["ok"])
+        self.assertEqual(dados["intencao"], "estudos_adicionar")
+        self.assertIn("Canal remoto aceita apenas links", dados["resposta"])
 
-        # Requisicao com header X-Nextor-Canal: remoto e upload multipart
-        arquivo_bytes = io.BytesIO(b"conteudo")
-        r_upload = self.client.post(
-            "/estudos/disciplinas/Redes/materiais",
-            data={"arquivo": (arquivo_bytes, "remoto.txt")},
-            content_type="multipart/form-data",
-            headers={**self.headers, "X-Nextor-Canal": "remoto"},
-        )
-        self.assertEqual(r_upload.status_code, 400)
-        self.assertIn("canal remoto nao permite upload", r_upload.get_json()["erro"])
+        # Assistente externo com link HTTP/HTTPS e aceito
+        with mock.patch.object(estudos, "baixar_link", return_value=("Protocolo TCP", "Texto sobre TCP")):
+            r_link = self.client.post(
+                "/v1/assistente",
+                json={"texto": "adicionar https://exemplo.org/tcp em Redes"},
+                headers={"Authorization": "Bearer token-siri-teste"},
+            )
+        self.assertEqual(r_link.status_code, 200)
+        dados_link = r_link.get_json()
+        self.assertTrue(dados_link["ok"])
+        self.assertEqual(dados_link["intencao"], "estudos_adicionar")
+        self.assertIn("adicionado em Redes", dados_link["resposta"])
 
     def test_importar_material_upload_arquivo_api(self):
         self.client.post("/estudos/disciplinas", json={"nome": "Sistemas Operacionais"}, headers=self.headers)
