@@ -1,9 +1,13 @@
 """Gerenciamento de adaptadores de assistentes (Siri, Alexa, Telegram, etc).
 
-Controla tokens revogaveis por adaptador, rate limiting em memoria e log de chamadas.
+Controla tokens revogaveis por hash sha256 e comparacao hmac em tempo constante,
+rate limiting por janela deslizante e registro seguro de requisicoes com sanitizacao de log.
 """
 from datetime import datetime
+import hashlib
+import hmac
 import json
+import os
 from pathlib import Path
 import secrets
 import threading
@@ -23,6 +27,21 @@ def _agora_iso() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
 
+def _gerar_token() -> str:
+    return f"nxt_{secrets.token_urlsafe(24)}"
+
+
+def _hash_token(token: str) -> str:
+    return hashlib.sha256(token.strip().encode("utf-8")).hexdigest()
+
+
+def _prefixo_token(token: str) -> str:
+    t = token.strip()
+    if len(t) <= 8:
+        return t[:4] + "..." if len(t) >= 4 else t + "..."
+    return t[:8] + "..."
+
+
 def carregar() -> list[dict[str, Any]]:
     with _TRAVA:
         if not ARQUIVO.exists():
@@ -38,7 +57,7 @@ def salvar(lista: list[dict[str, Any]]) -> None:
         ARQUIVO.write_text(json.dumps(lista, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def listar(apenas_ativos: bool = False, mascarar: bool = False) -> list[dict[str, Any]]:
+def listar(apenas_ativos: bool = False, mascarar: bool = True) -> list[dict[str, Any]]:
     todos = carregar()
     resultado = []
     for item in todos:
@@ -46,11 +65,8 @@ def listar(apenas_ativos: bool = False, mascarar: bool = False) -> list[dict[str
             continue
         copia = dict(item)
         if mascarar:
-            token = copia.get("token", "")
-            if len(token) > 8:
-                copia["token"] = token[:4] + "..." + token[-4:]
-            else:
-                copia["token"] = "***"
+            # Nunca expor o hash completo na listagem padrao
+            copia.pop("token_hash", None)
         resultado.append(copia)
     return resultado
 
@@ -70,29 +86,38 @@ def cadastrar(
         if item.get("id") == id_limpo:
             raise ValueError(f"adaptador '{id_limpo}' ja existe")
 
-    token_gerado = token.strip() if token else secrets.token_urlsafe(24)
-    novo = {
+    token_puro = token.strip() if token else _gerar_token()
+    token_hash = _hash_token(token_puro)
+    prefixo = _prefixo_token(token_puro)
+
+    salvo = {
         "id": id_limpo,
         "nome": nome.strip() or id_limpo,
-        "token": token_gerado,
+        "prefixo": prefixo,
+        "token_hash": token_hash,
         "limite_por_minuto": max(1, int(limite_por_minuto)),
         "ativo": True,
         "criado_em": _agora_iso(),
         "ultimo_uso": None,
         "total_requisicoes": 0,
     }
-    lista.append(novo)
+    lista.append(salvo)
     salvar(lista)
-    return novo
+
+    # Retorna o token completo apenas uma unica vez no ato da criacao
+    retorno = dict(salvo)
+    retorno["token"] = token_puro
+    return retorno
 
 
 def buscar_por_token(token: str) -> dict[str, Any] | None:
     if not token:
         return None
-    token_limpo = token.strip()
+    hash_candidato = _hash_token(token)
     lista = carregar()
     for item in lista:
-        if item.get("token") == token_limpo:
+        hash_salvo = item.get("token_hash", "")
+        if hash_salvo and hmac.compare_digest(hash_salvo, hash_candidato):
             return item
     return None
 
@@ -106,12 +131,12 @@ def buscar_por_id(id_adaptador: str) -> dict[str, Any] | None:
     return None
 
 
-def revogar(id_ou_token: str) -> bool:
-    chave = id_ou_token.strip()
+def revogar(id_adaptador: str) -> bool:
+    chave = id_adaptador.strip().lower()
     lista = carregar()
     alterado = False
     for item in lista:
-        if item.get("id") == chave.lower() or item.get("token") == chave:
+        if item.get("id") == chave:
             item["ativo"] = False
             item["revogado_em"] = _agora_iso()
             alterado = True
@@ -120,12 +145,12 @@ def revogar(id_ou_token: str) -> bool:
     return alterado
 
 
-def ativar(id_ou_token: str) -> bool:
-    chave = id_ou_token.strip()
+def ativar(id_adaptador: str) -> bool:
+    chave = id_adaptador.strip().lower()
     lista = carregar()
     alterado = False
     for item in lista:
-        if item.get("id") == chave.lower() or item.get("token") == chave:
+        if item.get("id") == chave:
             item["ativo"] = True
             item["reativado_em"] = _agora_iso()
             alterado = True
@@ -134,13 +159,10 @@ def ativar(id_ou_token: str) -> bool:
     return alterado
 
 
-def remover(id_ou_token: str) -> bool:
-    chave = id_ou_token.strip()
+def remover(id_adaptador: str) -> bool:
+    chave = id_adaptador.strip().lower()
     lista = carregar()
-    nova_lista = [
-        item for item in lista
-        if item.get("id") != chave.lower() and item.get("token") != chave
-    ]
+    nova_lista = [item for item in lista if item.get("id") != chave]
     if len(nova_lista) != len(lista):
         salvar(nova_lista)
         return True
@@ -184,10 +206,28 @@ def registrar_log(
     status_http: int = 200,
     detalhe: str = "",
 ) -> None:
+    ativo_log = os.getenv("NEXTOR_LOG_ASSISTENTES", "1").strip().lower()
+    if ativo_log in ("0", "false", "nao", "no"):
+        return
+
+    gravar_texto = os.getenv("NEXTOR_LOG_TEXTO", "sim").strip().lower() not in ("0", "false", "nao", "no")
+    if gravar_texto and texto:
+        texto_escapado = (
+            texto.replace("\r\n", " ")
+            .replace("\r", " ")
+            .replace("\n", "\\n")
+            .replace("\t", "\\t")
+            .strip()
+        )
+        texto_final = texto_escapado[:120]
+    else:
+        texto_final = ""
+
     carimbo = _agora_iso()
-    linha = f"{carimbo}\t{id_adaptador}\t{status_http}\t{intencao}\t{texto}"
+    linha = f"{carimbo}\t{id_adaptador}\t{status_http}\t{intencao}\t{texto_final}"
     if detalhe:
-        linha += f"\t{detalhe}"
+        detalhe_escapado = detalhe.replace("\r\n", " ").replace("\r", " ").replace("\n", "\\n").replace("\t", "\\t").strip()
+        linha += f"\t{detalhe_escapado}"
     linha += "\n"
 
     with _TRAVA:
