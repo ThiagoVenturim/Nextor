@@ -622,6 +622,20 @@ def assistente_logs_endpoint():
     return jsonify(ok=True, logs=adaptadores.ler_logs(limite=limite))
 
 
+# --- Adaptador Telegram -------------------------------------------------------
+
+@app.post("/v1/telegram/webhook")
+def telegram_webhook_endpoint():
+    """Webhook para integracao de mensagens do Telegram."""
+    from . import telegram_bot
+    dados = request.get_json(silent=True)
+    if not dados:
+        return jsonify(ok=False, erro="payload_invalido"), 400
+    resultado = telegram_bot.processar_update(dados, enviar_resposta=False)
+    status_code = 200 if resultado.get("ok") else (403 if not resultado.get("autorizado", True) else 400)
+    return jsonify(resultado), status_code
+
+
 # --- Dispositivos e telas (celular, tablet, notebook, PC, TV) ------------------
 
 @app.route("/v1/dispositivos", methods=["GET", "POST"])
