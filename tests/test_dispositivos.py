@@ -77,7 +77,9 @@ class TestCadastroDispositivos(BaseDispositivosTestCase):
         url = dispositivos.gerar_url_pareamento(item["id"], token_puro=item["token"], host="192.168.1.50", porta=5005)
         self.assertIn("http://192.168.1.50:5005/dispositivo/conectar?", url)
         self.assertIn("id=tv-quarto", url)
-        self.assertIn(f"token={item['token']}", url)
+        self.assertIn(f"#token={item['token']}", url)
+        self.assertNotIn("?token=", url)
+        self.assertNotIn("&token=", url)
 
     def test_endpoint_admin_cadastrar_e_listar(self):
         # Sem token mestre -> 401
