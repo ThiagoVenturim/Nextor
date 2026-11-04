@@ -121,6 +121,17 @@ def rotear(frase: str, canal: str = "local", id_dispositivo: str | None = None) 
         return {"intencao": "nest", "resposta": _fazer_nest("parar")}
 
     # Skill de Estudos (biblioteca de materias e busca FTS5)
+    # Gravacao de aulas (Issue #3)
+    if "para a gravacao" in base or "parar a gravacao" in base or "para gravacao" in base or "parar gravacao" in base or "encerrar gravacao" in base or "terminar gravacao" in base:
+        _registra(frase, "estudos_parar_gravacao")
+        return {"intencao": "estudos_parar_gravacao", "resposta": _fazer_estudos_parar_gravacao()}
+
+    m_grav = re.search(r"(?:grava|gravar|iniciar gravacao)(?:\s+a|\s+da|\s+de)?\s+aula\s+(?:de\s+|da\s+)?(.+)$", limpa, flags=re.IGNORECASE)
+    if m_grav:
+        disc_aula = m_grav.group(1).strip(" ?.")
+        _registra(frase, "estudos_gravar_aula")
+        return {"intencao": "estudos_gravar_aula", "resposta": _fazer_estudos_gravar_aula(disc_aula)}
+
     if base.startswith("nova disciplina") or base.startswith("criar disciplina") or base.startswith("crie a disciplina"):
         nome_disc = re.sub(r"^(nova disciplina|criar disciplina|crie a disciplina)\s+", "", limpa, flags=re.IGNORECASE).strip(" .:")
         _registra(frase, "estudos_criar_disciplina")
@@ -298,6 +309,24 @@ def _fazer_estudos_buscar(termo: str, disciplina: str = "") -> str:
         return estudos.resumo_busca(termo, disciplina_nome=disciplina)
     except Exception:
         return "Nao consegui buscar os materiais agora."
+
+
+def _fazer_estudos_gravar_aula(disciplina: str) -> str:
+    try:
+        from . import aulas
+        res = aulas.iniciar_gravacao(disciplina)
+        return res.get("aviso") or res.get("erro", "Erro ao iniciar gravacao.")
+    except Exception:
+        return "Nao consegui iniciar a gravacao da aula agora."
+
+
+def _fazer_estudos_parar_gravacao() -> str:
+    try:
+        from . import aulas
+        res = aulas.parar_gravacao()
+        return res.get("aviso") or res.get("erro", "Erro ao encerrar gravacao.")
+    except Exception:
+        return "Nao consegui encerrar a gravacao agora."
 
 
 if __name__ == "__main__":
