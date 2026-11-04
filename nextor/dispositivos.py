@@ -323,7 +323,7 @@ def gerar_url_pareamento(
     disp = buscar_por_id(id_dispositivo)
     if not disp:
         raise ValueError("dispositivo nao encontrado")
-    return f"http://{host}:{porta}/dispositivo/conectar?id={disp['id']}&token={token_puro}"
+    return f"http://{host}:{porta}/dispositivo/conectar?id={disp['id']}#token={token_puro}"
 
 
 def resetar_estado_testes() -> None:

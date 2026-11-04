@@ -34,6 +34,11 @@ python -m venv .venv
 O `setup.py` pergunta o essencial e escreve o `.env` (segredos e preferencias), que nao vai
 para o git. Tambem da para copiar `.env.example` para `.env` e editar na mao.
 
+> Seguranca do token: o servico exige que `NEXTOR_TOKEN` tenha no minimo 24 caracteres
+> e recusa o valor padrao `troque-este-token`. O `scripts/setup.py` gera um token seguro
+> automaticamente se deixado em branco, ou voce pode gerar um via terminal:
+> `python -c "import secrets; print(secrets.token_urlsafe(24))"`
+
 ## Estrutura
 
 O codigo e um pacote em `nextor/` (um modulo por habilidade). Veja `docs/ARQUITETURA.md`.
@@ -128,7 +133,8 @@ amanha". Sem o endereco, o resto do Nextor funciona normalmente.
 
 O Nextor tem um rosto: um bichinho que reage ao que voce escreve e muda de visual com o modo.
 
-- Abra `http://localhost:5005/rosto?token=SEU_TOKEN` ou rode `scriptsosto.ps1`, que abre o rosto numa janela propria.
+- Abra `http://localhost:5005/rosto?token=SEU_TOKEN` ou rode `scripts
+osto.ps1`, que abre o rosto numa janela propria.
 - No NexDeck, o botao de carinha no topo abre o mesmo bichinho no celular.
 - Converse pela tela; marque "no Nest" se quiser ouvir a resposta no alto-falante.
 
