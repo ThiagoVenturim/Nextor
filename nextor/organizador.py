@@ -121,7 +121,7 @@ def classificar_por_data(arquivo: Path) -> str:
 
 def classificar_por_disciplina(arquivo: Path, disciplinas_disponiveis: Optional[List[str]] = None) -> str:
     """Classifica o arquivo associando seu nome a uma das disciplinas conhecidas."""
-    nome = arquivo.stem.lower()
+    nome = arquivo.stem.lower().replace("_", " ").replace("-", " ")
 
     lista_disc = disciplinas_disponiveis
     if lista_disc is None:
@@ -132,7 +132,7 @@ def classificar_por_disciplina(arquivo: Path, disciplinas_disponiveis: Optional[
             lista_disc = []
 
     for d in lista_disc:
-        d_limpa = d.strip().lower()
+        d_limpa = d.strip().lower().replace("_", " ").replace("-", " ")
         if d_limpa and d_limpa in nome:
             return d.strip()
 
