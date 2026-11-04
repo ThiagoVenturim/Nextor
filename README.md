@@ -234,6 +234,7 @@ O Nextor conta com biblioteca local por disciplina e recurso de gravacao e trans
 - Transcricao offline dividida em trechos com carimbo de horario ([00:00 - 00:15] ...) salva diretamente na pasta da disciplina.
 - Indicador visual e de estado ativo durante a gravacao.
 - Aviso de consentimento mandatorio em todas as gravacoes.
+- Resumos e Flashcards Anki: "Resume a ultima aula de fisica", "resume o capitulo 3 de calculo", "flashcards de calculo". Gera topicos com fontes identificadas e exporta flashcards prontos para importacao no Anki (CSV/TSV).
 
 ## Estado
 
