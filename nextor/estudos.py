@@ -270,11 +270,13 @@ def baixar_link(
 
         content_length = resp.headers.get("Content-Length")
         if content_length and isinstance(content_length, (int, str)):
+            tamanho_num = None
             try:
-                if int(content_length) > max_bytes:
-                    raise ValueError(f"Download recusado: tamanho de {content_length} bytes excede o limite de 10 MB.")
+                tamanho_num = int(content_length)
             except (ValueError, TypeError):
                 pass
+            if tamanho_num is not None and tamanho_num > max_bytes:
+                raise ValueError(f"Download recusado: tamanho de {content_length} bytes excede o limite de 10 MB.")
 
         charset = resp.headers.get_content_charset() or "utf-8"
         buffer = bytearray()

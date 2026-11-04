@@ -1,6 +1,7 @@
 """Testes da biblioteca de materias de estudos, extratores e busca FTS5. Sem rede."""
 import io
 import os
+import socket
 import tempfile
 import unittest
 import zipfile
@@ -172,11 +173,16 @@ class TestExtratores(unittest.TestCase):
     def test_baixar_link_offline(self):
         fake_html = b"<html><head><title>Artigo Cientifico</title></head><body>Resumo do estudo</body></html>"
         fake_resp = mock.MagicMock()
+        fake_resp.headers.get.side_effect = lambda k, d=None: {
+            "Content-Type": "text/html; charset=utf-8",
+            "Content-Length": str(len(fake_html)),
+        }.get(k, d)
         fake_resp.headers.get_content_charset.return_value = "utf-8"
-        fake_resp.read.return_value = fake_html
+        fake_resp.read.side_effect = [fake_html, b""]
         fake_resp.__enter__.return_value = fake_resp
 
-        with mock.patch("urllib.request.urlopen", return_value=fake_resp):
+        with mock.patch("socket.getaddrinfo", return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))]), \
+             mock.patch("urllib.request.urlopen", return_value=fake_resp):
             titulo, texto = estudos.baixar_link("https://exemplo.org/artigo")
             self.assertEqual(titulo, "Artigo Cientifico")
             self.assertIn("Resumo do estudo", texto)
@@ -187,9 +193,12 @@ class TestMateriaisEBuscaFTS5(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.base_dir = Path(self.tmp.name) / "estudos"
         self.db_path = self.base_dir / "test_estudos.db"
+        self.p_env_importar = mock.patch.dict(os.environ, {"NEXTOR_ESTUDOS_IMPORTAR_DE": str(self.tmp.name)})
+        self.p_env_importar.start()
         estudos.criar_disciplina("Fisica", base_dir=self.base_dir, caminho_db=self.db_path)
 
     def tearDown(self):
+        self.p_env_importar.stop()
         self.tmp.cleanup()
 
     def test_importar_material_txt_e_copia_para_pasta(self):
@@ -290,6 +299,176 @@ class TestMateriaisEBuscaFTS5(unittest.TestCase):
         self.assertEqual(resumo_nenhum, "Nao encontrei nenhum material sobre relatividade em Fisica.")
 
 
+class TestSegurancaEstudos(unittest.TestCase):
+    """Testes de seguranca essenciais: mitigacao de Path Traversal e SSRF."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.pasta_autorizada = Path(self.tmp.name) / "autorizada"
+        self.pasta_autorizada.mkdir(parents=True, exist_ok=True)
+        self.pasta_externa = Path(self.tmp.name) / "externa"
+        self.pasta_externa.mkdir(parents=True, exist_ok=True)
+        self.base_estudos = Path(self.tmp.name) / "dados_estudos"
+        self.db_path = self.base_estudos / "seguranca.db"
+
+        self.p_env = mock.patch.dict(os.environ, {"NEXTOR_ESTUDOS_IMPORTAR_DE": str(self.pasta_autorizada)})
+        self.p_env.start()
+        estudos.criar_disciplina("Seguranca", base_dir=self.base_estudos, caminho_db=self.db_path)
+
+    def tearDown(self):
+        self.p_env.stop()
+        self.tmp.cleanup()
+
+    def test_recusa_arquivos_env_e_sensiveis(self):
+        # Arquivo .env
+        env_file = self.pasta_autorizada / ".env"
+        env_file.write_text("SEGREDO=123", encoding="utf-8")
+        with self.assertRaises(ValueError) as ctx:
+            estudos.validar_caminho_local(env_file, pastas_autorizadas=[self.pasta_autorizada])
+        self.assertIn("ocultos nao sao permitidos", str(ctx.exception))
+
+        # Arquivo .env.prod
+        env_prod = self.pasta_autorizada / ".env.prod"
+        env_prod.write_text("TOKEN=xyz", encoding="utf-8")
+        with self.assertRaises(ValueError):
+            estudos.validar_caminho_local(env_prod, pastas_autorizadas=[self.pasta_autorizada])
+
+        # Arquivo sensivel com extensao proibida
+        pem_file = self.pasta_autorizada / "chave.pem"
+        pem_file.write_text("CERT", encoding="utf-8")
+        with self.assertRaises(ValueError) as ctx_pem:
+            estudos.validar_caminho_local(pem_file, pastas_autorizadas=[self.pasta_autorizada])
+        self.assertIn("Extensao '.pem' nao permitida", str(ctx_pem.exception))
+
+        # Arquivo sensivel chamado secret.txt
+        sec_file = self.pasta_autorizada / "secret.txt"
+        sec_file.write_text("senhas", encoding="utf-8")
+        with self.assertRaises(ValueError) as ctx_sec:
+            estudos.validar_caminho_local(sec_file, pastas_autorizadas=[self.pasta_autorizada])
+        self.assertIn("recusado por regras de seguranca", str(ctx_sec.exception))
+
+    def test_recusa_arquivo_fora_de_pastas_autorizadas(self):
+        fora = self.pasta_externa / "material_fora.txt"
+        fora.write_text("Conteudo de fora.", encoding="utf-8")
+
+        # Tentar validar caminho fora das pastas autorizadas
+        with self.assertRaises(ValueError) as ctx:
+            estudos.validar_caminho_local(fora, pastas_autorizadas=[self.pasta_autorizada])
+        self.assertIn("fora das pastas autorizadas", str(ctx.exception))
+
+        # Tentar importar via importar_material
+        res = estudos.importar_material(
+            "Seguranca",
+            fora,
+            base_dir=self.base_estudos,
+            caminho_db=self.db_path,
+            pastas_autorizadas=[self.pasta_autorizada],
+        )
+        self.assertFalse(res["ok"])
+        self.assertIn("fora das pastas autorizadas", res["erro"])
+
+    def test_recusa_path_traversal_com_pontos(self):
+        # Criar arquivo fora da pasta autorizada
+        externo = self.pasta_externa / "privado.txt"
+        externo.write_text("privado", encoding="utf-8")
+
+        # Construir caminho com traversal relativo a partir da pasta autorizada
+        caminho_traversal = self.pasta_autorizada / ".." / "externa" / "privado.txt"
+        with self.assertRaises(ValueError) as ctx:
+            estudos.validar_caminho_local(caminho_traversal, pastas_autorizadas=[self.pasta_autorizada])
+        self.assertIn("fora das pastas autorizadas", str(ctx.exception))
+
+    def test_recusa_ssrf_ips_privados_e_loopback(self):
+        urls_proibidas = [
+            "http://127.0.0.1/admin",
+            "http://127.0.0.1:8000/api",
+            "http://localhost:5005/notas",
+            "http://localhost.localdomain/info",
+            "http://192.168.1.1/config",
+            "http://192.168.0.254/router",
+            "http://10.0.0.1/intranet",
+            "http://172.16.0.1/dashboard",
+            "http://169.254.169.254/latest/meta-data/",
+            "ftp://exemplo.com/arquivo.txt",
+        ]
+        for url in urls_proibidas:
+            with self.subTest(url=url):
+                with self.assertRaises(ValueError):
+                    estudos.validar_url_segura(url)
+
+    def test_recusa_ssrf_resolucao_dns_privada(self):
+        # Simula dominio aparentemente externo que resolve para 127.0.0.1 (DNS rebinding / SSRF)
+        with mock.patch("socket.getaddrinfo", return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", 80))]):
+            with self.assertRaises(ValueError) as ctx:
+                estudos.validar_url_segura("http://meu-host-interno.com/api")
+            self.assertIn("Acesso bloqueado ao IP 127.0.0.1", str(ctx.exception))
+
+        # Simula resolucao para 192.168.1.50
+        with mock.patch("socket.getaddrinfo", return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("192.168.1.50", 80))]):
+            with self.assertRaises(ValueError) as ctx:
+                estudos.validar_url_segura("http://servidor-rede-local.com/api")
+            self.assertIn("Acesso bloqueado ao IP 192.168.1.50", str(ctx.exception))
+
+    def test_download_acima_de_10mb_content_length(self):
+        fake_resp = mock.MagicMock()
+        fake_resp.headers.get.side_effect = lambda k, d=None: {
+            "Content-Type": "text/html",
+            "Content-Length": str(15 * 1024 * 1024),
+        }.get(k, d)
+        fake_resp.read.return_value = b""
+        fake_resp.__enter__.return_value = fake_resp
+
+        with mock.patch("socket.getaddrinfo", return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))]), \
+             mock.patch("urllib.request.urlopen", return_value=fake_resp):
+            with self.assertRaises(ValueError) as ctx:
+                estudos.baixar_link("https://exemplo.org/grande.html")
+            self.assertIn("excede o limite de 10 MB", str(ctx.exception))
+
+    def test_download_acima_de_10mb_streaming_chunks(self):
+        # Sem header Content-Length, mas enviando mais de 10 MB em blocos
+        fake_resp = mock.MagicMock()
+        fake_resp.headers.get.side_effect = lambda k, d=None: {
+            "Content-Type": "text/html",
+        }.get(k, d)
+        fake_resp.headers.get_content_charset.return_value = "utf-8"
+        # 11 blocos de 1 MB
+        bloco = b"X" * (1024 * 1024)
+        fake_resp.read.side_effect = [bloco] * 11 + [b""]
+        fake_resp.__enter__.return_value = fake_resp
+
+        with mock.patch("socket.getaddrinfo", return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))]), \
+             mock.patch("urllib.request.urlopen", return_value=fake_resp):
+            with self.assertRaises(ValueError) as ctx:
+                estudos.baixar_link("https://exemplo.org/stream.html")
+            self.assertIn("Download interrompido: o conteudo excedeu o limite maximo de 10 MB", str(ctx.exception))
+
+    def test_canal_remoto_recusa_caminho_local(self):
+        arquivo = self.pasta_autorizada / "aula.txt"
+        arquivo.write_text("aula", encoding="utf-8")
+
+        # Via importar_material
+        res = estudos.importar_material(
+            "Seguranca",
+            arquivo,
+            canal="remoto",
+            base_dir=self.base_estudos,
+            caminho_db=self.db_path,
+        )
+        self.assertFalse(res["ok"])
+        self.assertIn("Canal remoto aceita apenas links", res["erro"])
+
+        # Canal remoto com link e aceito
+        with mock.patch.object(estudos, "baixar_link", return_value=("Titulo Web", "Conteudo Web")):
+            res_link = estudos.importar_material(
+                "Seguranca",
+                "https://exemplo.org/aula",
+                canal="remoto",
+                base_dir=self.base_estudos,
+                caminho_db=self.db_path,
+            )
+        self.assertTrue(res_link["ok"])
+
+
 class TestRoteadorEstudos(unittest.TestCase):
     def test_rotear_criar_disciplina(self):
         with mock.patch("nextor.roteador._fazer_estudos_criar_disciplina", return_value="Disciplina Calculo criada.") as m:
@@ -304,6 +483,12 @@ class TestRoteadorEstudos(unittest.TestCase):
             self.assertEqual(r["intencao"], "estudos_adicionar")
             self.assertEqual(r["resposta"], "Material adicionado.")
             m.assert_called_once_with("Calculo", "notas.txt")
+
+    def test_rotear_adicionar_material_canal_remoto(self):
+        with mock.patch("nextor.roteador._fazer_estudos_adicionar", return_value="Canal remoto aceita apenas links.") as m:
+            r = roteador.rotear("adicionar notas.txt em Calculo", canal="remoto")
+            self.assertEqual(r["intencao"], "estudos_adicionar")
+            m.assert_called_once_with("Calculo", "notas.txt", canal="remoto")
 
     def test_rotear_listar_materiais(self):
         with mock.patch("nextor.roteador._fazer_estudos_listar_materiais", return_value="Na disciplina Calculo voce tem 1 material.") as m:
@@ -329,23 +514,28 @@ class TestServicoEstudosEndpoints(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.base_dir = Path(self.tmp.name) / "estudos"
         self.db_path = self.base_dir / "servico_estudos.db"
+        self.pasta_autorizada = Path(self.tmp.name) / "autorizada"
+        self.pasta_autorizada.mkdir(parents=True, exist_ok=True)
 
         self.p_token = mock.patch.object(config, "TOKEN", "token-teste")
         self.p_dir = mock.patch.object(config, "ESTUDOS_DIR", self.base_dir)
         self.p_db = mock.patch.object(config, "ESTUDOS_DB", self.db_path)
         self.p_edir = mock.patch.object(estudos.config, "ESTUDOS_DIR", self.base_dir)
         self.p_edb = mock.patch.object(estudos.config, "ESTUDOS_DB", self.db_path)
+        self.p_env_importar = mock.patch.dict(os.environ, {"NEXTOR_ESTUDOS_IMPORTAR_DE": str(self.pasta_autorizada)})
 
         self.p_token.start()
         self.p_dir.start()
         self.p_db.start()
         self.p_edir.start()
         self.p_edb.start()
+        self.p_env_importar.start()
 
         self.client = servico.app.test_client()
         self.headers = {"X-Nextor-Token": "token-teste"}
 
     def tearDown(self):
+        self.p_env_importar.stop()
         self.p_edb.stop()
         self.p_edir.stop()
         self.p_db.stop()
@@ -360,7 +550,6 @@ class TestServicoEstudosEndpoints(unittest.TestCase):
         self.assertEqual(self.client.get("/estudos/buscar?q=algo").status_code, 401)
 
     def test_criar_e_listar_disciplinas_api(self):
-        # Criacao
         r_post = self.client.post(
             "/estudos/disciplinas",
             json={"nome": "Algoritmos e Estruturas"},
@@ -370,7 +559,6 @@ class TestServicoEstudosEndpoints(unittest.TestCase):
         self.assertTrue(r_post.get_json()["ok"])
         self.assertEqual(r_post.get_json()["slug"], "algoritmos_e_estruturas")
 
-        # Listagem
         r_get = self.client.get("/estudos/disciplinas", headers=self.headers)
         self.assertEqual(r_get.status_code, 200)
         dados = r_get.get_json()
@@ -386,7 +574,7 @@ class TestServicoEstudosEndpoints(unittest.TestCase):
     def test_importar_material_json_api(self):
         self.client.post("/estudos/disciplinas", json={"nome": "Redes"}, headers=self.headers)
 
-        origem = Path(self.tmp.name) / "tcp_ip.txt"
+        origem = self.pasta_autorizada / "tcp_ip.txt"
         origem.write_text("Camada de transporte e protocolo TCP/IP.", encoding="utf-8")
 
         r = self.client.post(
@@ -398,10 +586,32 @@ class TestServicoEstudosEndpoints(unittest.TestCase):
         self.assertTrue(r.get_json()["ok"])
         self.assertEqual(r.get_json()["titulo"], "Protocolo TCP")
 
-        # Listar materiais da disciplina
         r_list = self.client.get("/estudos/disciplinas/Redes/materiais", headers=self.headers)
         self.assertEqual(r_list.status_code, 200)
         self.assertEqual(len(r_list.get_json()["materiais"]), 1)
+
+    def test_importar_material_canal_remoto_recusa_local_api(self):
+        self.client.post("/estudos/disciplinas", json={"nome": "Redes"}, headers=self.headers)
+
+        # Requisicao com canal remoto enviando caminho local
+        r_json = self.client.post(
+            "/estudos/disciplinas/Redes/materiais",
+            json={"origem": "C:/documentos/teste.txt", "canal": "remoto"},
+            headers=self.headers,
+        )
+        self.assertEqual(r_json.status_code, 400)
+        self.assertIn("Canal remoto aceita apenas links", r_json.get_json()["erro"])
+
+        # Requisicao com header X-Nextor-Canal: remoto e upload multipart
+        arquivo_bytes = io.BytesIO(b"conteudo")
+        r_upload = self.client.post(
+            "/estudos/disciplinas/Redes/materiais",
+            data={"arquivo": (arquivo_bytes, "remoto.txt")},
+            content_type="multipart/form-data",
+            headers={**self.headers, "X-Nextor-Canal": "remoto"},
+        )
+        self.assertEqual(r_upload.status_code, 400)
+        self.assertIn("canal remoto nao permite upload", r_upload.get_json()["erro"])
 
     def test_importar_material_upload_arquivo_api(self):
         self.client.post("/estudos/disciplinas", json={"nome": "Sistemas Operacionais"}, headers=self.headers)
@@ -431,11 +641,9 @@ class TestServicoEstudosEndpoints(unittest.TestCase):
             headers=self.headers,
         )
 
-        # Busca sem query
         r_sem_q = self.client.get("/estudos/buscar", headers=self.headers)
         self.assertEqual(r_sem_q.status_code, 400)
 
-        # Busca com query
         r_busca = self.client.get("/estudos/buscar?q=variancia", headers=self.headers)
         self.assertEqual(r_busca.status_code, 200)
         res = r_busca.get_json()
