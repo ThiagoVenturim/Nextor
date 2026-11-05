@@ -120,6 +120,10 @@ GITHUB_USUARIO = os.getenv("GITHUB_USUARIO", "ThiagoVenturim").strip()
 GITHUB_REPOSITORIO_PADRAO = os.getenv("GITHUB_REPOSITORIO_PADRAO", "Nextor").strip()
 GITHUB_PROJECT_NUMERO = os.getenv("GITHUB_PROJECT_NUMERO", "").strip()
 
+# Gravacoes de reunioes e tela (Issue #14)
+REUNIOES_DIR = Path(os.getenv("NEXTOR_REUNIOES_DIR", "")) if os.getenv("NEXTOR_REUNIOES_DIR") else (RAIZ / "reunioes")
+GRAVACOES_TELA_DIR = Path(os.getenv("NEXTOR_GRAVACOES_TELA_DIR", "")) if os.getenv("NEXTOR_GRAVACOES_TELA_DIR") else (RAIZ / "gravacoes_tela")
+
 # Caminhos de dados (ficam na raiz, fora do git)
 ANOTACOES = RAIZ / "anotacoes.md"
 MP3 = RAIZ / "nextor_fala.mp3"
