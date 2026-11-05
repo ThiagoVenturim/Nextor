@@ -42,6 +42,8 @@ PROTEGIDOS = ("anotar", "falar_endpoint", "conversar_endpoint", "notas",
               "github_kanban_endpoint", "github_issues_endpoint", "github_issues_criar_endpoint",
               "github_mover_endpoint", "github_confirmar_endpoint", "github_cancelar_endpoint",
               "pendencias_endpoint", "pendencias_concluir_endpoint",
+              "reuniao_iniciar_endpoint", "reuniao_parar_endpoint",
+              "tela_iniciar_endpoint", "tela_marcar_endpoint", "tela_parar_endpoint",
               "canvas_cursos_endpoint", "canvas_tarefas_endpoint", "canvas_avisos_endpoint",
               "classroom_cursos_endpoint", "classroom_atividades_endpoint", "classroom_avisos_endpoint")
 WEB = Path(__file__).resolve().parent / "web"
@@ -1194,6 +1196,69 @@ def pendencias_concluir_endpoint():
         return jsonify(ok=False, erro="id_obrigatorio"), 400
 
     resultado = pendencias.concluir_tarefa(id_tarefa, confirmar=confirmar)
+    status_code = 200 if resultado.get("ok") else 400
+    return jsonify(resultado), status_code
+
+
+# --- Gravacao de Reunioes e Tela (Issue #14) ----------------------------------
+
+@app.post("/v1/reuniao/iniciar")
+def reuniao_iniciar_endpoint():
+    """Inicia gravacao de reuniao com consentimento informado."""
+    from . import reuniao_tela
+    dados = request.get_json(silent=True) or request.values
+    tema = (dados.get("tema") or "Reuniao").strip()
+    participantes = (dados.get("participantes") or "").strip() or None
+
+    resultado = reuniao_tela.gravador_reuniao.iniciar(tema=tema, participantes=participantes)
+    status_code = 200 if resultado.get("ok") else 400
+    return jsonify(resultado), status_code
+
+
+@app.post("/v1/reuniao/parar")
+def reuniao_parar_endpoint():
+    """Encerra gravacao de reuniao, transcreve e estrutura resumo com decisoes e acoes."""
+    from . import reuniao_tela
+    dados = request.get_json(silent=True) or request.values
+    salvar_anotacoes = str(dados.get("salvar_anotacoes", "true")).lower() in ("1", "true", "sim")
+
+    resultado = reuniao_tela.gravador_reuniao.parar(salvar_anotacoes=salvar_anotacoes)
+    status_code = 200 if resultado.get("ok") else 400
+    return jsonify(resultado), status_code
+
+
+@app.post("/v1/tela/iniciar")
+def tela_iniciar_endpoint():
+    """Inicia gravacao de tela da tarefa com ffmpeg e consentimento."""
+    from . import reuniao_tela
+    dados = request.get_json(silent=True) or request.values
+    tarefa = (dados.get("tarefa") or "Tarefa").strip()
+
+    resultado = reuniao_tela.gravador_tela.iniciar(tarefa=tarefa)
+    status_code = 200 if resultado.get("ok") else 400
+    return jsonify(resultado), status_code
+
+
+@app.post("/v1/tela/marcar")
+def tela_marcar_endpoint():
+    """Insere marcador temporal por voz ou texto na gravacao de tela ativa."""
+    from . import reuniao_tela
+    dados = request.get_json(silent=True) or request.values
+    nota = (dados.get("nota") or dados.get("marcador") or "").strip()
+
+    if not nota:
+        return jsonify(ok=False, erro="nota_obrigatoria"), 400
+
+    resultado = reuniao_tela.gravador_tela.adicionar_marcador(nota=nota)
+    status_code = 200 if resultado.get("ok") else 400
+    return jsonify(resultado), status_code
+
+
+@app.post("/v1/tela/parar")
+def tela_parar_endpoint():
+    """Encerra gravacao de tela e salva marcadores."""
+    from . import reuniao_tela
+    resultado = reuniao_tela.gravador_tela.parar()
     status_code = 200 if resultado.get("ok") else 400
     return jsonify(resultado), status_code
 

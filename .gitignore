@@ -23,6 +23,10 @@ dispositivos.json
 historico_organizacoes.json
 textos/
 dados_estudos/
+reunioes/
+gravacoes_tela/
+*.mp4
+*.wav
 
 # Modelos locais (vozes Piper, Vosk)
 models/
