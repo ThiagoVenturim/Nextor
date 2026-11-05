@@ -35,6 +35,8 @@ PROTEGIDOS = ("anotar", "falar_endpoint", "conversar_endpoint", "notas",
               "estudos_aulas_gravar_endpoint", "estudos_aulas_parar_endpoint", "estudos_aulas_status_endpoint",
               "estudos_resumo_endpoint", "estudos_flashcards_exportar_endpoint",
               "estudos_quiz_gerar_endpoint", "estudos_quiz_responder_endpoint", "estudos_quiz_historico_endpoint",
+              "estudos_perguntar_endpoint",
+              "estudos_artigos_buscar_endpoint", "estudos_artigos_salvar_endpoint",
               "organizador_previa_endpoint", "organizador_executar_endpoint",
               "organizador_desfazer_endpoint", "organizador_historico_endpoint",
               "github_kanban_endpoint", "github_issues_endpoint", "github_issues_criar_endpoint",
@@ -620,6 +622,70 @@ def estudos_quiz_historico_endpoint():
     from . import quiz
     res = quiz.obter_historico_quiz(disciplina_nome=disc)
     return jsonify(res)
+
+
+@app.post("/estudos/perguntar")
+def estudos_perguntar_endpoint():
+    dados = request.get_json(silent=True) or request.values
+    pergunta = (dados.get("pergunta") or dados.get("texto") or "").strip()
+    disc = (dados.get("disciplina") or "").strip()
+
+    if not pergunta:
+        return jsonify(ok=False, erro="Campo 'pergunta' e obrigatorio."), 400
+
+    from . import qa_estudos
+    res = qa_estudos.responder_com_material(pergunta=pergunta, disciplina_nome=disc)
+    return jsonify(res)
+
+
+@app.route("/estudos/artigos/buscar", methods=["GET", "POST"])
+def estudos_artigos_buscar_endpoint():
+    dados = request.get_json(silent=True) or request.values
+    termo = (dados.get("termo") or request.args.get("termo") or "").strip()
+    fonte = (dados.get("fonte") or request.args.get("fonte") or "todos").strip()
+    try:
+        limite = int(dados.get("limite") or request.args.get("limite") or 5)
+    except (ValueError, TypeError):
+        limite = 5
+
+    if not termo:
+        return jsonify(ok=False, erro="Campo 'termo' e obrigatorio."), 400
+
+    from . import artigos_cientificos
+    resultados = artigos_cientificos.buscar_artigos(termo, fonte=fonte, limite=limite)
+    return jsonify(ok=True, termo=termo, total=len(resultados), artigos=resultados)
+
+
+@app.post("/estudos/artigos/salvar")
+def estudos_artigos_salvar_endpoint():
+    dados = request.get_json(silent=True) or request.values
+    disc = (dados.get("disciplina") or "").strip()
+    artigo = dados.get("artigo")
+
+    if not disc:
+        return jsonify(ok=False, erro="Campo 'disciplina' e obrigatorio."), 400
+
+    if not artigo or not isinstance(artigo, dict):
+        autores_raw = dados.get("autores", [])
+        if isinstance(autores_raw, str):
+            autores = [a.strip() for a in autores_raw.split(",") if a.strip()]
+        else:
+            autores = list(autores_raw)
+
+        artigo = {
+            "titulo": dados.get("titulo") or "Artigo Cientifico",
+            "autores": autores,
+            "ano": dados.get("ano") or datetime.now().year,
+            "resumo": dados.get("resumo") or "",
+            "referencia_abnt": dados.get("referencia_abnt") or "",
+            "url": dados.get("url") or "",
+            "pdf_url": dados.get("pdf_url") or "",
+            "veiculo": dados.get("veiculo") or "Repositorio",
+        }
+
+    from . import artigos_cientificos
+    res = artigos_cientificos.salvar_artigo_na_disciplina(artigo, disciplina_nome=disc)
+    return jsonify(res), 200 if res.get("ok") else 400
 
 # --- Assistentes externos (Siri, Alexa, Telegram, etc) -------------------------
 
