@@ -222,14 +222,17 @@ def coletar_todas_pendencias(
     incluir_agenda: bool = True,
     incluir_github: bool = True,
     incluir_canvas: bool = True,
+    incluir_classroom: bool = True,
     agora: Optional[datetime] = None,
     caminho_anotacoes: Optional[Path] = None,
     mock_eventos: Optional[List[dict]] = None,
     mock_issues: Optional[List[dict]] = None,
     mock_canvas: Optional[List[dict]] = None,
+    mock_classroom: Optional[List[dict]] = None,
     token_github: Optional[str] = None,
     canvas_base_url: Optional[str] = None,
     canvas_token: Optional[str] = None,
+    classroom_token: Optional[str] = None,
 ) -> List[dict]:
     """Agrega todas as pendencias das fontes ativas e ordena rigorosamente por prioridade e prazo."""
     lista: List[dict] = []
@@ -253,6 +256,17 @@ def coletar_todas_pendencias(
                     lista.extend(coletar_pendencias_canvas(base_url=canvas_base_url, token=canvas_token, agora=agora))
             except Exception as e:
                 log.warning("Falha ao coletar pendencias do Canvas LMS: %s", e)
+
+    if incluir_classroom:
+        if mock_classroom is not None:
+            lista.extend(mock_classroom)
+        else:
+            try:
+                from .google_classroom import coletar_pendencias_classroom, esta_configurado as classroom_esta_configurado
+                if classroom_esta_configurado(token=classroom_token):
+                    lista.extend(coletar_pendencias_classroom(token=classroom_token, agora=agora))
+            except Exception as e:
+                log.warning("Falha ao coletar pendencias do Google Sala de Aula: %s", e)
 
     def chave_ordenacao(item: dict):
         # 1. Atrasadas primeiro (0), depois outras (1)

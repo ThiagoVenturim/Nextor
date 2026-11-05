@@ -122,6 +122,40 @@ def rotear(frase: str, canal: str = "local", id_dispositivo: str | None = None) 
         _registra(frase, "canvas_avisos")
         return {"intencao": "canvas_avisos", "resposta": _fazer_canvas_avisos()}
 
+    # Integracao Google Sala de Aula / Classroom (Issue #18)
+    base_cr = base.strip(" ?.")
+    m_cr_disc = re.search(r"^(?:quais\s+sao\s+(?:as|minhas)\s+|ver\s+|listar\s+)?(?:atividades|tarefas)\s+(?:de\s+|da\s+|do\s+|em\s+)?(.+?)\s+(?:no\s+classroom|no\s+google\s+sala\s+de\s+aula|no\s+sala\s+de\s+aula)[ ?.]*$", limpa, flags=re.IGNORECASE)
+    if m_cr_disc:
+        disc_cr = m_cr_disc.group(1).strip(" ?.")
+        _registra(frase, "classroom_atividades")
+        return {"intencao": "classroom_atividades", "resposta": _fazer_classroom_atividades(disciplina=disc_cr)}
+
+    m_cr_disc_alt = re.search(r"^(?:atividades|tarefas)\s+(?:do\s+classroom|do\s+google\s+sala\s+de\s+aula|do\s+sala\s+de\s+aula)\s+(?:de\s+|da\s+|do\s+|em\s+)?(.+?)[ ?.]*$", limpa, flags=re.IGNORECASE)
+    if m_cr_disc_alt:
+        disc_cr = m_cr_disc_alt.group(1).strip(" ?.")
+        _registra(frase, "classroom_atividades")
+        return {"intencao": "classroom_atividades", "resposta": _fazer_classroom_atividades(disciplina=disc_cr)}
+
+    if any(k in base_cr for k in ("atividades do google sala de aula", "atividades do sala de aula", "atividades do classroom", "tarefas do google sala de aula", "tarefas do sala de aula", "tarefas do classroom", "minhas atividades do google sala de aula", "minhas atividades do classroom", "classroom atividades")):
+        _registra(frase, "classroom_atividades")
+        return {"intencao": "classroom_atividades", "resposta": _fazer_classroom_atividades()}
+
+    m_cr_avisos_disc = re.search(r"^(?:avisos|comunicados)\s+(?:de\s+|da\s+|do\s+|em\s+)?(.+?)\s+(?:no\s+classroom|no\s+google\s+sala\s+de\s+aula|no\s+sala\s+de\s+aula)[ ?.]*$", limpa, flags=re.IGNORECASE)
+    if m_cr_avisos_disc:
+        disc_cra = m_cr_avisos_disc.group(1).strip(" ?.")
+        _registra(frase, "classroom_avisos")
+        return {"intencao": "classroom_avisos", "resposta": _fazer_classroom_avisos(disciplina=disc_cra)}
+
+    m_cr_avisos_disc_alt = re.search(r"^(?:avisos|comunicados)\s+(?:do\s+classroom|do\s+google\s+sala\s+de\s+aula|do\s+sala\s+de\s+aula)\s+(?:de\s+|da\s+|do\s+|em\s+)?(.+?)[ ?.]*$", limpa, flags=re.IGNORECASE)
+    if m_cr_avisos_disc_alt:
+        disc_cra = m_cr_avisos_disc_alt.group(1).strip(" ?.")
+        _registra(frase, "classroom_avisos")
+        return {"intencao": "classroom_avisos", "resposta": _fazer_classroom_avisos(disciplina=disc_cra)}
+
+    if any(k in base_cr for k in ("avisos do classroom", "avisos do google sala de aula", "avisos do sala de aula", "comunicados do classroom", "classroom avisos")):
+        _registra(frase, "classroom_avisos")
+        return {"intencao": "classroom_avisos", "resposta": _fazer_classroom_avisos()}
+
     # Busca de artigos cientificos em fontes abertas (Issue #7)
     m_salvar_art = re.search(r"^salvar\s+artigo\s+(.+?)\s+(?:na\s+disciplina|em|para)\s+(.+)$", limpa, flags=re.IGNORECASE)
     if m_salvar_art:
@@ -797,6 +831,28 @@ def _fazer_canvas_avisos(disciplina: str = "") -> str:
         return canvas_lms.resumo_avisos_falado(avisos, disciplina=disciplina)
     except Exception as e:
         return f"Nao consegui consultar os avisos do Canvas agora: {e}"
+
+
+def _fazer_classroom_atividades(disciplina: str = "") -> str:
+    try:
+        from . import google_classroom
+        if not google_classroom.esta_configurado():
+            return "O Google Sala de Aula nao esta configurado. Configure GOOGLE_CLASSROOM_TOKEN no .env."
+        atividades = google_classroom.listar_atividades(disciplina_nome=disciplina, apenas_pendentes=True)
+        return google_classroom.resumo_atividades_falado(atividades, disciplina=disciplina)
+    except Exception as e:
+        return f"Nao consegui consultar as atividades do Google Sala de Aula agora: {e}"
+
+
+def _fazer_classroom_avisos(disciplina: str = "") -> str:
+    try:
+        from . import google_classroom
+        if not google_classroom.esta_configurado():
+            return "O Google Sala de Aula nao esta configurado. Configure GOOGLE_CLASSROOM_TOKEN no .env."
+        avisos = google_classroom.listar_avisos(disciplina_nome=disciplina)
+        return google_classroom.resumo_avisos_falado(avisos, disciplina=disciplina)
+    except Exception as e:
+        return f"Nao consegui consultar os avisos do Google Sala de Aula agora: {e}"
 
 
 if __name__ == "__main__":

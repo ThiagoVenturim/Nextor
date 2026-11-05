@@ -646,6 +646,7 @@ class TestServicoCanvasEndpoints(unittest.TestCase):
                 incluir_agenda=False,
                 incluir_github=False,
                 incluir_canvas=True,
+                incluir_classroom=False,
             )
 
         # Teste quando fonte=github desativa o canvas
@@ -657,6 +658,7 @@ class TestServicoCanvasEndpoints(unittest.TestCase):
                 incluir_agenda=False,
                 incluir_github=True,
                 incluir_canvas=False,
+                incluir_classroom=False,
             )
 
 
