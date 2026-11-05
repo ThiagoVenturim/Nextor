@@ -62,6 +62,33 @@ def rotear(frase: str, canal: str = "local", id_dispositivo: str | None = None) 
             idioma = "ingles"
         _registra(frase, "traduzir")
         return {"intencao": "traduzir", "resposta": _fazer_texto("traduzir", conteudo, idioma)}
+
+    # Resumos de estudos (Issue #4) e flashcards Anki
+    m_flash = re.search(r"^(?:gerar\s+|criar\s+|fazer\s+)?flashcards\s+(?:de\s+|da\s+|do\s+|em\s+)?(.+)$", limpa, flags=re.IGNORECASE)
+    if m_flash:
+        disc_flash = m_flash.group(1).strip(" ?.")
+        _registra(frase, "estudos_flashcards")
+        return {"intencao": "estudos_flashcards", "resposta": _fazer_estudos_resumo(disc_flash, alvo="", gerar_cards=True)}
+
+    m_resumo_aula = re.search(r"^resum\w*\s+(?:a\s+)?(?:ultima\s+aula|aula)\s+(?:de\s+|da\s+|do\s+|em\s+)?(.+)$", limpa, flags=re.IGNORECASE)
+    if m_resumo_aula:
+        disc_res = m_resumo_aula.group(1).strip(" ?.")
+        _registra(frase, "estudos_resumo")
+        return {"intencao": "estudos_resumo", "resposta": _fazer_estudos_resumo(disc_res, alvo="ultima aula", gerar_cards=True)}
+
+    m_resumo_cap = re.search(r"^resum\w*\s+(?:o\s+)?(capitulo\s+[\w\d]+|modulo\s+[\w\d]+|material\s+[\w\d]+)\s+(?:de\s+|da\s+|do\s+|em\s+)?(.+)$", limpa, flags=re.IGNORECASE)
+    if m_resumo_cap:
+        alvo_cap = m_resumo_cap.group(1).strip()
+        disc_res = m_resumo_cap.group(2).strip(" ?.")
+        _registra(frase, "estudos_resumo")
+        return {"intencao": "estudos_resumo", "resposta": _fazer_estudos_resumo(disc_res, alvo=alvo_cap, gerar_cards=True)}
+
+    m_resumo_disc = re.search(r"^resum\w*\s+(?:a\s+disciplina\s+|a\s+materia\s+)(?:de\s+|da\s+|do\s+|em\s+)?(.+)$", limpa, flags=re.IGNORECASE)
+    if m_resumo_disc:
+        disc_res = m_resumo_disc.group(1).strip(" ?.")
+        _registra(frase, "estudos_resumo")
+        return {"intencao": "estudos_resumo", "resposta": _fazer_estudos_resumo(disc_res, alvo="", gerar_cards=True)}
+
     if "resum" in base:
         conteudo = re.sub(r".*?resum\w*\s+", "", limpa, count=1, flags=re.IGNORECASE).strip()
         _registra(frase, "resumir")
@@ -367,6 +394,15 @@ def _fazer_organizador_desfazer(alvo: str | None = None) -> str:
         return organizador.desfazer_organizacao_por_frase(alvo)
     except Exception as e:
         return f"Nao consegui desfazer a organizacao: {e}"
+
+
+def _fazer_estudos_resumo(disciplina: str, alvo: str = "", gerar_cards: bool = True) -> str:
+    try:
+        from . import resumos
+        res = resumos.resumir_estudos(disciplina_nome=disciplina, alvo=alvo, gerar_cards=gerar_cards)
+        return res.get("aviso") or res.get("erro", "Nao consegui gerar o resumo agora.")
+    except Exception:
+        return "Nao consegui gerar o resumo dos estudos agora."
 
 
 if __name__ == "__main__":

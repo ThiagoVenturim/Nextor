@@ -33,6 +33,7 @@ PROTEGIDOS = ("anotar", "falar_endpoint", "conversar_endpoint", "notas",
               "conversa_endpoint", "identidade_endpoint", "voz_endpoint", "fala_endpoint",
               "estudos_disciplinas_endpoint", "estudos_materiais_endpoint", "estudos_buscar_endpoint",
               "estudos_aulas_gravar_endpoint", "estudos_aulas_parar_endpoint", "estudos_aulas_status_endpoint",
+              "estudos_resumo_endpoint", "estudos_flashcards_exportar_endpoint",
               "organizador_previa_endpoint", "organizador_executar_endpoint",
               "organizador_desfazer_endpoint", "organizador_historico_endpoint")
 WEB = Path(__file__).resolve().parent / "web"
@@ -507,6 +508,64 @@ def estudos_aulas_parar_endpoint():
 def estudos_aulas_status_endpoint():
     from . import aulas
     return jsonify(ok=True, **aulas.status_gravacao())
+
+
+@app.post("/estudos/resumo")
+def estudos_resumo_endpoint():
+    dados = request.get_json(silent=True) or request.values
+    disc = (dados.get("disciplina") or "").strip()
+    alvo = (dados.get("alvo") or dados.get("termo") or "").strip()
+    gerar_cards = str(dados.get("gerar_flashcards", "true")).lower() in ("1", "true", "sim")
+    formato = (dados.get("formato") or "csv").strip()
+
+    if not disc:
+        return jsonify(ok=False, erro="Nome da disciplina e obrigatorio."), 400
+
+    from . import resumos
+    res = resumos.resumir_estudos(
+        disciplina_nome=disc,
+        alvo=alvo,
+        gerar_cards=gerar_cards,
+        formato_exportacao=formato,
+    )
+    if not res.get("ok"):
+        return jsonify(ok=False, erro=res.get("erro", "Erro ao gerar resumo.")), 404
+
+    return jsonify(res)
+
+
+@app.route("/estudos/flashcards/exportar", methods=["GET", "POST"])
+def estudos_flashcards_exportar_endpoint():
+    disc = (request.args.get("disciplina") or (request.is_json and request.get_json(silent=True) or {}).get("disciplina") or request.values.get("disciplina") or "").strip()
+    alvo = (request.args.get("alvo") or (request.is_json and request.get_json(silent=True) or {}).get("alvo") or request.values.get("alvo") or "").strip()
+    formato = (request.args.get("formato") or (request.is_json and request.get_json(silent=True) or {}).get("formato") or request.values.get("formato") or "csv").lower().strip()
+
+    if not disc:
+        return jsonify(ok=False, erro="Nome da disciplina e obrigatorio."), 400
+
+    from . import resumos
+    res = resumos.resumir_estudos(
+        disciplina_nome=disc,
+        alvo=alvo,
+        gerar_cards=True,
+        formato_exportacao=formato,
+    )
+    if not res.get("ok"):
+        return jsonify(ok=False, erro=res.get("erro", "Nenhum material encontrado para exportar flashcards.")), 404
+
+    flashcards = res.get("flashcards", [])
+    if not flashcards:
+        return jsonify(ok=False, erro="Nenhum flashcard disponivel para exportar."), 404
+
+    conteudo_export = resumos.exportar_flashcards_anki(flashcards, formato=formato)
+    mime = "text/tab-separated-values; charset=utf-8" if formato == "tsv" else "text/csv; charset=utf-8"
+    ext = "tsv" if formato == "tsv" else "csv"
+    slug_disc = resumos.normalizar_slug(disc)
+    headers = {
+        "Content-Type": mime,
+        "Content-Disposition": f'attachment; filename="flashcards_{slug_disc}.{ext}"',
+    }
+    return conteudo_export, 200, headers
 
 # --- Assistentes externos (Siri, Alexa, Telegram, etc) -------------------------
 
