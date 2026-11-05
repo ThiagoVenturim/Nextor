@@ -41,7 +41,8 @@ PROTEGIDOS = ("anotar", "falar_endpoint", "conversar_endpoint", "notas",
               "organizador_desfazer_endpoint", "organizador_historico_endpoint",
               "github_kanban_endpoint", "github_issues_endpoint", "github_issues_criar_endpoint",
               "github_mover_endpoint", "github_confirmar_endpoint", "github_cancelar_endpoint",
-              "pendencias_endpoint", "pendencias_concluir_endpoint")
+              "pendencias_endpoint", "pendencias_concluir_endpoint",
+              "canvas_cursos_endpoint", "canvas_tarefas_endpoint", "canvas_avisos_endpoint")
 WEB = Path(__file__).resolve().parent / "web"
 
 
@@ -982,6 +983,80 @@ def github_cancelar_endpoint():
     return jsonify(resultado), 200
 
 
+# --- Integracao Canvas LMS (Issue #17) ----------------------------------------
+
+@app.get("/v1/canvas/cursos")
+def canvas_cursos_endpoint():
+    """Lista os cursos ativos matriculados no Canvas LMS."""
+    from . import canvas_lms
+    if not canvas_lms.esta_configurado():
+        return jsonify(ok=False, erro="Canvas LMS nao configurado. Configure CANVAS_BASE_URL e CANVAS_TOKEN."), 503
+
+    cursos = canvas_lms.listar_cursos_ativos()
+    return jsonify(ok=True, total=len(cursos), cursos=cursos), 200
+
+
+@app.get("/v1/canvas/tarefas")
+def canvas_tarefas_endpoint():
+    """Lista tarefas e prazos no Canvas LMS."""
+    from . import canvas_lms
+    if not canvas_lms.esta_configurado():
+        return jsonify(ok=False, erro="Canvas LMS nao configurado. Configure CANVAS_BASE_URL e CANVAS_TOKEN."), 503
+
+    curso_id = request.args.get("curso_id")
+    disciplina = request.args.get("disciplina") or ""
+    apenas_pendentes = str(request.args.get("apenas_pendentes", "true")).lower() in ("1", "true", "sim")
+
+    tarefas = canvas_lms.listar_tarefas(
+        curso_id=curso_id,
+        disciplina_nome=disciplina,
+        apenas_pendentes=apenas_pendentes,
+    )
+    resumo = canvas_lms.resumo_tarefas_falado(tarefas, disciplina=disciplina)
+
+    tarefas_json = []
+    for t in tarefas:
+        item = dict(t)
+        item.pop("dt_prazo", None)
+        tarefas_json.append(item)
+
+    return jsonify(
+        ok=True,
+        total=len(tarefas_json),
+        resumo_falado=resumo,
+        tarefas=tarefas_json,
+    ), 200
+
+
+@app.get("/v1/canvas/avisos")
+def canvas_avisos_endpoint():
+    """Lista avisos e comunicados no Canvas LMS."""
+    from . import canvas_lms
+    if not canvas_lms.esta_configurado():
+        return jsonify(ok=False, erro="Canvas LMS nao configurado. Configure CANVAS_BASE_URL e CANVAS_TOKEN."), 503
+
+    curso_id = request.args.get("curso_id")
+    disciplina = request.args.get("disciplina") or ""
+    try:
+        limite = int(request.args.get("limite", 5))
+    except (ValueError, TypeError):
+        limite = 5
+
+    avisos = canvas_lms.listar_avisos(
+        curso_id=curso_id,
+        disciplina_nome=disciplina,
+        limite=limite,
+    )
+    resumo = canvas_lms.resumo_avisos_falado(avisos, disciplina=disciplina)
+
+    return jsonify(
+        ok=True,
+        total=len(avisos),
+        resumo_falado=resumo,
+        avisos=avisos,
+    ), 200
+
+
 # --- Painel de Tarefas e Pendencias (Issue #13) -------------------------------
 
 @app.get("/v1/pendencias")
@@ -994,11 +1069,13 @@ def pendencias_endpoint():
     incluir_anotacoes = fonte is None or fonte == "anotacoes"
     incluir_agenda = fonte is None or fonte == "agenda"
     incluir_github = fonte is None or fonte == "github"
+    incluir_canvas = fonte is None or fonte == "canvas"
 
     lista = pendencias.coletar_todas_pendencias(
         incluir_anotacoes=incluir_anotacoes,
         incluir_agenda=incluir_agenda,
         incluir_github=incluir_github,
+        incluir_canvas=incluir_canvas,
     )
     if apenas_hoje:
         lista = [p for p in lista if p.get("para_hoje") or p.get("atrasada")]

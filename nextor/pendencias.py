@@ -221,11 +221,15 @@ def coletar_todas_pendencias(
     incluir_anotacoes: bool = True,
     incluir_agenda: bool = True,
     incluir_github: bool = True,
+    incluir_canvas: bool = True,
     agora: Optional[datetime] = None,
     caminho_anotacoes: Optional[Path] = None,
     mock_eventos: Optional[List[dict]] = None,
     mock_issues: Optional[List[dict]] = None,
+    mock_canvas: Optional[List[dict]] = None,
     token_github: Optional[str] = None,
+    canvas_base_url: Optional[str] = None,
+    canvas_token: Optional[str] = None,
 ) -> List[dict]:
     """Agrega todas as pendencias das fontes ativas e ordena rigorosamente por prioridade e prazo."""
     lista: List[dict] = []
@@ -238,6 +242,17 @@ def coletar_todas_pendencias(
 
     if incluir_github:
         lista.extend(coletar_pendencias_github(token=token_github, mock_issues=mock_issues))
+
+    if incluir_canvas:
+        if mock_canvas is not None:
+            lista.extend(mock_canvas)
+        else:
+            try:
+                from .canvas_lms import coletar_pendencias_canvas, esta_configurado
+                if esta_configurado(base_url=canvas_base_url, token=canvas_token):
+                    lista.extend(coletar_pendencias_canvas(base_url=canvas_base_url, token=canvas_token, agora=agora))
+            except Exception as e:
+                log.warning("Falha ao coletar pendencias do Canvas LMS: %s", e)
 
     def chave_ordenacao(item: dict):
         # 1. Atrasadas primeiro (0), depois outras (1)
