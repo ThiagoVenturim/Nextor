@@ -240,9 +240,28 @@ def rotear(frase: str, canal: str = "local", id_dispositivo: str | None = None) 
 
     # Skill de Estudos (biblioteca de materias e busca FTS5)
     # Gravacao de aulas (Issue #3)
+    # Gravacoes de reunioes e tela (Issue #14) e aulas (Issue #3)
+    m_marca = re.match(r"^(?:marca|marcar|marca aqui|marcador)\s*:\s*(.+)$", limpa, flags=re.IGNORECASE)
+    if m_marca:
+        nota_marca = m_marca.group(1).strip(" ?.")
+        _registra(frase, "tela_marcar")
+        return {"intencao": "tela_marcar", "resposta": _fazer_tela_marcar(nota_marca)}
+
     if "para a gravacao" in base or "parar a gravacao" in base or "para gravacao" in base or "parar gravacao" in base or "encerrar gravacao" in base or "terminar gravacao" in base:
         _registra(frase, "estudos_parar_gravacao")
         return {"intencao": "estudos_parar_gravacao", "resposta": _fazer_estudos_parar_gravacao()}
+
+    m_reuniao = re.search(r"(?:grava|gravar|iniciar gravacao)(?:\s+de|\s+da)?\s+reuniao(?:\s+sobre|\s+com)?\s*(.*)$", limpa, flags=re.IGNORECASE)
+    if m_reuniao:
+        tema_reuniao = m_reuniao.group(1).strip(" ?.") or "Reuniao"
+        _registra(frase, "reuniao_iniciar")
+        return {"intencao": "reuniao_iniciar", "resposta": _fazer_reuniao_iniciar(tema_reuniao)}
+
+    m_tela = re.search(r"(?:grava|gravar|iniciar gravacao)(?:\s+de|\s+da)?\s+tela(?:\s+da\s+tarefa|\s+para\s+a\s+tarefa|\s+da|\s+de)?\s*(.*)$", limpa, flags=re.IGNORECASE)
+    if m_tela:
+        tarefa_tela = m_tela.group(1).strip(" ?.") or "Tarefa"
+        _registra(frase, "tela_iniciar")
+        return {"intencao": "tela_iniciar", "resposta": _fazer_tela_iniciar(tarefa_tela)}
 
     m_grav = re.search(r"(?:grava|gravar|iniciar gravacao)(?:\s+a|\s+da|\s+de)?\s+aula\s+(?:de\s+|da\s+)?(.+)$", limpa, flags=re.IGNORECASE)
     if m_grav:
@@ -510,6 +529,21 @@ def _fazer_estudos_gravar_aula(disciplina: str) -> str:
 
 def _fazer_estudos_parar_gravacao() -> str:
     try:
+        from . import reuniao_tela
+        if reuniao_tela.gravador_reuniao.gravando:
+            res = reuniao_tela.gravador_reuniao.parar()
+            if res.get("ok"):
+                total_acoes = len(res.get("itens_acao", []))
+                return f"Reuniao encerrada. Duracao: {res.get('duracao')}. Gerados {total_acoes} itens de acao."
+            return res.get("mensagem", "Erro ao encerrar reuniao.")
+
+        if reuniao_tela.gravador_tela.gravando:
+            res = reuniao_tela.gravador_tela.parar()
+            if res.get("ok"):
+                total_m = res.get("total_marcadores", 0)
+                return f"Gravacao de tela encerrada. Duracao: {res.get('duracao')}. {total_m} marcadores salvos."
+            return res.get("mensagem", "Erro ao encerrar gravacao de tela.")
+
         from . import aulas
         res = aulas.parar_gravacao()
         return res.get("aviso") or res.get("erro", "Erro ao encerrar gravacao.")
@@ -712,6 +746,37 @@ def _fazer_estudos_salvar_artigo(artigo_id_ou_termo: str, disciplina: str) -> st
         return f"Nao consegui salvar o artigo em {disciplina} agora."
 
 
+def _fazer_reuniao_iniciar(tema: str) -> str:
+    try:
+        from . import reuniao_tela
+        res = reuniao_tela.gravador_reuniao.iniciar(tema=tema)
+        if res.get("ok"):
+            return f"{res.get('aviso')} Gravando reuniao sobre '{tema}'."
+        return res.get("erro", "Nao foi possivel iniciar a gravacao da reuniao.")
+    except Exception as e:
+        return f"Erro ao iniciar gravacao de reuniao: {e}"
+
+
+def _fazer_tela_iniciar(tarefa: str) -> str:
+    try:
+        from . import reuniao_tela
+        res = reuniao_tela.gravador_tela.iniciar(tarefa=tarefa)
+        if res.get("ok"):
+            return f"{res.get('aviso')} Gravando tela para a tarefa '{tarefa}'."
+        return res.get("erro", "Nao foi possivel iniciar a gravacao de tela.")
+    except Exception as e:
+        return f"Erro ao iniciar gravacao de tela: {e}"
+
+
+def _fazer_tela_marcar(nota: str) -> str:
+    try:
+        from . import reuniao_tela
+        res = reuniao_tela.gravador_tela.adicionar_marcador(nota=nota)
+        if res.get("ok"):
+            return res.get("mensagem", f"Marcado: {nota}")
+        return res.get("erro", "Nenhuma gravacao de tela ativa para marcar.")
+    except Exception as e:
+        return f"Erro ao adicionar marcador na tela: {e}"
 def _fazer_canvas_tarefas(disciplina: str = "") -> str:
     try:
         from . import canvas_lms
