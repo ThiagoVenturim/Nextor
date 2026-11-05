@@ -38,7 +38,8 @@ PROTEGIDOS = ("anotar", "falar_endpoint", "conversar_endpoint", "notas",
               "organizador_previa_endpoint", "organizador_executar_endpoint",
               "organizador_desfazer_endpoint", "organizador_historico_endpoint",
               "github_kanban_endpoint", "github_issues_endpoint", "github_issues_criar_endpoint",
-              "github_mover_endpoint", "github_confirmar_endpoint", "github_cancelar_endpoint")
+              "github_mover_endpoint", "github_confirmar_endpoint", "github_cancelar_endpoint",
+              "pendencias_endpoint", "pendencias_concluir_endpoint")
 WEB = Path(__file__).resolve().parent / "web"
 
 
@@ -913,6 +914,64 @@ def github_cancelar_endpoint():
     from . import github_integration
     resultado = github_integration.cancelar_acao_pendente()
     return jsonify(resultado), 200
+
+
+# --- Painel de Tarefas e Pendencias (Issue #13) -------------------------------
+
+@app.get("/v1/pendencias")
+def pendencias_endpoint():
+    """Retorna lista consolidada e ordenada de pendencias de multiplas fontes."""
+    from . import pendencias
+    apenas_hoje = str(request.args.get("apenas_hoje", "")).lower() in ("1", "true", "sim")
+    fonte = request.args.get("fonte")
+
+    incluir_anotacoes = fonte is None or fonte == "anotacoes"
+    incluir_agenda = fonte is None or fonte == "agenda"
+    incluir_github = fonte is None or fonte == "github"
+
+    lista = pendencias.coletar_todas_pendencias(
+        incluir_anotacoes=incluir_anotacoes,
+        incluir_agenda=incluir_agenda,
+        incluir_github=incluir_github,
+    )
+    if apenas_hoje:
+        lista = [p for p in lista if p.get("para_hoje") or p.get("atrasada")]
+
+    resumo = pendencias.gerar_resumo_falado(lista, apenas_hoje=apenas_hoje)
+    total_hoje = sum(1 for p in lista if p.get("para_hoje"))
+    total_atrasadas = sum(1 for p in lista if p.get("atrasada"))
+
+    lista_json = []
+    for p in lista:
+        item = dict(p)
+        item.pop("dt_prazo", None)
+        item.pop("linha_original", None)
+        lista_json.append(item)
+
+    return jsonify(
+        ok=True,
+        total=len(lista_json),
+        total_hoje=total_hoje,
+        total_atrasadas=total_atrasadas,
+        resumo_falado=resumo,
+        pendencias=lista_json,
+    ), 200
+
+
+@app.post("/v1/pendencias/concluir")
+def pendencias_concluir_endpoint():
+    """Marca uma tarefa/pendencia como concluida."""
+    from . import pendencias
+    dados = request.get_json(silent=True) or request.values
+    id_tarefa = (dados.get("id") or dados.get("id_tarefa") or "").strip()
+    confirmar = str(dados.get("confirmar", "")).lower() in ("1", "true", "sim")
+
+    if not id_tarefa:
+        return jsonify(ok=False, erro="id_obrigatorio"), 400
+
+    resultado = pendencias.concluir_tarefa(id_tarefa, confirmar=confirmar)
+    status_code = 200 if resultado.get("ok") else 400
+    return jsonify(resultado), status_code
 
 
 # --- Dispositivos e telas (celular, tablet, notebook, PC, TV) ------------------

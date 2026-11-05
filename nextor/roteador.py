@@ -261,6 +261,29 @@ def rotear(frase: str, canal: str = "local", id_dispositivo: str | None = None) 
         _registra(frase, "github_propor_mover")
         return {"intencao": "github_propor_mover", "resposta": _fazer_github_propor_mover(issue_ref, coluna_alvo)}
 
+    # Skill Painel de Tarefas e Pendencias (Issue #13)
+    if "confirma conclusao" in base or "confirmar conclusao" in base or "confirme a conclusao" in base or (base in ("confirma", "confirmar") and _tem_conclusao_pendente()):
+        _registra(frase, "pendencias_confirmar_conclusao")
+        return {"intencao": "pendencias_confirmar_conclusao", "resposta": _fazer_confirmar_conclusao_tarefa()}
+
+    if "cancela conclusao" in base or "cancelar conclusao" in base:
+        _registra(frase, "pendencias_cancelar_conclusao")
+        return {"intencao": "pendencias_cancelar_conclusao", "resposta": _fazer_cancelar_conclusao_tarefa()}
+
+    m_concluir = re.search(r"(?:marca|marcar|conclui|concluir)\s+(?:a\s+)?tarefa\s+(.+?)(?:\s+como\s+(?:feita|feito|concluida|concluido))?$", limpa, flags=re.IGNORECASE)
+    if m_concluir:
+        alvo_tarefa = m_concluir.group(1).strip(" ?.")
+        _registra(frase, "pendencias_concluir")
+        return {"intencao": "pendencias_concluir", "resposta": _fazer_concluir_tarefa(alvo_tarefa)}
+
+    if any(k in base for k in ("minhas pendencias", "quais sao minhas pendencias", "listar pendencias", "ver pendencias")):
+        _registra(frase, "pendencias")
+        return {"intencao": "pendencias", "resposta": _fazer_pendencias(apenas_hoje=False)}
+
+    if any(k in base for k in ("para fazer hoje", "pra fazer hoje", "que fazer hoje", "tarefas de hoje", "o que fazer hoje", "minhas tarefas hoje")):
+        _registra(frase, "pendencias_hoje")
+        return {"intencao": "pendencias_hoje", "resposta": _fazer_pendencias(apenas_hoje=True)}
+
     if any(w in base for w in PALAVRAS_AGENDA) or "o que tenho" in base or "o que eu tenho" in base:
         quando = "proximos" if any(k in base for k in ("amanha", "semana", "proxim")) else "hoje"
         _registra(frase, "agenda")
@@ -536,6 +559,61 @@ def _fazer_estudos_iniciar_quiz(disciplina: str) -> str:
         return quiz.iniciar_quiz_por_voz(disciplina)
     except Exception:
         return f"Nao consegui iniciar o quiz de {disciplina} agora."
+
+
+def _tem_conclusao_pendente() -> bool:
+    try:
+        from . import pendencias
+        return pendencias.obter_conclusao_pendente() is not None
+    except Exception:
+        return False
+
+
+def _fazer_pendencias(apenas_hoje: bool = False) -> str:
+    try:
+        from . import pendencias, dispositivos
+        lista = pendencias.coletar_todas_pendencias()
+        if apenas_hoje:
+            lista = [p for p in lista if p.get("para_hoje") or p.get("atrasada")]
+        fala = pendencias.gerar_resumo_falado(lista, apenas_hoje=apenas_hoje)
+
+        disp_ativo = dispositivos.dispositivo_ativo()
+        if disp_ativo and disp_ativo.get("id"):
+            linhas = [f"- {p['titulo']} ({p['fonte']})" for p in lista[:10]]
+            detalhe_tela = f"{fala}\n\nTarefas:\n" + "\n".join(linhas)
+            dispositivos.enviar_resposta_dispositivo(
+                disp_ativo["id"],
+                texto=detalhe_tela,
+                titulo="Painel de Tarefas",
+                intencao="pendencias",
+            )
+        return fala
+    except Exception as e:
+        return f"Nao consegui listar as pendencias agora: {e}"
+
+
+def _fazer_concluir_tarefa(alvo: str) -> str:
+    try:
+        from . import pendencias
+        return pendencias.concluir_tarefa_por_voz(alvo)
+    except Exception as e:
+        return f"Nao consegui concluir a tarefa: {e}"
+
+
+def _fazer_confirmar_conclusao_tarefa() -> str:
+    try:
+        from . import pendencias
+        return pendencias.confirmar_conclusao_pendente()
+    except Exception as e:
+        return f"Nao consegui confirmar a conclusao da tarefa: {e}"
+
+
+def _fazer_cancelar_conclusao_tarefa() -> str:
+    try:
+        from . import pendencias
+        return pendencias.cancelar_conclusao_pendente()
+    except Exception as e:
+        return f"Nao consegui cancelar a conclusao: {e}"
 
 
 if __name__ == "__main__":
