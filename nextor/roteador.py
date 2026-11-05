@@ -247,6 +247,37 @@ def rotear(frase: str, canal: str = "local", id_dispositivo: str | None = None) 
         _registra(frase, "organizador_previa")
         return {"intencao": "organizador_previa", "resposta": _fazer_organizador_previa(alvo_pasta, criterio_pasta)}
 
+    # Skill Integracao GitHub (Issue #16)
+    if any(k in base for k in ("meu kanban", "no kanban", "ver kanban", "listar kanban")):
+        _registra(frase, "github_kanban")
+        return {"intencao": "github_kanban", "resposta": _fazer_github_kanban()}
+
+    if any(k in base for k in ("minhas issues", "listar issues", "quais issues", "ver issues")):
+        _registra(frase, "github_issues")
+        return {"intencao": "github_issues", "resposta": _fazer_github_issues()}
+
+    if "confirma criacao" in base or "confirmar criacao" in base or "confirma movimentacao" in base or "confirmar movimentacao" in base or (base in ("confirma", "confirmar") and _tem_acao_pendente_github()):
+        _registra(frase, "github_confirmar")
+        return {"intencao": "github_confirmar", "resposta": _fazer_github_confirmar()}
+
+    if "cancela criacao" in base or "cancelar criacao" in base or "cancela movimentacao" in base or "cancelar movimentacao" in base:
+        _registra(frase, "github_cancelar")
+        return {"intencao": "github_cancelar", "resposta": _fazer_github_cancelar()}
+
+    m_issue = re.search(r"(?:cria|criar|crie)\s+(?:uma\s+)?issue(?:\s+no\s+|\s+em\s+|\s+para\s+o\s+)?([^\s:]+)?[:,\s]+(.+)$", limpa, flags=re.IGNORECASE)
+    if m_issue:
+        repo_alvo = (m_issue.group(1) or "").strip()
+        titulo_issue = (m_issue.group(2) or "").strip(" ?.")
+        _registra(frase, "github_propor_issue")
+        return {"intencao": "github_propor_issue", "resposta": _fazer_github_propor_issue(repo_alvo, titulo_issue)}
+
+    m_mover = re.search(r"(?:move|mover|mova)\s+(?:o\s+)?cartao\s+(?:da\s+issue\s+|de\s+|do\s+)?([^\s]+)\s+para\s+(.+)$", limpa, flags=re.IGNORECASE)
+    if m_mover:
+        issue_ref = m_mover.group(1).strip(" ?.")
+        coluna_alvo = m_mover.group(2).strip(" ?.")
+        _registra(frase, "github_propor_mover")
+        return {"intencao": "github_propor_mover", "resposta": _fazer_github_propor_mover(issue_ref, coluna_alvo)}
+
     if any(w in base for w in PALAVRAS_AGENDA) or "o que tenho" in base or "o que eu tenho" in base:
         quando = "proximos" if any(k in base for k in ("amanha", "semana", "proxim")) else "hoje"
         _registra(frase, "agenda")
@@ -445,6 +476,66 @@ def _fazer_estudos_resumo(disciplina: str, alvo: str = "", gerar_cards: bool = T
         return res.get("aviso") or res.get("erro", "Nao consegui gerar o resumo agora.")
     except Exception:
         return "Nao consegui gerar o resumo dos estudos agora."
+
+
+def _tem_acao_pendente_github() -> bool:
+    try:
+        from . import github_integration
+        return github_integration.obter_acao_pendente() is not None
+    except Exception:
+        return False
+
+
+def _fazer_github_kanban() -> str:
+    try:
+        from . import github_integration
+        return github_integration.resumo_kanban_por_voz()
+    except Exception as e:
+        return f"Nao consegui acessar o kanban: {e}"
+
+
+def _fazer_github_issues() -> str:
+    try:
+        from . import github_integration
+        return github_integration.resumo_issues_por_voz()
+    except Exception as e:
+        return f"Nao consegui acessar as issues: {e}"
+
+
+def _fazer_github_propor_issue(repo: str, titulo: str) -> str:
+    try:
+        from . import github_integration
+        res = github_integration.propor_criacao_issue(repo=repo, titulo=titulo)
+        return res.get("mensagem") or res.get("erro", "Erro ao propor criacao de issue.")
+    except Exception as e:
+        return f"Nao consegui preparar a criacao da issue: {e}"
+
+
+def _fazer_github_propor_mover(issue_ref: str, coluna: str) -> str:
+    try:
+        from . import github_integration
+        res = github_integration.propor_movimentacao_cartao(issue_ref=issue_ref, coluna=coluna)
+        return res.get("mensagem") or res.get("erro", "Erro ao propor movimentacao de cartao.")
+    except Exception as e:
+        return f"Nao consegui preparar a movimentacao do cartao: {e}"
+
+
+def _fazer_github_confirmar() -> str:
+    try:
+        from . import github_integration
+        res = github_integration.confirmar_acao_pendente()
+        return res.get("mensagem") or res.get("erro", "Nenhuma acao pendente para confirmar.")
+    except Exception as e:
+        return f"Nao consegui confirmar a acao no GitHub: {e}"
+
+
+def _fazer_github_cancelar() -> str:
+    try:
+        from . import github_integration
+        res = github_integration.cancelar_acao_pendente()
+        return res.get("mensagem") or "Acao cancelada com sucesso."
+    except Exception as e:
+        return f"Nao consegui cancelar a acao: {e}"
 
 
 def _fazer_estudos_quiz_do_dia() -> str:
