@@ -84,6 +84,10 @@ def obter_pastas_importacao_estudos():
 
 ESTUDOS_IMPORTAR_DE = obter_pastas_importacao_estudos()
 
+# Artigos cientificos (OpenAlex e arXiv - Issue #7)
+OPENALEX_API_URL = os.getenv("NEXTOR_OPENALEX_API_URL", "https://api.openalex.org/works")
+ARXIV_API_URL = os.getenv("NEXTOR_ARXIV_API_URL", "http://export.arxiv.org/api/query")
+
 # Telegram
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 TELEGRAM_USUARIOS_AUTORIZADOS = os.getenv("TELEGRAM_USUARIOS_AUTORIZADOS", "").strip()
