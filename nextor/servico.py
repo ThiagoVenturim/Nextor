@@ -34,6 +34,7 @@ PROTEGIDOS = ("anotar", "falar_endpoint", "conversar_endpoint", "notas",
               "estudos_disciplinas_endpoint", "estudos_materiais_endpoint", "estudos_buscar_endpoint",
               "estudos_aulas_gravar_endpoint", "estudos_aulas_parar_endpoint", "estudos_aulas_status_endpoint",
               "estudos_resumo_endpoint", "estudos_flashcards_exportar_endpoint",
+              "estudos_quiz_gerar_endpoint", "estudos_quiz_responder_endpoint", "estudos_quiz_historico_endpoint",
               "organizador_previa_endpoint", "organizador_executar_endpoint",
               "organizador_desfazer_endpoint", "organizador_historico_endpoint")
 WEB = Path(__file__).resolve().parent / "web"
@@ -566,6 +567,56 @@ def estudos_flashcards_exportar_endpoint():
         "Content-Disposition": f'attachment; filename="flashcards_{slug_disc}.{ext}"',
     }
     return conteudo_export, 200, headers
+
+
+@app.post("/estudos/quiz/gerar")
+def estudos_quiz_gerar_endpoint():
+    dados = request.get_json(silent=True) or request.values
+    disc = (dados.get("disciplina") or "").strip()
+    try:
+        qtd = int(dados.get("quantidade", 3))
+    except (ValueError, TypeError):
+        qtd = 3
+
+    if not disc:
+        return jsonify(ok=False, erro="Nome da disciplina e obrigatorio."), 400
+
+    from . import quiz
+    res = quiz.obter_ou_gerar_questoes_quiz(disciplina_nome=disc, quantidade=qtd)
+    if not res.get("ok"):
+        return jsonify(ok=False, erro=res.get("erro", "Erro ao obter questoes.")), 404
+
+    return jsonify(res)
+
+
+@app.post("/estudos/quiz/responder")
+def estudos_quiz_responder_endpoint():
+    dados = request.get_json(silent=True) or request.values
+    questao_id = dados.get("questao_id")
+    resposta = (dados.get("resposta") or "").strip()
+
+    if not questao_id or not resposta:
+        return jsonify(ok=False, erro="questao_id e resposta sao obrigatorios."), 400
+
+    try:
+        q_id = int(questao_id)
+    except (ValueError, TypeError):
+        return jsonify(ok=False, erro="questao_id invalido."), 400
+
+    from . import quiz
+    res = quiz.registrar_tentativa(questao_id=q_id, resposta_usuario=resposta)
+    if not res.get("ok"):
+        return jsonify(ok=False, erro=res.get("erro", "Erro ao processar resposta.")), 404
+
+    return jsonify(res)
+
+
+@app.get("/estudos/quiz/historico")
+def estudos_quiz_historico_endpoint():
+    disc = (request.args.get("disciplina") or request.values.get("disciplina") or "").strip()
+    from . import quiz
+    res = quiz.obter_historico_quiz(disciplina_nome=disc)
+    return jsonify(res)
 
 # --- Assistentes externos (Siri, Alexa, Telegram, etc) -------------------------
 

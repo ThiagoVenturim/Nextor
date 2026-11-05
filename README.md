@@ -235,6 +235,7 @@ O Nextor conta com biblioteca local por disciplina e recurso de gravacao e trans
 - Indicador visual e de estado ativo durante a gravacao.
 - Aviso de consentimento mandatorio em todas as gravacoes.
 - Resumos e Flashcards Anki: "Resume a ultima aula de fisica", "resume o capitulo 3 de calculo", "flashcards de calculo". Gera topicos com fontes identificadas e exporta flashcards prontos para importacao no Anki (CSV/TSV).
+- Quizzes por voz com repeticao espacada: "Me faz um quiz de calculo", "Iniciar quiz de fisica", "Quiz do dia". Suporta multipla escolha e verdadeiro/falso com explicacao detalhada e fonte, registrando acertos/erros e priorizando questoes com menor aproveitamento.
 
 ## Estado
 
