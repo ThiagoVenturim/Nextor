@@ -226,7 +226,7 @@ def propor_movimentacao_cartao(
     global _ACAO_PENDENTE
     coluna_limpa = coluna.strip()
     issue_str = str(issue_ref).strip().lstrip("#")
-    repo_norm = normalizar_repositorio(repo) if repo else (config.GITHUB_REPOSITORIO_PADRAO or "Nextor")
+    repo_norm = normalizar_repositorio(repo or "")
 
     if not issue_str or not coluna_limpa:
         return {"ok": False, "erro": "parametros_invalidos", "mensagem": "Numero da issue e coluna sao obrigatorios."}
