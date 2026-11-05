@@ -77,6 +77,23 @@ def rotear(frase: str, canal: str = "local", id_dispositivo: str | None = None) 
         _registra(frase, "traduzir")
         return {"intencao": "traduzir", "resposta": _fazer_texto("traduzir", conteudo, idioma)}
 
+    # Perguntas sobre a materia com fontes (Issue #5)
+    m_qa_diz = re.search(r"o que (?:o )?meu material diz sobre\s+(.+)$", limpa, flags=re.IGNORECASE)
+    if m_qa_diz:
+        termo_qa = m_qa_diz.group(1).strip(" ?.")
+        _registra(frase, "estudos_perguntar")
+        return {"intencao": "estudos_perguntar", "resposta": _fazer_estudos_perguntar(termo_qa)}
+
+    if any(k in base for k in ("segundo o meu material", "pelo meu material", "no meu material", "segundo meu material")):
+        texto_limpo_qa = re.sub(
+            r"\b(segundo\s+o\s+meu\s+material|pelo\s+meu\s+material|no\s+meu\s+material|segundo\s+meu\s+material)\b",
+            "",
+            limpa,
+            flags=re.IGNORECASE,
+        ).strip(" ?.,:")
+        _registra(frase, "estudos_perguntar")
+        return {"intencao": "estudos_perguntar", "resposta": _fazer_estudos_perguntar(texto_limpo_qa)}
+
     # Quizzes de estudos com repeticao espacada (Issue #6)
     if base in ("quiz do dia", "quiz de hoje", "fazer o quiz do dia", "iniciar quiz do dia", "quiz diario", "quiz diário"):
         _registra(frase, "estudos_quiz_do_dia")
@@ -536,6 +553,15 @@ def _fazer_estudos_iniciar_quiz(disciplina: str) -> str:
         return quiz.iniciar_quiz_por_voz(disciplina)
     except Exception:
         return f"Nao consegui iniciar o quiz de {disciplina} agora."
+
+
+def _fazer_estudos_perguntar(pergunta_ou_topico: str, disciplina: str = "") -> str:
+    try:
+        from . import qa_estudos
+        res = qa_estudos.responder_com_material(pergunta=pergunta_ou_topico, disciplina_nome=disciplina)
+        return res.get("resposta_fala") or res.get("resposta_detalhada") or "Nao consegui responder com base no seu material agora."
+    except Exception:
+        return "Nao consegui consultar o seu material agora."
 
 
 if __name__ == "__main__":

@@ -35,6 +35,7 @@ PROTEGIDOS = ("anotar", "falar_endpoint", "conversar_endpoint", "notas",
               "estudos_aulas_gravar_endpoint", "estudos_aulas_parar_endpoint", "estudos_aulas_status_endpoint",
               "estudos_resumo_endpoint", "estudos_flashcards_exportar_endpoint",
               "estudos_quiz_gerar_endpoint", "estudos_quiz_responder_endpoint", "estudos_quiz_historico_endpoint",
+              "estudos_perguntar_endpoint",
               "organizador_previa_endpoint", "organizador_executar_endpoint",
               "organizador_desfazer_endpoint", "organizador_historico_endpoint",
               "github_kanban_endpoint", "github_issues_endpoint", "github_issues_criar_endpoint",
@@ -618,6 +619,20 @@ def estudos_quiz_historico_endpoint():
     disc = (request.args.get("disciplina") or request.values.get("disciplina") or "").strip()
     from . import quiz
     res = quiz.obter_historico_quiz(disciplina_nome=disc)
+    return jsonify(res)
+
+
+@app.post("/estudos/perguntar")
+def estudos_perguntar_endpoint():
+    dados = request.get_json(silent=True) or request.values
+    pergunta = (dados.get("pergunta") or dados.get("texto") or "").strip()
+    disc = (dados.get("disciplina") or "").strip()
+
+    if not pergunta:
+        return jsonify(ok=False, erro="Campo 'pergunta' e obrigatorio."), 400
+
+    from . import qa_estudos
+    res = qa_estudos.responder_com_material(pergunta=pergunta, disciplina_nome=disc)
     return jsonify(res)
 
 # --- Assistentes externos (Siri, Alexa, Telegram, etc) -------------------------
