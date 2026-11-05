@@ -8,7 +8,7 @@ Oferece resposta em duas camadas:
 Suporta marcar tarefas como feitas por voz e API, mantendo confirmacao previa
 para mutacoes externas (GitHub).
 """
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 import logging
 import os
 from pathlib import Path
@@ -247,7 +247,15 @@ def coletar_todas_pendencias(
 
         dt = item.get("dt_prazo")
         # 3. Data de vencimento menor primeiro; sem data vai para o final
-        dt_val = dt if isinstance(dt, datetime) else (datetime.max if not dt else datetime.combine(dt, datetime.min.time()))
+        if isinstance(dt, datetime):
+            if dt.tzinfo is not None:
+                dt_val = dt.astimezone(timezone.utc).replace(tzinfo=None)
+            else:
+                dt_val = dt
+        elif isinstance(dt, date):
+            dt_val = datetime.combine(dt, datetime.min.time())
+        else:
+            dt_val = datetime.max
         return (prioridade_atrasada, prioridade_hoje, dt_val, item.get("titulo", "").lower())
 
     lista.sort(key=chave_ordenacao)
