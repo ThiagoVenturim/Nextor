@@ -110,6 +110,12 @@ def obter_pastas_organizacao_permitidas():
 
 ORGANIZAR_PASTAS_PERMITIDAS = obter_pastas_organizacao_permitidas()
 
+# Integracao GitHub (Issue #16)
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "").strip()
+GITHUB_USUARIO = os.getenv("GITHUB_USUARIO", "ThiagoVenturim").strip()
+GITHUB_REPOSITORIO_PADRAO = os.getenv("GITHUB_REPOSITORIO_PADRAO", "Nextor").strip()
+GITHUB_PROJECT_NUMERO = os.getenv("GITHUB_PROJECT_NUMERO", "").strip()
+
 # Caminhos de dados (ficam na raiz, fora do git)
 ANOTACOES = RAIZ / "anotacoes.md"
 MP3 = RAIZ / "nextor_fala.mp3"
