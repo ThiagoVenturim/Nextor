@@ -237,6 +237,7 @@ O Nextor conta com biblioteca local por disciplina e recurso de gravacao e trans
 - Resumos e Flashcards Anki: "Resume a ultima aula de fisica", "resume o capitulo 3 de calculo", "flashcards de calculo". Gera topicos com fontes identificadas e exporta flashcards prontos para importacao no Anki (CSV/TSV).
 - Quizzes por voz com repeticao espacada: "Me faz um quiz de calculo", "Iniciar quiz de fisica", "Quiz do dia". Suporta multipla escolha e verdadeiro/falso com explicacao detalhada e fonte, registrando acertos/erros e priorizando questoes com menor aproveitamento.
 - Perguntas sobre a materia com fontes: "O que e derivada segundo o meu material?", "Explica integrais em calculo pelo meu material". Responde em duas camadas (voz concisa para Nest e resposta detalhada com citacoes exatas de fontes). Regra estrita anti-alucinacao: recusa e declara explicitamente caso o material nao cubra o assunto.
+- Busca de artigos cientificos (OpenAlex e arXiv): "Procura artigos sobre redes neurais", "Buscar artigos de fisica para calculo", "Salvar artigo <id> na disciplina calculo". Extrai os artigos mais relevantes com resumo e referencia ABNT NBR 6023, permitindo salvar diretamente na biblioteca da disciplina.
 
 ## Estado
 

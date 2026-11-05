@@ -94,6 +94,27 @@ def rotear(frase: str, canal: str = "local", id_dispositivo: str | None = None) 
         _registra(frase, "estudos_perguntar")
         return {"intencao": "estudos_perguntar", "resposta": _fazer_estudos_perguntar(texto_limpo_qa)}
 
+    # Busca de artigos cientificos em fontes abertas (Issue #7)
+    m_salvar_art = re.search(r"^salvar\s+artigo\s+(.+?)\s+(?:na\s+disciplina|em|para)\s+(.+)$", limpa, flags=re.IGNORECASE)
+    if m_salvar_art:
+        art_id = m_salvar_art.group(1).strip(" ?.")
+        disc_art = m_salvar_art.group(2).strip(" ?.")
+        _registra(frase, "estudos_salvar_artigo")
+        return {"intencao": "estudos_salvar_artigo", "resposta": _fazer_estudos_salvar_artigo(art_id, disc_art)}
+
+    m_art_disc = re.search(r"^(?:busca|buscar|pesquisa|pesquisar|procura|procurar)\s+artigos?\s+(?:sobre|de)\s+(.+?)\s+(?:para|em|na disciplina)\s+(.+)$", limpa, flags=re.IGNORECASE)
+    if m_art_disc:
+        termo_art = m_art_disc.group(1).strip()
+        disc_art = m_art_disc.group(2).strip(" ?.")
+        _registra(frase, "estudos_buscar_artigos")
+        return {"intencao": "estudos_buscar_artigos", "resposta": _fazer_estudos_buscar_artigos(termo_art, disciplina=disc_art)}
+
+    m_art = re.search(r"^(?:busca|buscar|pesquisa|pesquisar|procura|procurar)\s+artigos?\s+(?:sobre|de)\s+(.+)$", limpa, flags=re.IGNORECASE)
+    if m_art:
+        termo_art = m_art.group(1).strip(" ?.")
+        _registra(frase, "estudos_buscar_artigos")
+        return {"intencao": "estudos_buscar_artigos", "resposta": _fazer_estudos_buscar_artigos(termo_art)}
+
     # Quizzes de estudos com repeticao espacada (Issue #6)
     if base in ("quiz do dia", "quiz de hoje", "fazer o quiz do dia", "iniciar quiz do dia", "quiz diario", "quiz diário"):
         _registra(frase, "estudos_quiz_do_dia")
@@ -562,6 +583,27 @@ def _fazer_estudos_perguntar(pergunta_ou_topico: str, disciplina: str = "") -> s
         return res.get("resposta_fala") or res.get("resposta_detalhada") or "Nao consegui responder com base no seu material agora."
     except Exception:
         return "Nao consegui consultar o seu material agora."
+
+
+def _fazer_estudos_buscar_artigos(termo: str, disciplina: str = "") -> str:
+    try:
+        from . import artigos_cientificos
+        artigos = artigos_cientificos.buscar_artigos(termo, limite=3)
+        return artigos_cientificos.resumo_artigos_falado(artigos, termo)
+    except Exception:
+        return f"Nao consegui buscar artigos sobre {termo} agora."
+
+
+def _fazer_estudos_salvar_artigo(artigo_id_ou_termo: str, disciplina: str) -> str:
+    try:
+        from . import artigos_cientificos
+        artigos = artigos_cientificos.buscar_artigos(artigo_id_ou_termo, limite=1)
+        if not artigos:
+            return f"Nao encontrei o artigo '{artigo_id_ou_termo}' para salvar."
+        res = artigos_cientificos.salvar_artigo_na_disciplina(artigos[0], disciplina_nome=disciplina)
+        return res.get("aviso") or f"Artigo salvo em {disciplina}."
+    except Exception:
+        return f"Nao consegui salvar o artigo em {disciplina} agora."
 
 
 if __name__ == "__main__":
