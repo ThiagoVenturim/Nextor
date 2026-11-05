@@ -30,6 +30,14 @@ def esta_configurado(token: Optional[str] = None) -> bool:
         return False
     # Pode ser o proprio token OAuth em string ou o caminho para um arquivo JSON
     p = Path(tk)
+    if tk.endswith(".json") or ("/" in tk or "\\" in tk):
+        if p.exists() and p.is_file():
+            try:
+                conteudo = p.read_text(encoding="utf-8").strip()
+                return bool(conteudo)
+            except Exception:
+                return False
+        return False
     if p.exists() and p.is_file():
         try:
             conteudo = p.read_text(encoding="utf-8").strip()
@@ -46,6 +54,20 @@ def _resolver_bearer_token(token: Optional[str] = None) -> str:
         return ""
 
     p = Path(tk)
+    if tk.endswith(".json") or ("/" in tk or "\\" in tk):
+        if p.exists() and p.is_file():
+            try:
+                conteudo = p.read_text(encoding="utf-8").strip()
+                if conteudo.startswith("{"):
+                    dados = json.loads(conteudo)
+                    if isinstance(dados, dict):
+                        return (dados.get("access_token") or dados.get("token") or "").strip()
+                return conteudo
+            except Exception as e:
+                log.warning("Falha ao ler arquivo de token do Google Classroom: %s", e)
+                return ""
+        return ""
+
     if p.exists() and p.is_file():
         try:
             conteudo = p.read_text(encoding="utf-8").strip()
@@ -273,7 +295,7 @@ def listar_atividades(
             if dt_prazo:
                 if dt_prazo < dt_agora:
                     atrasada = True
-                elif dt_prazo.date() == hoje_data:
+                if dt_prazo.date() == hoje_data:
                     para_hoje = True
 
             materiais = []

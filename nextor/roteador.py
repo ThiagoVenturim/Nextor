@@ -146,6 +146,12 @@ def rotear(frase: str, canal: str = "local", id_dispositivo: str | None = None) 
         _registra(frase, "classroom_avisos")
         return {"intencao": "classroom_avisos", "resposta": _fazer_classroom_avisos(disciplina=disc_cra)}
 
+    m_cr_avisos_disc_alt = re.search(r"^(?:avisos|comunicados)\s+(?:do\s+classroom|do\s+google\s+sala\s+de\s+aula|do\s+sala\s+de\s+aula)\s+(?:de\s+|da\s+|do\s+|em\s+)?(.+?)[ ?.]*$", limpa, flags=re.IGNORECASE)
+    if m_cr_avisos_disc_alt:
+        disc_cra = m_cr_avisos_disc_alt.group(1).strip(" ?.")
+        _registra(frase, "classroom_avisos")
+        return {"intencao": "classroom_avisos", "resposta": _fazer_classroom_avisos(disciplina=disc_cra)}
+
     if any(k in base_cr for k in ("avisos do classroom", "avisos do google sala de aula", "avisos do sala de aula", "comunicados do classroom", "classroom avisos")):
         _registra(frase, "classroom_avisos")
         return {"intencao": "classroom_avisos", "resposta": _fazer_classroom_avisos()}
