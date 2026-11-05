@@ -92,6 +92,10 @@ ARXIV_API_URL = os.getenv("NEXTOR_ARXIV_API_URL", "http://export.arxiv.org/api/q
 CANVAS_BASE_URL = os.getenv("CANVAS_BASE_URL", "").rstrip("/")
 CANVAS_TOKEN = os.getenv("CANVAS_TOKEN", "").strip()
 
+# Integracao Google Sala de Aula / Classroom (Issue #18)
+GOOGLE_CLASSROOM_TOKEN = os.getenv("GOOGLE_CLASSROOM_TOKEN", "").strip()
+GOOGLE_CLASSROOM_CREDENTIALS = os.getenv("GOOGLE_CLASSROOM_CREDENTIALS", "").strip()
+
 # Telegram
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 TELEGRAM_USUARIOS_AUTORIZADOS = os.getenv("TELEGRAM_USUARIOS_AUTORIZADOS", "").strip()

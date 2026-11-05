@@ -42,7 +42,8 @@ PROTEGIDOS = ("anotar", "falar_endpoint", "conversar_endpoint", "notas",
               "github_kanban_endpoint", "github_issues_endpoint", "github_issues_criar_endpoint",
               "github_mover_endpoint", "github_confirmar_endpoint", "github_cancelar_endpoint",
               "pendencias_endpoint", "pendencias_concluir_endpoint",
-              "canvas_cursos_endpoint", "canvas_tarefas_endpoint", "canvas_avisos_endpoint")
+              "canvas_cursos_endpoint", "canvas_tarefas_endpoint", "canvas_avisos_endpoint",
+              "classroom_cursos_endpoint", "classroom_atividades_endpoint", "classroom_avisos_endpoint")
 WEB = Path(__file__).resolve().parent / "web"
 
 
@@ -1057,6 +1058,84 @@ def canvas_avisos_endpoint():
     ), 200
 
 
+# --- Integracao Google Sala de Aula / Classroom (Issue #18) -------------------
+
+@app.get("/v1/classroom/cursos")
+def classroom_cursos_endpoint():
+    """Lista cursos ativos matriculados no Google Sala de Aula."""
+    from . import google_classroom
+    if not google_classroom.esta_configurado():
+        return jsonify(ok=False, erro="Google Sala de Aula nao configurado. Configure GOOGLE_CLASSROOM_TOKEN."), 503
+
+    cursos = google_classroom.listar_cursos_ativos()
+    return jsonify(
+        ok=True,
+        total=len(cursos),
+        cursos=cursos,
+    ), 200
+
+
+@app.get("/v1/classroom/atividades")
+def classroom_atividades_endpoint():
+    """Lista atividades e prazos no Google Sala de Aula."""
+    from . import google_classroom
+    if not google_classroom.esta_configurado():
+        return jsonify(ok=False, erro="Google Sala de Aula nao configurado. Configure GOOGLE_CLASSROOM_TOKEN."), 503
+
+    curso_id = request.args.get("curso_id")
+    disciplina = request.args.get("disciplina") or ""
+    apenas_pendentes = str(request.args.get("apenas_pendentes", "true")).lower() in ("1", "true", "sim")
+
+    atividades = google_classroom.listar_atividades(
+        curso_id=curso_id,
+        disciplina_nome=disciplina,
+        apenas_pendentes=apenas_pendentes,
+    )
+    resumo = google_classroom.resumo_atividades_falado(atividades, disciplina=disciplina)
+
+    atividades_json = []
+    for a in atividades:
+        item = dict(a)
+        item.pop("dt_prazo", None)
+        atividades_json.append(item)
+
+    return jsonify(
+        ok=True,
+        total=len(atividades_json),
+        resumo_falado=resumo,
+        atividades=atividades_json,
+    ), 200
+
+
+@app.get("/v1/classroom/avisos")
+def classroom_avisos_endpoint():
+    """Lista comunicados e avisos no Google Sala de Aula."""
+    from . import google_classroom
+    if not google_classroom.esta_configurado():
+        return jsonify(ok=False, erro="Google Sala de Aula nao configurado. Configure GOOGLE_CLASSROOM_TOKEN."), 503
+
+    curso_id = request.args.get("curso_id")
+    disciplina = request.args.get("disciplina") or ""
+    try:
+        limite = int(request.args.get("limite", 5))
+    except (ValueError, TypeError):
+        limite = 5
+
+    avisos = google_classroom.listar_avisos(
+        curso_id=curso_id,
+        disciplina_nome=disciplina,
+        limite=limite,
+    )
+    resumo = google_classroom.resumo_avisos_falado(avisos, disciplina=disciplina)
+
+    return jsonify(
+        ok=True,
+        total=len(avisos),
+        resumo_falado=resumo,
+        avisos=avisos,
+    ), 200
+
+
 # --- Painel de Tarefas e Pendencias (Issue #13) -------------------------------
 
 @app.get("/v1/pendencias")
@@ -1070,12 +1149,14 @@ def pendencias_endpoint():
     incluir_agenda = fonte is None or fonte == "agenda"
     incluir_github = fonte is None or fonte == "github"
     incluir_canvas = fonte is None or fonte == "canvas"
+    incluir_classroom = fonte is None or fonte in ("classroom", "google_classroom")
 
     lista = pendencias.coletar_todas_pendencias(
         incluir_anotacoes=incluir_anotacoes,
         incluir_agenda=incluir_agenda,
         incluir_github=incluir_github,
         incluir_canvas=incluir_canvas,
+        incluir_classroom=incluir_classroom,
     )
     if apenas_hoje:
         lista = [p for p in lista if p.get("para_hoje") or p.get("atrasada")]

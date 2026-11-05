@@ -239,6 +239,7 @@ O Nextor conta com biblioteca local por disciplina e recurso de gravacao e trans
 - Perguntas sobre a materia com fontes: "O que e derivada segundo o meu material?", "Explica integrais em calculo pelo meu material". Responde em duas camadas (voz concisa para Nest e resposta detalhada com citacoes exatas de fontes). Regra estrita anti-alucinacao: recusa e declara explicitamente caso o material nao cubra o assunto.
 - Busca de artigos cientificos (OpenAlex e arXiv): "Procura artigos sobre redes neurais", "Buscar artigos de fisica para calculo", "Salvar artigo <id> na disciplina calculo". Extrai os artigos mais relevantes com resumo e referencia ABNT NBR 6023, permitindo salvar diretamente na biblioteca da disciplina.
 - Integracao Canvas LMS: "Quais sao minhas tarefas do Canvas?", "Avisos do Canvas", "Tarefas de fisica no Canvas". Consulta cursos ativos, tarefas com prazos e comunicados, integrando pendencias academicas ao painel unificado com sintese de voz para o Nest.
+- Integracao Google Sala de Aula (Classroom): "Quais sao minhas atividades do Google Sala de Aula?", "Atividades do Classroom", "Tarefas do Sala de Aula de fisica", "Avisos do Classroom". Consulta cursos ativos, atividades com prazos e avisos, integrando ao painel multifonte e respondendo por voz no Nest. Veja o guia em docs/GOOGLE_CLASSROOM.md.
 
 ## Estado
 
