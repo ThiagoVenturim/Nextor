@@ -35,7 +35,9 @@ PROTEGIDOS = ("anotar", "falar_endpoint", "conversar_endpoint", "notas",
               "estudos_aulas_gravar_endpoint", "estudos_aulas_parar_endpoint", "estudos_aulas_status_endpoint",
               "estudos_resumo_endpoint", "estudos_flashcards_exportar_endpoint",
               "organizador_previa_endpoint", "organizador_executar_endpoint",
-              "organizador_desfazer_endpoint", "organizador_historico_endpoint")
+              "organizador_desfazer_endpoint", "organizador_historico_endpoint",
+              "github_kanban_endpoint", "github_issues_endpoint", "github_issues_criar_endpoint",
+              "github_mover_endpoint", "github_confirmar_endpoint", "github_cancelar_endpoint")
 WEB = Path(__file__).resolve().parent / "web"
 
 
@@ -775,6 +777,91 @@ def organizador_historico_endpoint():
     limite = int(request.args.get("limite", 10))
     historico = organizador.listar_historico(limite=limite)
     return jsonify(ok=True, historico=historico), 200
+
+
+# --- Integracao GitHub (Issue #16) --------------------------------------------
+
+@app.get("/v1/github/kanban")
+def github_kanban_endpoint():
+    """Retorna tarefas do kanban agrupadas por status."""
+    from . import github_integration
+    usuario = request.args.get("usuario")
+    dados = github_integration.listar_itens_kanban(usuario=usuario)
+    return jsonify(dados), 200
+
+
+@app.get("/v1/github/issues")
+def github_issues_endpoint():
+    """Retorna lista de issues atribuidas ao usuario."""
+    from . import github_integration
+    usuario = request.args.get("usuario")
+    estado = request.args.get("estado", "open")
+    issues = github_integration.listar_issues_atribuidas(usuario=usuario, estado=estado)
+    return jsonify(ok=True, total=len(issues), issues=issues), 200
+
+
+@app.post("/v1/github/issues")
+def github_issues_criar_endpoint():
+    """Cria ou propoe criacao de issue no GitHub com confirmacao."""
+    from . import github_integration
+    dados = request.get_json(silent=True) or request.values
+    repo = (dados.get("repo") or "").strip()
+    titulo = (dados.get("titulo") or "").strip()
+    corpo = (dados.get("corpo") or "").strip()
+    confirmar = str(dados.get("confirmar", "")).lower() in ("1", "true", "sim")
+
+    if not titulo:
+        return jsonify(ok=False, erro="titulo_obrigatorio"), 400
+
+    proposta = github_integration.propor_criacao_issue(repo=repo, titulo=titulo, corpo=corpo)
+    if not confirmar:
+        return jsonify(proposta), 200
+
+    resultado = github_integration.confirmar_acao_pendente(id_acao=proposta.get("id_acao"))
+    status_code = 200 if resultado.get("ok") else 400
+    return jsonify(resultado), status_code
+
+
+@app.post("/v1/github/kanban/mover")
+def github_mover_endpoint():
+    """Move ou propoe movimentacao de cartao no kanban com confirmacao."""
+    from . import github_integration
+    dados = request.get_json(silent=True) or request.values
+    issue = (dados.get("issue") or dados.get("numero") or "").strip()
+    coluna = (dados.get("coluna") or "").strip()
+    repo = (dados.get("repo") or "").strip() or None
+    confirmar = str(dados.get("confirmar", "")).lower() in ("1", "true", "sim")
+
+    if not issue or not coluna:
+        return jsonify(ok=False, erro="parametros_invalidos"), 400
+
+    proposta = github_integration.propor_movimentacao_cartao(issue_ref=issue, coluna=coluna, repo=repo)
+    if not confirmar:
+        return jsonify(proposta), 200
+
+    resultado = github_integration.confirmar_acao_pendente(id_acao=proposta.get("id_acao"))
+    status_code = 200 if resultado.get("ok") else 400
+    return jsonify(resultado), status_code
+
+
+@app.post("/v1/github/confirmar")
+def github_confirmar_endpoint():
+    """Confirma e executa a acao pendente no GitHub."""
+    from . import github_integration
+    dados = request.get_json(silent=True) or request.values
+    id_acao = (dados.get("id_acao") or "").strip() or None
+
+    resultado = github_integration.confirmar_acao_pendente(id_acao=id_acao)
+    status_code = 200 if resultado.get("ok") else 400
+    return jsonify(resultado), status_code
+
+
+@app.post("/v1/github/cancelar")
+def github_cancelar_endpoint():
+    """Cancela a acao pendente no GitHub."""
+    from . import github_integration
+    resultado = github_integration.cancelar_acao_pendente()
+    return jsonify(resultado), 200
 
 
 # --- Dispositivos e telas (celular, tablet, notebook, PC, TV) ------------------
