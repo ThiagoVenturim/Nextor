@@ -238,6 +238,7 @@ O Nextor conta com biblioteca local por disciplina e recurso de gravacao e trans
 - Quizzes por voz com repeticao espacada: "Me faz um quiz de calculo", "Iniciar quiz de fisica", "Quiz do dia". Suporta multipla escolha e verdadeiro/falso com explicacao detalhada e fonte, registrando acertos/erros e priorizando questoes com menor aproveitamento.
 - Perguntas sobre a materia com fontes: "O que e derivada segundo o meu material?", "Explica integrais em calculo pelo meu material". Responde em duas camadas (voz concisa para Nest e resposta detalhada com citacoes exatas de fontes). Regra estrita anti-alucinacao: recusa e declara explicitamente caso o material nao cubra o assunto.
 - Busca de artigos cientificos (OpenAlex e arXiv): "Procura artigos sobre redes neurais", "Buscar artigos de fisica para calculo", "Salvar artigo <id> na disciplina calculo". Extrai os artigos mais relevantes com resumo e referencia ABNT NBR 6023, permitindo salvar diretamente na biblioteca da disciplina.
+- Integracao Canvas LMS: "Quais sao minhas tarefas do Canvas?", "Avisos do Canvas", "Tarefas de fisica no Canvas". Consulta cursos ativos, tarefas com prazos e comunicados, integrando pendencias academicas ao painel unificado com sintese de voz para o Nest.
 
 ## Estado
 

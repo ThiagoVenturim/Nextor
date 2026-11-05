@@ -94,6 +94,34 @@ def rotear(frase: str, canal: str = "local", id_dispositivo: str | None = None) 
         _registra(frase, "estudos_perguntar")
         return {"intencao": "estudos_perguntar", "resposta": _fazer_estudos_perguntar(texto_limpo_qa)}
 
+    # Integracao Canvas LMS (Issue #17)
+    base_canvas = base.strip(" ?.")
+    m_canvas_tarefas_disc = re.search(r"^(?:quais\s+sao\s+(?:as|minhas)\s+|ver\s+|listar\s+)?tarefas\s+(?:de\s+|da\s+|do\s+|em\s+)?(.+?)\s+no\s+canvas[ ?.]*$", limpa, flags=re.IGNORECASE)
+    if m_canvas_tarefas_disc:
+        disc_c = m_canvas_tarefas_disc.group(1).strip(" ?.")
+        _registra(frase, "canvas_tarefas")
+        return {"intencao": "canvas_tarefas", "resposta": _fazer_canvas_tarefas(disciplina=disc_c)}
+
+    m_canvas_tarefas_disc_alt = re.search(r"^tarefas\s+do\s+canvas\s+(?:de\s+|da\s+|do\s+|em\s+)?(.+?)[ ?.]*$", limpa, flags=re.IGNORECASE)
+    if m_canvas_tarefas_disc_alt:
+        disc_c = m_canvas_tarefas_disc_alt.group(1).strip(" ?.")
+        _registra(frase, "canvas_tarefas")
+        return {"intencao": "canvas_tarefas", "resposta": _fazer_canvas_tarefas(disciplina=disc_c)}
+
+    if base_canvas in ("quais sao minhas tarefas do canvas", "quais sao as tarefas do canvas", "tarefas do canvas", "tarefas no canvas", "o que tenho no canvas", "canvas tarefas") or any(k in base_canvas for k in ("tarefas do canvas", "tarefas no canvas", "minhas tarefas do canvas")):
+        _registra(frase, "canvas_tarefas")
+        return {"intencao": "canvas_tarefas", "resposta": _fazer_canvas_tarefas()}
+
+    m_canvas_avisos_disc = re.search(r"^(?:avisos|anuncios)\s+(?:de\s+|da\s+|do\s+|em\s+)?(.+?)\s+no\s+canvas[ ?.]*$", limpa, flags=re.IGNORECASE)
+    if m_canvas_avisos_disc:
+        disc_a = m_canvas_avisos_disc.group(1).strip(" ?.")
+        _registra(frase, "canvas_avisos")
+        return {"intencao": "canvas_avisos", "resposta": _fazer_canvas_avisos(disciplina=disc_a)}
+
+    if base_canvas in ("avisos do canvas", "avisos no canvas", "anuncios do canvas", "ultimos avisos do canvas", "canvas avisos") or any(k in base_canvas for k in ("avisos do canvas", "avisos no canvas", "anuncios do canvas")):
+        _registra(frase, "canvas_avisos")
+        return {"intencao": "canvas_avisos", "resposta": _fazer_canvas_avisos()}
+
     # Busca de artigos cientificos em fontes abertas (Issue #7)
     m_salvar_art = re.search(r"^salvar\s+artigo\s+(.+?)\s+(?:na\s+disciplina|em|para)\s+(.+)$", limpa, flags=re.IGNORECASE)
     if m_salvar_art:
@@ -749,6 +777,26 @@ def _fazer_tela_marcar(nota: str) -> str:
         return res.get("erro", "Nenhuma gravacao de tela ativa para marcar.")
     except Exception as e:
         return f"Erro ao adicionar marcador na tela: {e}"
+def _fazer_canvas_tarefas(disciplina: str = "") -> str:
+    try:
+        from . import canvas_lms
+        if not canvas_lms.esta_configurado():
+            return "O Canvas LMS nao esta configurado. Configure CANVAS_BASE_URL e CANVAS_TOKEN."
+        tarefas = canvas_lms.listar_tarefas(disciplina_nome=disciplina)
+        return canvas_lms.resumo_tarefas_falado(tarefas, disciplina=disciplina)
+    except Exception as e:
+        return f"Nao consegui consultar as tarefas do Canvas agora: {e}"
+
+
+def _fazer_canvas_avisos(disciplina: str = "") -> str:
+    try:
+        from . import canvas_lms
+        if not canvas_lms.esta_configurado():
+            return "O Canvas LMS nao esta configurado. Configure CANVAS_BASE_URL e CANVAS_TOKEN."
+        avisos = canvas_lms.listar_avisos(disciplina_nome=disciplina)
+        return canvas_lms.resumo_avisos_falado(avisos, disciplina=disciplina)
+    except Exception as e:
+        return f"Nao consegui consultar os avisos do Canvas agora: {e}"
 
 
 if __name__ == "__main__":

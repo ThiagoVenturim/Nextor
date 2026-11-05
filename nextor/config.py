@@ -88,6 +88,10 @@ ESTUDOS_IMPORTAR_DE = obter_pastas_importacao_estudos()
 OPENALEX_API_URL = os.getenv("NEXTOR_OPENALEX_API_URL", "https://api.openalex.org/works")
 ARXIV_API_URL = os.getenv("NEXTOR_ARXIV_API_URL", "http://export.arxiv.org/api/query")
 
+# Integracao Canvas LMS (Issue #17)
+CANVAS_BASE_URL = os.getenv("CANVAS_BASE_URL", "").rstrip("/")
+CANVAS_TOKEN = os.getenv("CANVAS_TOKEN", "").strip()
+
 # Telegram
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 TELEGRAM_USUARIOS_AUTORIZADOS = os.getenv("TELEGRAM_USUARIOS_AUTORIZADOS", "").strip()
