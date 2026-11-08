@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Nextor GTD</title>
+  <link rel="manifest" href="/gtd/manifest.webmanifest">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="/gtd/app.css">
+</head>
+<body>
+  <div id="app" class="app-container">
+    <!-- Topo -->
+    <header class="app-header">
+      <div class="header-marca">
+        <svg class="header-icon" viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="9 11 12 14 22 4"></polyline>
+          <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+        </svg>
+        <span class="header-titulo">Nextor GTD</span>
+      </div>
+      <div class="header-acoes">
+        <button id="btn-sync" class="btn-icone" title="Sincronizar" aria-label="Sincronizar">
+          <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <polyline points="1 20 1 14 7 14"></polyline>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+          </svg>
+        </button>
+        <button id="btn-tema" class="btn-icone" title="Alternar tema" aria-label="Alternar tema">
+          <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+        </button>
+        <button id="btn-config" class="btn-icone" title="Configuracoes" aria-label="Configuracoes">
+          <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Notificacao de feedback -->
+    <div id="toast" class="toast oculto"></div>
+
+    <!-- Conteudo Principal -->
+    <main class="app-main">
+      <!-- Tela 1: Inbox (Captura Rapida) -->
+      <section id="aba-inbox" class="tela-secao ativa">
+        <div class="card-captura">
+          <label for="input-captura" class="label-titulo">Captura Rapida</label>
+          <div class="grupo-captura">
+            <textarea id="input-captura" rows="3" placeholder="O que esta na sua mente agora? Tarefa, ideia ou anotacao..."></textarea>
+          </div>
+          <div class="linha-controles">
+            <select id="select-contexto-captura" class="select-padrao">
+              <option value="@qualquer">@qualquer</option>
+              <option value="@faculdade">@faculdade</option>
+              <option value="@casa">@casa</option>
+              <option value="@trabalho">@trabalho</option>
+              <option value="@academia">@academia</option>
+              <option value="@leitura">@leitura</option>
+            </select>
+            <button id="btn-capturar" class="btn-primario">
+              <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              <span>Capturar</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="bloco-lista">
+          <div class="lista-cabecalho">
+            <h3>Caixa de Entrada</h3>
+            <span id="badge-inbox-total" class="badge">0</span>
+          </div>
+          <div id="lista-inbox" class="itens-container">
+            <!-- Itens inseridos via JS -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Tela 2: Hoje (Agenda + Proximas + Leitura) -->
+      <section id="aba-hoje" class="tela-secao">
+        <div class="painel-dia-resumo" id="bloco-resumo-falado">
+          <p class="resumo-texto" id="texto-resumo-dia">Carregando dia...</p>
+        </div>
+
+        <!-- Meta Leitura do Dia -->
+        <div class="card-meta-leitura">
+          <div class="meta-cabecalho">
+            <span class="meta-titulo">Meta de Leitura Diaria</span>
+            <span id="progresso-leitura-texto" class="meta-status">0 / 20 pag</span>
+          </div>
+          <div class="barra-fundo">
+            <div id="barra-leitura-progresso" class="barra-preenchimento" style="width: 0%"></div>
+          </div>
+          <div class="meta-acao-rapida">
+            <input type="number" id="input-paginas-hoje" min="1" placeholder="Paginas lidas" class="input-pequeno">
+            <button id="btn-somar-leitura" class="btn-secundario">Registrar Leitura</button>
+          </div>
+        </div>
+
+        <!-- Compromissos Agenda -->
+        <div class="bloco-lista">
+          <div class="lista-cabecalho">
+            <h3>Compromissos de Hoje</h3>
+          </div>
+          <div id="lista-agenda" class="itens-container"></div>
+        </div>
+
+        <!-- Proximas Acoes Prioritarias -->
+        <div class="bloco-lista">
+          <div class="lista-cabecalho">
+            <h3>Proximas Acoes</h3>
+          </div>
+          <div id="lista-hoje-acoes" class="itens-container"></div>
+        </div>
+      </section>
+
+      <!-- Tela 3: Contextos -->
+      <section id="aba-contextos" class="tela-secao">
+        <div class="seletor-chips-contexto" id="filtro-contextos">
+          <button class="chip ativo" data-ctx="@qualquer">Todos</button>
+          <button class="chip" data-ctx="@faculdade">@faculdade</button>
+          <button class="chip" data-ctx="@casa">@casa</button>
+          <button class="chip" data-ctx="@trabalho">@trabalho</button>
+          <button class="chip" data-ctx="@academia">@academia</button>
+          <button class="chip" data-ctx="@leitura">@leitura</button>
+        </div>
+        <div class="bloco-lista">
+          <div id="lista-contextos" class="itens-container"></div>
+        </div>
+      </section>
+
+      <!-- Tela 4: Projetos -->
+      <section id="aba-projetos" class="tela-secao">
+        <div class="card-captura">
+          <label for="input-novo-projeto" class="label-titulo">Novo Projeto</label>
+          <div class="grupo-captura">
+            <input type="text" id="input-novo-projeto" placeholder="Nome do projeto...">
+          </div>
+          <div class="linha-controles">
+            <input type="text" id="input-desc-projeto" placeholder="Descricao ou objetivo (opcional)" class="input-padrao">
+            <button id="btn-criar-projeto" class="btn-primario">
+              <span>Criar</span>
+            </button>
+          </div>
+        </div>
+        <div class="bloco-lista">
+          <div class="lista-cabecalho">
+            <h3>Projetos Ativos</h3>
+            <span id="badge-projetos-total" class="badge">0</span>
+          </div>
+          <div id="lista-projetos" class="itens-container"></div>
+        </div>
+      </section>
+
+      <!-- Tela 5: Leitura -->
+      <section id="aba-leitura" class="tela-secao">
+        <div class="card-captura">
+          <label for="input-titulo-livro" class="label-titulo">Adicionar Livro ou Artigo</label>
+          <div class="grupo-captura">
+            <input type="text" id="input-titulo-livro" placeholder="Titulo do livro ou artigo...">
+          </div>
+          <div class="linha-controles-dupla">
+            <input type="text" id="input-autor-livro" placeholder="Autor" class="input-metade">
+            <input type="number" id="input-total-paginas" min="1" placeholder="Total paginas" class="input-metade">
+          </div>
+          <div class="linha-controles">
+            <select id="select-tipo-leitura" class="select-padrao">
+              <option value="livro">Livro</option>
+              <option value="artigo">Artigo</option>
+            </select>
+            <button id="btn-adicionar-leitura" class="btn-primario">
+              <span>Adicionar</span>
+            </button>
+          </div>
+        </div>
+        <div class="bloco-lista">
+          <div class="lista-cabecalho">
+            <h3>Fila de Leitura</h3>
+          </div>
+          <div id="lista-leituras" class="itens-container"></div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Modal de Processar Item -->
+    <div id="modal-processar" class="modal-backdrop oculto">
+      <div class="modal-card">
+        <div class="modal-cabecalho">
+          <h4>Esclarecer / Processar Item</h4>
+          <button id="btn-fechar-modal" class="btn-icone" aria-label="Fechar">&times;</button>
+        </div>
+        <div class="modal-corpo">
+          <p id="modal-item-titulo" class="modal-item-destaque"></p>
+          <div class="modal-acoes-grid">
+            <button class="btn-acao-modal" data-destino="proxima">
+              <strong>Proxima Acao</strong>
+              <small>Fazer na primeira oportunidade</small>
+            </button>
+            <button class="btn-acao-modal" data-destino="projeto">
+              <strong>Virar Projeto</strong>
+              <small>Exige mais de uma acao</small>
+            </button>
+            <button class="btn-acao-modal" data-destino="leitura">
+              <strong>Fila de Leitura</strong>
+              <small>Livro ou artigo para ler</small>
+            </button>
+            <button class="btn-acao-modal" data-destino="aguardando">
+              <strong>Aguardando</strong>
+              <small>Esperando outra pessoa</small>
+            </button>
+            <button class="btn-acao-modal" data-destino="algum_dia">
+              <strong>Algum Dia</strong>
+              <small>Ideia para o futuro</small>
+            </button>
+            <button class="btn-acao-modal perigo" data-destino="lixo">
+              <strong>Lixo</strong>
+              <small>Descartar este item</small>
+            </button>
+          </div>
+
+          <div id="form-ajuste-acao" class="bloco-ajuste-acao oculto">
+            <label>Contexto:</label>
+            <select id="modal-select-contexto" class="select-padrao">
+              <option value="@qualquer">@qualquer</option>
+              <option value="@faculdade">@faculdade</option>
+              <option value="@casa">@casa</option>
+              <option value="@trabalho">@trabalho</option>
+              <option value="@academia">@academia</option>
+              <option value="@leitura">@leitura</option>
+            </select>
+            <label>Prazo (opcional):</label>
+            <input type="date" id="modal-input-prazo" class="input-padrao">
+            <button id="btn-confirmar-processar" class="btn-primario expandido">Confirmar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de Configuracoes / Token -->
+    <div id="modal-config" class="modal-backdrop oculto">
+      <div class="modal-card">
+        <div class="modal-cabecalho">
+          <h4>Configuracoes</h4>
+          <button id="btn-fechar-config" class="btn-icone" aria-label="Fechar">&times;</button>
+        </div>
+        <div class="modal-corpo">
+          <label for="input-token-mestre">Token de Acesso:</label>
+          <input type="password" id="input-token-mestre" placeholder="Cole o NEXTOR_TOKEN aqui" class="input-padrao">
+          <p class="ajuda-texto">O token e armazenado localmente no seu aparelho e transmitido apenas nos cabecalhos HTTP.</p>
+          <button id="btn-salvar-config" class="btn-primario expandido">Salvar Configuracoes</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Barra de Navegacao Inferior (Thumb Bottom Navigation) -->
+    <nav class="bottom-nav">
+      <button class="nav-tab ativa" data-alvo="aba-inbox">
+        <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline>
+          <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path>
+        </svg>
+        <span>Inbox</span>
+      </button>
+      <button class="nav-tab" data-alvo="aba-hoje">
+        <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="16" y1="2" x2="16" y2="6"></line>
+          <line x1="8" y1="2" x2="8" y2="6"></line>
+          <line x1="3" y1="10" x2="21" y2="10"></line>
+        </svg>
+        <span>Hoje</span>
+      </button>
+      <button class="nav-tab" data-alvo="aba-contextos">
+        <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="4"></circle>
+          <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94"></path>
+        </svg>
+        <span>Contextos</span>
+      </button>
+      <button class="nav-tab" data-alvo="aba-projetos">
+        <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+        </svg>
+        <span>Projetos</span>
+      </button>
+      <button class="nav-tab" data-alvo="aba-leitura">
+        <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+        </svg>
+        <span>Leitura</span>
+      </button>
+    </nav>
+  </div>
+
+  <script src="/gtd/app.js"></script>
+</body>
+</html>
