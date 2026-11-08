@@ -5,6 +5,7 @@ Utiliza exclusivamente consultas parametrizadas com placeholders '?'.
 """
 from contextlib import contextmanager
 from datetime import date, datetime
+import json
 from pathlib import Path
 import sqlite3
 from typing import Any, Dict, List, Optional, Union
@@ -58,9 +59,14 @@ class ArmazenamentoGTD:
                     criado_em TEXT NOT NULL,
                     concluido_em TEXT,
                     origem TEXT DEFAULT 'local',
-                    ref_externa TEXT
+                    ref_externa TEXT,
+                    metadados TEXT DEFAULT '{}'
                 )
             """)
+            try:
+                cursor.execute("ALTER TABLE itens ADD COLUMN metadados TEXT DEFAULT '{}'")
+            except sqlite3.OperationalError:
+                pass
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS projetos (
                     id TEXT PRIMARY KEY,
@@ -116,11 +122,12 @@ class ArmazenamentoGTD:
     def salvar_item(self, item: Item) -> Item:
         with self._conexao() as conn:
             cursor = conn.cursor()
+            meta_str = json.dumps(item.metadados) if isinstance(item.metadados, dict) else "{}"
             cursor.execute("""
                 INSERT INTO itens (
                     id, titulo, nota, contexto, estado, projeto_id,
-                    prazo, energia, criado_em, concluido_em, origem, ref_externa
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    prazo, energia, criado_em, concluido_em, origem, ref_externa, metadados
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     titulo = excluded.titulo,
                     nota = excluded.nota,
@@ -131,11 +138,12 @@ class ArmazenamentoGTD:
                     energia = excluded.energia,
                     concluido_em = excluded.concluido_em,
                     origem = excluded.origem,
-                    ref_externa = excluded.ref_externa
+                    ref_externa = excluded.ref_externa,
+                    metadados = excluded.metadados
             """, (
                 item.id, item.titulo, item.nota, item.contexto, item.estado,
                 item.projeto_id, item.prazo, item.energia, item.criado_em,
-                item.concluido_em, item.origem, item.ref_externa
+                item.concluido_em, item.origem, item.ref_externa, meta_str
             ))
             conn.commit()
         return item

@@ -2,6 +2,7 @@
 from dataclasses import dataclass, field, asdict
 from datetime import date, datetime
 from typing import Any, Dict, Optional
+import json
 import uuid
 
 CONTEXTOS_PERMITIDOS = (
@@ -86,6 +87,7 @@ class Item:
     concluido_em: Optional[str] = None
     origem: str = "local"
     ref_externa: Optional[str] = None
+    metadados: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         self.contexto = normalizar_contexto(self.contexto)
@@ -94,6 +96,20 @@ class Item:
         if self.energia not in ENERGIAS_PERMITIDAS:
             self.energia = "media"
         self.prazo = normalizar_prazo(self.prazo)
+        if not isinstance(self.metadados, dict):
+            if isinstance(self.metadados, str):
+                try:
+                    self.metadados = json.loads(self.metadados)
+                except Exception:
+                    self.metadados = {}
+            else:
+                self.metadados = {}
+
+    def obter_meta(self, chave: str, padrao: Any = None) -> Any:
+        return self.metadados.get(chave, padrao)
+
+    def definir_meta(self, chave: str, valor: Any) -> None:
+        self.metadados[chave] = valor
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -103,9 +119,14 @@ class Item:
         campos_validos = {
             "id", "titulo", "nota", "contexto", "estado",
             "projeto_id", "prazo", "energia", "criado_em",
-            "concluido_em", "origem", "ref_externa"
+            "concluido_em", "origem", "ref_externa", "metadados"
         }
         filtrados = {k: v for k, v in dados.items() if k in campos_validos}
+        if "metadados" in filtrados and isinstance(filtrados["metadados"], str):
+            try:
+                filtrados["metadados"] = json.loads(filtrados["metadados"])
+            except Exception:
+                filtrados["metadados"] = {}
         return cls(**filtrados)
 
 
