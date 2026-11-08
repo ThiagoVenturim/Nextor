@@ -132,6 +132,15 @@ GITHUB_PROJECT_NUMERO = os.getenv("GITHUB_PROJECT_NUMERO", "").strip()
 REUNIOES_DIR = Path(os.getenv("NEXTOR_REUNIOES_DIR", "")) if os.getenv("NEXTOR_REUNIOES_DIR") else (RAIZ / "reunioes")
 GRAVACOES_TELA_DIR = Path(os.getenv("NEXTOR_GRAVACOES_TELA_DIR", "")) if os.getenv("NEXTOR_GRAVACOES_TELA_DIR") else (RAIZ / "gravacoes_tela")
 
+# GTD e Produtividade Pessoal (Issues #42, #43, #44)
+GTD_DIR = Path(os.getenv("NEXTOR_GTD_DIR", "")).resolve() if os.getenv("NEXTOR_GTD_DIR") else (Path.home() / ".nextor")
+GTD_DB = Path(os.getenv("NEXTOR_GTD_DB", "")).resolve() if os.getenv("NEXTOR_GTD_DB") else (GTD_DIR / "gtd.db")
+LEITURA_META_DIARIA = int(os.getenv("NEXTOR_LEITURA_META_DIARIA", "20"))
+NOTION_TOKEN = os.getenv("NOTION_TOKEN", "").strip()
+NOTION_DB_TAREFAS = os.getenv("NOTION_DB_TAREFAS", "").strip()
+NOTION_DB_LEITURAS = os.getenv("NOTION_DB_LEITURAS", "").strip()
+TELEGRAM_DONO_CHAT_ID = os.getenv("TELEGRAM_DONO_CHAT_ID", "").strip()
+
 # Caminhos de dados (ficam na raiz, fora do git)
 ANOTACOES = RAIZ / "anotacoes.md"
 MP3 = RAIZ / "nextor_fala.mp3"
