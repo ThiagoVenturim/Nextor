@@ -1269,7 +1269,7 @@ def tela_parar_endpoint():
 def dispositivos_endpoint():
     from . import dispositivos
     token = _obter_token()
-    eh_mestre = (token == config.TOKEN)
+    eh_mestre = autorizado()
 
     if request.method == "POST":
         if not eh_mestre:
@@ -1330,7 +1330,7 @@ def dispositivo_presenca_endpoint(id_dispositivo):
         return jsonify(ok=False, erro="dispositivo nao encontrado"), 404
     disp_autenticado = dispositivos.buscar_por_token(token)
     eh_proprio = (disp_autenticado and disp_autenticado.get("id") == disp["id"] and disp.get("ativo", True))
-    if not (token == config.TOKEN or eh_proprio):
+    if not (autorizado() or eh_proprio):
         return jsonify(ok=False, erro="nao autorizado"), 401
 
     ip = request.remote_addr
@@ -1389,7 +1389,7 @@ def dispositivo_mensagens_endpoint(id_dispositivo):
         return jsonify(ok=False, erro="dispositivo nao encontrado"), 404
     disp_autenticado = dispositivos.buscar_por_token(token)
     eh_proprio = (disp_autenticado and disp_autenticado.get("id") == disp["id"] and disp.get("ativo", True))
-    if not (token == config.TOKEN or eh_proprio):
+    if not (autorizado() or eh_proprio):
         return jsonify(ok=False, erro="nao autorizado"), 401
 
     limpar = str(request.args.get("limpar", "")).lower() in ("1", "true", "sim")
