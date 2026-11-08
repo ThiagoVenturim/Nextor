@@ -63,6 +63,46 @@ def falar(texto: str) -> str:
     return "Falado no Nest."
 
 
+@mcp.tool(description="Captura uma nova tarefa ou ideia para a caixa de entrada (Inbox) do GTD.")
+def gtd_capturar(titulo: str, nota: str = "", contexto: str = "@qualquer") -> str:
+    from .gtd import capturar
+    item = capturar(titulo=titulo, nota=nota, contexto=contexto)
+    return f"Capturado no GTD: {item.titulo} ({item.contexto})"
+
+
+@mcp.tool(description="Consulta a agenda do dia completa do GTD (eventos, tarefas prioritarias e meta de leitura).")
+def gtd_dia() -> str:
+    from .gtd import agenda_do_dia
+    res = agenda_do_dia()
+    return res.get("resumo_falado", "Agenda do dia indisponivel.")
+
+
+@mcp.tool(description="Processa um item do GTD mudando seu destino (proxima, aguardando, algum_dia, feito, lixo, projeto ou leitura).")
+def gtd_processar(item_id: str, destino: str, contexto: str = "") -> str:
+    from .gtd import processar
+    resultado = processar(item_id=item_id, novo_estado=destino, novo_contexto=contexto or None)
+    if resultado is None:
+        return f"Item {item_id} descartado."
+    return f"Item {item_id} movido para {resultado.estado}."
+
+
+@mcp.tool(description="Registra paginas lidas e atualiza o progresso da meta diaria de leitura.")
+def leitura_progresso(paginas: int, leitura_id: str = "") -> str:
+    from .gtd import atualizar_progresso, listar_leituras
+    id_alvo = leitura_id
+    if not id_alvo:
+        leituras_ativas = listar_leituras(estado="lendo")
+        if not leituras_ativas:
+            leituras_ativas = listar_leituras(estado="quero_ler")
+        if not leituras_ativas:
+            return "Nenhuma leitura ativa cadastrada no momento."
+        id_alvo = leituras_ativas[0].id
+
+    res = atualizar_progresso(id_alvo, paginas)
+    status_meta = "Meta batida!" if res["meta_atingida"] else f"Faltam {res['faltam_paginas']} paginas para a meta."
+    return f"Registradas {paginas} paginas. Total hoje: {res['paginas_lidas_hoje']}/{res['meta_diaria']}. {status_meta}"
+
+
 def main():
     mcp.run(transport="stdio")
 
