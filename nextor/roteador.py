@@ -420,6 +420,14 @@ def rotear(frase: str, canal: str = "local", id_dispositivo: str | None = None) 
         _registra(frase, "pendencias_hoje")
         return {"intencao": "pendencias_hoje", "resposta": _fazer_pendencias(apenas_hoje=True)}
 
+    if any(k in base for k in ("como esta meu dia", "como esta o meu dia", "como ta meu dia", "como ta o meu dia", "resumo do meu dia", "resumo do dia", "visao do dia")):
+        _registra(frase, "agenda_dia")
+        return {"intencao": "agenda_dia", "resposta": _fazer_gtd_dia()}
+
+    if any(k in base for k in ("proxima reuniao", "qual minha proxima reuniao", "quando e minha proxima reuniao", "minha proxima reuniao", "proximo compromisso")):
+        _registra(frase, "proxima_reuniao")
+        return {"intencao": "proxima_reuniao", "resposta": _fazer_proxima_reuniao()}
+
     if any(w in base for w in PALAVRAS_AGENDA) or "o que tenho" in base or "o que eu tenho" in base:
         quando = "proximos" if any(k in base for k in ("amanha", "semana", "proxim")) else "hoje"
         _registra(frase, "agenda")
@@ -480,6 +488,21 @@ def _fazer_agenda(quando: str) -> str:
         return "Hoje: " + resumo_falado(eventos_hoje())
     except Exception:
         return "Nao consegui ler a agenda agora."
+
+
+def _fazer_proxima_reuniao() -> str:
+    try:
+        from .agenda import proxima_reuniao
+        prox = proxima_reuniao()
+        if not prox:
+            return "Voce nao tem nenhuma reuniao agendada para os proximos dias."
+        ini = prox["inicio"]
+        hora_str = ini.strftime("%H:%M") if hasattr(ini, "strftime") else str(ini)
+        data_str = ini.strftime("%d/%m") if hasattr(ini, "strftime") else ""
+        link_info = f" Link disponivel: {prox['link_video']}." if prox.get("link_video") else " Nao ha link de videoconferencia registrado."
+        return f"Sua proxima reuniao e '{prox['titulo']}' no dia {data_str} as {hora_str}.{link_info}"
+    except Exception as e:
+        return f"Nao consegui consultar a proxima reuniao: {e}"
 
 
 def _fazer_noticias(assunto: str) -> str:
