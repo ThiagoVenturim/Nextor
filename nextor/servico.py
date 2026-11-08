@@ -1725,6 +1725,138 @@ def gtd_revisao_endpoint():
     return jsonify(ok=True, **res)
 
 
+@app.get("/gtd/config")
+def gtd_obter_config_endpoint():
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    from .gtd.configuracao import obter_config_completa
+    res = obter_config_completa()
+    return jsonify(ok=True, **res)
+
+
+@app.put("/gtd/config")
+def gtd_salvar_config_endpoint():
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    dados = request.get_json(silent=True)
+    if not isinstance(dados, dict):
+        return jsonify(ok=False, erro="corpo da requisicao deve ser um objeto JSON"), 400
+    if "metodo_ativo" in dados:
+        from .gtd.metodos.registro import REGISTRO_METODOS
+        m = str(dados["metodo_ativo"]).strip().lower()
+        if m not in REGISTRO_METODOS:
+            return jsonify(ok=False, erro=f"Metodo desconhecido: {m}"), 400
+    from .gtd.configuracao import salvar_config
+    salvo = salvar_config(dados)
+    return jsonify(ok=True, config=salvo)
+
+
+@app.get("/gtd/visao")
+def gtd_visao_endpoint():
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    from .gtd import ArmazenamentoGTD
+    from .gtd.configuracao import carregar_config
+    from .gtd.metodos import obter_metodo
+    cfg = carregar_config()
+    slug_metodo = request.args.get("metodo") or cfg.get("metodo_ativo", "gtd")
+    metodo = obter_metodo(slug_metodo)
+
+    banco = ArmazenamentoGTD()
+    itens = banco.listar_itens()
+
+    eventos = []
+    try:
+        from . import agenda
+        if hasattr(agenda, "eventos_hoje"):
+            evs = agenda.eventos_hoje() or []
+            for e in evs:
+                inicio = e.get("inicio")
+                hora_str = inicio.strftime("%H:%M") if hasattr(inicio, "strftime") else "Dia todo"
+                eventos.append({"titulo": e.get("titulo", ""), "horario": hora_str})
+    except Exception:
+        eventos = []
+
+    res = metodo.visao_dia(itens, eventos)
+    return jsonify(ok=True, **res)
+
+
+@app.get("/gtd/pomodoro/estado")
+def gtd_pomodoro_estado_endpoint():
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    from .gtd.metodos import pomodoro
+    return jsonify(ok=True, **pomodoro.obter_estado())
+
+
+@app.post("/gtd/pomodoro/<acao>")
+def gtd_pomodoro_acao_endpoint(acao: str):
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    from .gtd.metodos import pomodoro
+    from .gtd import ArmazenamentoGTD
+
+    dados = request.get_json(silent=True) or {}
+    a = acao.strip().lower()
+
+    if a == "iniciar":
+        item_id = dados.get("item_id")
+        try:
+            duracao = int(dados.get("duracao_min", 25))
+        except (ValueError, TypeError):
+            duracao = 25
+        modo = dados.get("modo", "foco")
+        res = pomodoro.iniciar(item_id=item_id, duracao_min=duracao, modo=modo)
+        return jsonify(ok=True, **res)
+
+    if a == "pausar":
+        res = pomodoro.pausar()
+        return jsonify(ok=True, **res)
+
+    if a == "parar":
+        res = pomodoro.parar()
+        return jsonify(ok=True, **res)
+
+    if a == "concluir":
+        banco = ArmazenamentoGTD()
+        res = pomodoro.concluir(db=banco)
+        try:
+            from .notificacoes import notificar
+            notificar(
+                evento="pomodoro_fim",
+                titulo="Pomodoro Concluido",
+                corpo=f"Sessao finalizada com sucesso. {res.get('tarefa_associada', '')}".strip(),
+            )
+        except Exception:
+            pass
+        return jsonify(ok=True, **res)
+
+    return jsonify(ok=False, erro="acao pomodoro desconhecida"), 400
+
+
+@app.post("/gtd/notificacoes/teste")
+def gtd_notificacao_teste_endpoint():
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    dados = request.get_json(silent=True) or {}
+    canal = dados.get("canal")
+    canais_especificos = [canal] if canal else None
+    titulo = dados.get("titulo") or "Teste de Notificacao"
+    corpo = dados.get("corpo") or "Esta e uma notificacao de teste do Nextor GTD."
+
+    from .notificacoes import notificar
+    from .gtd.configuracao import carregar_config
+    cfg = carregar_config()
+    res = notificar(
+        evento="lembrete",
+        titulo=titulo,
+        corpo=corpo,
+        canais_especificos=canais_especificos,
+        config_usuario=cfg,
+    )
+    return jsonify(ok=True, **res)
+
+
 def main():
     exigir_token_mestre_valido()
     from .automacoes import iniciar_agendador

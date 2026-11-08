@@ -42,14 +42,22 @@
             <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
           </svg>
         </button>
-        <button id="btn-config" class="btn-icone" title="Configuracoes" aria-label="Configuracoes">
-          <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="3"></circle>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-          </svg>
-        </button>
       </div>
     </header>
+
+    <!-- Barra Pomodoro Integrada (#45) -->
+    <div id="barra-pomodoro" class="barra-pomodoro">
+      <div class="pomo-info">
+        <span id="pomo-tempo" class="pomo-tempo">25:00</span>
+        <span id="pomo-modo-label" class="badge">Foco</span>
+        <span id="pomo-ciclos" class="pomo-ciclos">0 ciclos</span>
+      </div>
+      <div class="pomo-controles">
+        <button id="btn-pomo-start" class="btn-pomo ativo">Iniciar</button>
+        <button id="btn-pomo-pause" class="btn-pomo">Pausar</button>
+        <button id="btn-pomo-stop" class="btn-pomo">Parar</button>
+      </div>
+    </div>
 
     <!-- Notificacao de feedback -->
     <div id="toast" class="toast oculto"></div>
@@ -87,19 +95,29 @@
             <h3>Caixa de Entrada</h3>
             <span id="badge-inbox-total" class="badge">0</span>
           </div>
-          <div id="lista-inbox" class="itens-container">
-            <!-- Itens inseridos via JS -->
-          </div>
+          <div id="lista-inbox" class="itens-container"></div>
         </div>
       </section>
 
-      <!-- Tela 2: Hoje (Agenda + Proximas + Leitura) -->
+      <!-- Tela 2: Visao do Metodo Ativo (GTD, Kanban, Eisenhower, PARA) (#45) -->
       <section id="aba-hoje" class="tela-secao">
+        <!-- Seletor de Metodo Ativo -->
+        <div class="seletor-metodo-container">
+          <div class="barra-metodos" id="seletor-metodos">
+            <button class="tab-metodo ativa" data-metodo="gtd">GTD</button>
+            <button class="tab-metodo" data-metodo="kanban">Kanban</button>
+            <button class="tab-metodo" data-metodo="eisenhower">Eisenhower</button>
+            <button class="tab-metodo" data-metodo="para">P.A.R.A.</button>
+          </div>
+          <p id="metodo-descricao-ativa" class="metodo-descricao-texto">Fluxo classico de 5 passos do GTD.</p>
+        </div>
+
+        <!-- Resumo Inteligente do Dia -->
         <div class="painel-dia-resumo" id="bloco-resumo-falado">
           <p class="resumo-texto" id="texto-resumo-dia">Carregando dia...</p>
         </div>
 
-        <!-- Meta Leitura do Dia -->
+        <!-- Meta Leitura do Dia (#44) -->
         <div class="card-meta-leitura">
           <div class="meta-cabecalho">
             <span class="meta-titulo">Meta de Leitura Diaria</span>
@@ -122,12 +140,9 @@
           <div id="lista-agenda" class="itens-container"></div>
         </div>
 
-        <!-- Proximas Acoes Prioritarias -->
-        <div class="bloco-lista">
-          <div class="lista-cabecalho">
-            <h3>Proximas Acoes</h3>
-          </div>
-          <div id="lista-hoje-acoes" class="itens-container"></div>
+        <!-- Conteudo Dinamico do Metodo (Board Kanban, Matriz 2x2, Baldes PARA ou GTD) -->
+        <div id="container-visao-metodo" class="bloco-lista">
+          <!-- Renderizado via JS conforme metodo ativo -->
         </div>
       </section>
 
@@ -146,30 +161,7 @@
         </div>
       </section>
 
-      <!-- Tela 4: Projetos -->
-      <section id="aba-projetos" class="tela-secao">
-        <div class="card-captura">
-          <label for="input-novo-projeto" class="label-titulo">Novo Projeto</label>
-          <div class="grupo-captura">
-            <input type="text" id="input-novo-projeto" placeholder="Nome do projeto...">
-          </div>
-          <div class="linha-controles">
-            <input type="text" id="input-desc-projeto" placeholder="Descricao ou objetivo (opcional)" class="input-padrao">
-            <button id="btn-criar-projeto" class="btn-primario">
-              <span>Criar</span>
-            </button>
-          </div>
-        </div>
-        <div class="bloco-lista">
-          <div class="lista-cabecalho">
-            <h3>Projetos Ativos</h3>
-            <span id="badge-projetos-total" class="badge">0</span>
-          </div>
-          <div id="lista-projetos" class="itens-container"></div>
-        </div>
-      </section>
-
-      <!-- Tela 5: Leitura -->
+      <!-- Tela 4: Leitura (#44) -->
       <section id="aba-leitura" class="tela-secao">
         <div class="card-captura">
           <label for="input-titulo-livro" class="label-titulo">Adicionar Livro ou Artigo</label>
@@ -195,6 +187,103 @@
             <h3>Fila de Leitura</h3>
           </div>
           <div id="lista-leituras" class="itens-container"></div>
+        </div>
+      </section>
+
+      <!-- Tela 5: Configuracoes Completas (#47) -->
+      <section id="aba-config" class="tela-secao">
+        <!-- Metodo Ativo -->
+        <div class="secao-config-bloco">
+          <h3 class="config-titulo">Metodo de Produtividade</h3>
+          <label for="config-select-metodo">Metodo Principal:</label>
+          <select id="config-select-metodo" class="select-padrao">
+            <option value="gtd">GTD (A Arte de Fazer Acontecer)</option>
+            <option value="kanban">Kanban Pessoal</option>
+            <option value="eisenhower">Matriz de Eisenhower</option>
+            <option value="para">P.A.R.A. (Building a Second Brain)</option>
+          </select>
+          <p id="config-metodo-desc" class="ajuda-texto"></p>
+
+          <label for="config-wip-limite">Limite de WIP do Kanban (Fazendo):</label>
+          <input type="number" id="config-wip-limite" min="1" max="10" class="input-pequeno" value="3">
+        </div>
+
+        <!-- Tema e Paleta (#46) -->
+        <div class="secao-config-bloco">
+          <h3 class="config-titulo">Aparencia e Cores</h3>
+          <div class="linha-config">
+            <span>Tema:</span>
+            <select id="config-select-tema" class="select-padrao input-metade">
+              <option value="escuro">Escuro</option>
+              <option value="claro">Claro</option>
+            </select>
+          </div>
+          <div class="linha-config">
+            <span>Paleta de Acento:</span>
+            <div class="seletor-paletas">
+              <button class="btn-paleta paleta-azul ativa" data-paleta="azul" title="Azul"></button>
+              <button class="btn-paleta paleta-esmeralda" data-paleta="esmeralda" title="Esmeralda"></button>
+              <button class="btn-paleta paleta-violeta" data-paleta="violeta" title="Violeta"></button>
+              <button class="btn-paleta paleta-ambar" data-paleta="ambar" title="Ambar"></button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Notificacoes e Silencio (#46) -->
+        <div class="secao-config-bloco">
+          <h3 class="config-titulo">Notificacoes Multicanal</h3>
+          <div class="linha-config">
+            <span>Horario de Silencio:</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="config-silencio-ativo" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="linha-controles-dupla">
+            <div>
+              <label class="linha-config-descricao">Inicio:</label>
+              <input type="time" id="config-silencio-inicio" value="22:00" class="input-padrao">
+            </div>
+            <div>
+              <label class="linha-config-descricao">Fim:</label>
+              <input type="time" id="config-silencio-fim" value="07:00" class="input-padrao">
+            </div>
+          </div>
+
+          <div id="lista-canais-config" class="bloco-lista">
+            <!-- Canais carregados via API -->
+          </div>
+
+          <div class="linha-controles">
+            <button id="btn-disparar-teste-notificacao" class="btn-secundario">Disparar Notificacao de Teste</button>
+          </div>
+        </div>
+
+        <!-- Integracoes Ativas -->
+        <div class="secao-config-bloco">
+          <h3 class="config-titulo">Integracoes</h3>
+          <div id="lista-integracoes-config" class="bloco-lista">
+            <!-- Integracoes carregadas via API -->
+          </div>
+        </div>
+
+        <!-- Agentes e MCP Tools -->
+        <div class="secao-config-bloco">
+          <h3 class="config-titulo">Agentes e Servidor MCP</h3>
+          <p class="ajuda-texto">Habilidades autonomas que operam tarefas do painel.</p>
+          <div id="lista-agentes-config" class="bloco-lista">
+            <!-- Agentes carregados via API -->
+          </div>
+        </div>
+
+        <!-- Token Mestre -->
+        <div class="secao-config-bloco">
+          <h3 class="config-titulo">Autenticacao Local</h3>
+          <label for="input-token-mestre">Token Mestre (NEXTOR_TOKEN):</label>
+          <input type="password" id="input-token-mestre" placeholder="Cole o token seguro aqui" class="input-padrao">
+          <p class="ajuda-texto">O token fica apenas no seu navegador e e enviado no cabecalho HTTP das rotas.</p>
+          <button id="btn-salvar-tudo-config" class="btn-primario expandido">Salvar Configuracoes</button>
+          <button id="btn-abrir-wizard" class="btn-secundario expandido" style="margin-top: 8px;">Reabrir Assistente Inicial</button>
         </div>
       </section>
     </main>
@@ -253,18 +342,68 @@
       </div>
     </div>
 
-    <!-- Modal de Configuracoes / Token -->
-    <div id="modal-config" class="modal-backdrop oculto">
+    <!-- Modal Wizard de Primeira Vez (#47) -->
+    <div id="modal-wizard" class="modal-backdrop oculto">
       <div class="modal-card">
         <div class="modal-cabecalho">
-          <h4>Configuracoes</h4>
-          <button id="btn-fechar-config" class="btn-icone" aria-label="Fechar">&times;</button>
+          <h4 id="wizard-titulo">Configuracao Inicial</h4>
+          <button id="btn-pular-wizard" class="btn-secundario">Pular</button>
         </div>
         <div class="modal-corpo">
-          <label for="input-token-mestre">Token de Acesso:</label>
-          <input type="password" id="input-token-mestre" placeholder="Cole o NEXTOR_TOKEN aqui" class="input-padrao">
-          <p class="ajuda-texto">O token e armazenado localmente no seu aparelho e transmitido apenas nos cabecalhos HTTP.</p>
-          <button id="btn-salvar-config" class="btn-primario expandido">Salvar Configuracoes</button>
+          <div class="wizard-indicador">
+            <span class="wizard-ponto ativo" id="wponto-1"></span>
+            <span class="wizard-ponto" id="wponto-2"></span>
+            <span class="wizard-ponto" id="wponto-3"></span>
+          </div>
+
+          <!-- Passo 1: Metodo -->
+          <div id="passo-wizard-1" class="wizard-passo ativo">
+            <p><strong>Passo 1 de 3: Escolha seu metodo de produtividade</strong></p>
+            <p class="ajuda-texto">Voce podera trocar a qualquer momento sem perder tarefas.</p>
+            <select id="wizard-metodo" class="select-padrao">
+              <option value="gtd">GTD (Getting Things Done)</option>
+              <option value="kanban">Kanban Pessoal</option>
+              <option value="eisenhower">Matriz de Eisenhower</option>
+              <option value="para">P.A.R.A. (Projetos, Areas, Recursos, Arquivos)</option>
+            </select>
+            <button id="btn-wizard-avancar-1" class="btn-primario expandido" style="margin-top: 12px;">Continuar</button>
+          </div>
+
+          <!-- Passo 2: Canal de Notificacao -->
+          <div id="passo-wizard-2" class="wizard-passo">
+            <p><strong>Passo 2 de 3: Escolha seu canal principal de avisos</strong></p>
+            <select id="wizard-canal" class="select-padrao">
+              <option value="telegram">Telegram (Bot do Nextor)</option>
+              <option value="webpush">Web Push no Navegador / PWA</option>
+              <option value="discord">Discord (Webhook)</option>
+              <option value="whatsapp">WhatsApp Cloud API</option>
+              <option value="voz">Voz no Nest / PC</option>
+            </select>
+            <div class="linha-controles" style="margin-top: 12px;">
+              <button id="btn-wizard-voltar-2" class="btn-secundario">Voltar</button>
+              <button id="btn-wizard-avancar-2" class="btn-primario expandido">Continuar</button>
+            </div>
+          </div>
+
+          <!-- Passo 3: Aparencia -->
+          <div id="passo-wizard-3" class="wizard-passo">
+            <p><strong>Passo 3 de 3: Escolha o tema visual</strong></p>
+            <select id="wizard-tema" class="select-padrao">
+              <option value="escuro">Tema Escuro</option>
+              <option value="claro">Tema Claro</option>
+            </select>
+            <p class="linha-config-descricao" style="margin-top: 8px;">Paleta de Acento:</p>
+            <select id="wizard-paleta" class="select-padrao">
+              <option value="azul">Azul Moderno</option>
+              <option value="esmeralda">Esmeralda Foco</option>
+              <option value="violeta">Violeta Criativo</option>
+              <option value="ambar">Ambar Energia</option>
+            </select>
+            <div class="linha-controles" style="margin-top: 12px;">
+              <button id="btn-wizard-voltar-3" class="btn-secundario">Voltar</button>
+              <button id="btn-wizard-concluir" class="btn-primario expandido">Concluir Configuracao</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -285,7 +424,7 @@
           <line x1="8" y1="2" x2="8" y2="6"></line>
           <line x1="3" y1="10" x2="21" y2="10"></line>
         </svg>
-        <span>Hoje</span>
+        <span>Visao</span>
       </button>
       <button class="nav-tab" data-alvo="aba-contextos">
         <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -294,18 +433,19 @@
         </svg>
         <span>Contextos</span>
       </button>
-      <button class="nav-tab" data-alvo="aba-projetos">
-        <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-        </svg>
-        <span>Projetos</span>
-      </button>
       <button class="nav-tab" data-alvo="aba-leitura">
         <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
           <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
         </svg>
         <span>Leitura</span>
+      </button>
+      <button class="nav-tab" data-alvo="aba-config">
+        <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+        <span>Ajustes</span>
       </button>
     </nav>
   </div>

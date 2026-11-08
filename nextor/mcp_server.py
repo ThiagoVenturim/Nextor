@@ -103,6 +103,58 @@ def leitura_progresso(paginas: int, leitura_id: str = "") -> str:
     return f"Registradas {paginas} paginas. Total hoje: {res['paginas_lidas_hoje']}/{res['meta_diaria']}. {status_meta}"
 
 
+@mcp.tool(description="Troca o metodo ativo de produtividade (gtd, para, eisenhower, kanban).")
+def gtd_trocar_metodo(metodo: str) -> str:
+    from .gtd.configuracao import salvar_config
+    from .gtd.metodos import obter_metodo
+    m = obter_metodo(metodo)
+    salvar_config({"metodo_ativo": m.slug})
+    return f"Metodo alterado para {m.nome}."
+
+
+@mcp.tool(description="Inicia uma sessao Pomodoro de foco.")
+def pomodoro_iniciar(minutos: int = 25, item_id: str = "") -> str:
+    from .gtd.metodos import pomodoro
+    res = pomodoro.iniciar(item_id=item_id or None, duracao_min=minutos)
+    return f"Pomodoro iniciado: {res['tempo_formatado']} minutos de foco."
+
+
+@mcp.tool(description="Interrompe a sessao Pomodoro ativa.")
+def pomodoro_parar() -> str:
+    from .gtd.metodos import pomodoro
+    pomodoro.parar()
+    return "Pomodoro interrompido."
+
+
+@mcp.tool(description="Consulta o status atual do Pomodoro.")
+def pomodoro_estado() -> str:
+    from .gtd.metodos import pomodoro
+    res = pomodoro.obter_estado()
+    if not res["ativo"]:
+        return "Nenhum Pomodoro ativo no momento."
+    return f"Pomodoro em andamento ({res['modo']}): {res['tempo_formatado']} restantes."
+
+
+@mcp.tool(description="Envia notificacao de teste pelos canais de notificacao.")
+def notificacao_teste(canal: str = "", mensagem: str = "Teste de notificacao Nextor") -> str:
+    from .notificacoes import notificar
+    from .gtd.configuracao import carregar_config
+    cfg = carregar_config()
+    canais_especificos = [canal] if canal else None
+    res = notificar(
+        evento="lembrete",
+        titulo="Teste Nextor",
+        corpo=mensagem,
+        canais_especificos=canais_especificos,
+        config_usuario=cfg,
+    )
+    if res["silenciado"]:
+        return "Notificacao silenciada pelo horario de silencio."
+    if res["despachados"]:
+        return f"Notificacao enviada com sucesso para: {', '.join(res['despachados'])}."
+    return "Nenhum canal ativo ou configurado para envio."
+
+
 def main():
     mcp.run(transport="stdio")
 
