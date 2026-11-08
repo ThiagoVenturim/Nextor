@@ -1478,6 +1478,384 @@ checar();
     return html, 200, {"Content-Type": "text/html; charset=utf-8"}
 
 
+# -------------------------------------------------------------
+# Painel GTD e Produtividade Pessoal no Celular (Issues #42, #43, #44)
+# -------------------------------------------------------------
+
+def autorizado_gtd() -> bool:
+    """Verifica autenticacao estrita para rotas GTD via header.
+
+    Requisitos:
+    - Token mestre deve ser valido (validar_token_mestre)
+    - Token fornecido no header (X-Nextor-Token ou Authorization: Bearer)
+    - Token na query string e explicitamente rejeitado
+    - Comparacao usando hmac.compare_digest em tempo constante
+    """
+    if not validar_token_mestre():
+        return False
+    if request.args.get("token"):
+        return False
+    enviado = request.headers.get("X-Nextor-Token")
+    if not enviado:
+        auth = request.headers.get("Authorization", "")
+        if auth.lower().startswith("bearer "):
+            enviado = auth[7:].strip()
+    mestre = config.TOKEN or ""
+    if not enviado or not mestre:
+        return False
+    return hmac.compare_digest(enviado, mestre)
+
+
+@app.get("/gtd")
+@app.get("/gtd/")
+@app.get("/gtd/app")
+def gtd_pwa_index():
+    pasta_pwa = WEB / "gtd"
+    return send_from_directory(pasta_pwa, "index.html")
+
+
+@app.get("/gtd/<path:filename>")
+def gtd_pwa_estaticos(filename):
+    pasta_pwa = WEB / "gtd"
+    arquivo = (pasta_pwa / filename).resolve()
+    if not str(arquivo).startswith(str(pasta_pwa.resolve())):
+        return jsonify(erro="acesso negado"), 403
+    if arquivo.is_file():
+        return send_from_directory(pasta_pwa, filename)
+    return send_from_directory(pasta_pwa, "index.html")
+
+
+@app.get("/gtd/itens")
+def gtd_listar_itens_endpoint():
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    from .gtd import ArmazenamentoGTD
+    banco = ArmazenamentoGTD()
+    estado = request.args.get("estado")
+    contexto = request.args.get("contexto")
+    projeto_id = request.args.get("projeto_id")
+    itens = banco.listar_itens(estado=estado, contexto=contexto, projeto_id=projeto_id)
+    return jsonify(ok=True, itens=[i.to_dict() for i in itens])
+
+
+@app.post("/gtd/itens")
+def gtd_criar_item_endpoint():
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    dados = request.get_json(silent=True) or {}
+    titulo = (dados.get("titulo") or "").strip()
+    if not titulo:
+        return jsonify(ok=False, erro="titulo obrigatorio"), 400
+
+    from .gtd import ArmazenamentoGTD, Item
+    import uuid
+    banco = ArmazenamentoGTD()
+    item = Item(
+        id=str(uuid.uuid4()),
+        titulo=titulo,
+        nota=(dados.get("nota") or "").strip(),
+        contexto=dados.get("contexto", "@qualquer"),
+        estado=dados.get("estado", "inbox"),
+        projeto_id=dados.get("projeto_id"),
+        prazo=dados.get("prazo"),
+        energia=dados.get("energia", "media"),
+    )
+    salvo = banco.salvar_item(item)
+    return jsonify(ok=True, item=salvo.to_dict())
+
+
+@app.post("/gtd/capturar")
+def gtd_capturar_endpoint():
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    dados = request.get_json(silent=True) or {}
+    titulo = (dados.get("titulo") or "").strip()
+    if not titulo:
+        return jsonify(ok=False, erro="titulo obrigatorio"), 400
+
+    from .gtd import capturar
+    item = capturar(
+        titulo=titulo,
+        nota=(dados.get("nota") or "").strip(),
+        contexto=dados.get("contexto", "@qualquer"),
+        energia=dados.get("energia", "media"),
+        prazo=dados.get("prazo"),
+        projeto_id=dados.get("projeto_id"),
+    )
+    return jsonify(ok=True, item=item.to_dict())
+
+
+@app.post("/gtd/processar")
+def gtd_processar_endpoint():
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    dados = request.get_json(silent=True) or {}
+    item_id = (dados.get("item_id") or dados.get("id") or "").strip()
+    novo_estado = (dados.get("novo_estado") or dados.get("estado") or "").strip()
+    if not item_id or not novo_estado:
+        return jsonify(ok=False, erro="item_id e novo_estado sao obrigatorios"), 400
+
+    from .gtd import processar
+    try:
+        resultado = processar(
+            item_id=item_id,
+            novo_estado=novo_estado,
+            novo_contexto=dados.get("novo_contexto") or dados.get("contexto"),
+            projeto_id=dados.get("projeto_id"),
+            prazo=dados.get("prazo"),
+            energia=dados.get("energia"),
+        )
+        if resultado is None:
+            return jsonify(ok=True, removido=True)
+        return jsonify(ok=True, item=resultado.to_dict())
+    except ValueError as e:
+        return jsonify(ok=False, erro=str(e)), 400
+
+
+@app.get("/gtd/hoje")
+def gtd_hoje_endpoint():
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    from .gtd import agenda_do_dia
+    res = agenda_do_dia()
+    return jsonify(ok=True, **res)
+
+
+@app.get("/gtd/leituras")
+def gtd_listar_leituras_endpoint():
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    from .gtd import listar_leituras
+    estado = request.args.get("estado")
+    tipo = request.args.get("tipo")
+    leituras = listar_leituras(estado=estado, tipo=tipo)
+    return jsonify(ok=True, leituras=[l.to_dict() for l in leituras])
+
+
+@app.post("/gtd/leituras")
+def gtd_criar_leitura_endpoint():
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    dados = request.get_json(silent=True) or {}
+    titulo = (dados.get("titulo") or "").strip()
+    if not titulo:
+        return jsonify(ok=False, erro="titulo obrigatorio"), 400
+
+    from .gtd import criar_leitura
+    leitura = criar_leitura(
+        titulo=titulo,
+        autor=(dados.get("autor") or "").strip(),
+        tipo=dados.get("tipo", "livro"),
+        estado=dados.get("estado", "quero_ler"),
+        paginas_total=int(dados.get("paginas_total") or 0),
+        paginas_lidas=int(dados.get("paginas_lidas") or 0),
+        fonte_url=(dados.get("fonte_url") or "").strip(),
+    )
+    return jsonify(ok=True, leitura=leitura.to_dict())
+
+
+@app.post("/gtd/leituras/<id_leitura>/progresso")
+def gtd_progresso_leitura_endpoint(id_leitura: str):
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    dados = request.get_json(silent=True) or {}
+    try:
+        paginas = int(dados.get("paginas", 0))
+    except (ValueError, TypeError):
+        paginas = 0
+    if paginas <= 0:
+        return jsonify(ok=False, erro="paginas deve ser maior que zero"), 400
+
+    from .gtd import atualizar_progresso
+    try:
+        res = atualizar_progresso(id_leitura, paginas)
+        return jsonify(ok=True, progresso=res, **res)
+    except ValueError as e:
+        return jsonify(ok=False, erro=str(e)), 400
+
+
+@app.post("/gtd/sincronizar")
+def gtd_sincronizar_endpoint():
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    from .gtd.integracoes import sincronizar_tudo
+    res = sincronizar_tudo()
+    return jsonify(ok=True, **res)
+
+
+@app.get("/gtd/projetos")
+def gtd_listar_projetos_endpoint():
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    from .gtd import ArmazenamentoGTD
+    banco = ArmazenamentoGTD()
+    estado = request.args.get("estado")
+    projetos = banco.listar_projetos(estado=estado)
+    return jsonify(ok=True, projetos=[p.to_dict() for p in projetos])
+
+
+@app.post("/gtd/projetos")
+def gtd_criar_projeto_endpoint():
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    dados = request.get_json(silent=True) or {}
+    nome = (dados.get("nome") or dados.get("titulo") or "").strip()
+    if not nome:
+        return jsonify(ok=False, erro="nome obrigatorio"), 400
+
+    from .gtd import ArmazenamentoGTD, Projeto
+    import uuid
+    banco = ArmazenamentoGTD()
+    projeto = Projeto(
+        id=str(uuid.uuid4()),
+        nome=nome,
+        descricao=(dados.get("descricao") or "").strip(),
+        estado=dados.get("estado", "ativo"),
+    )
+    salvo = banco.salvar_projeto(projeto)
+    return jsonify(ok=True, projeto=salvo.to_dict())
+
+
+@app.get("/gtd/revisao")
+def gtd_revisao_endpoint():
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    from .gtd import revisao_semanal
+    res = revisao_semanal()
+    return jsonify(ok=True, **res)
+
+
+@app.get("/gtd/config")
+def gtd_obter_config_endpoint():
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    from .gtd.configuracao import obter_config_completa
+    res = obter_config_completa()
+    return jsonify(ok=True, **res)
+
+
+@app.put("/gtd/config")
+def gtd_salvar_config_endpoint():
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    dados = request.get_json(silent=True)
+    if not isinstance(dados, dict):
+        return jsonify(ok=False, erro="corpo da requisicao deve ser um objeto JSON"), 400
+    if "metodo_ativo" in dados:
+        from .gtd.metodos.registro import REGISTRO_METODOS
+        m = str(dados["metodo_ativo"]).strip().lower()
+        if m not in REGISTRO_METODOS:
+            return jsonify(ok=False, erro=f"Metodo desconhecido: {m}"), 400
+    from .gtd.configuracao import salvar_config
+    salvo = salvar_config(dados)
+    return jsonify(ok=True, config=salvo)
+
+
+@app.get("/gtd/visao")
+def gtd_visao_endpoint():
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    from .gtd import ArmazenamentoGTD
+    from .gtd.configuracao import carregar_config
+    from .gtd.metodos import obter_metodo
+    cfg = carregar_config()
+    slug_metodo = request.args.get("metodo") or cfg.get("metodo_ativo", "gtd")
+    metodo = obter_metodo(slug_metodo)
+
+    banco = ArmazenamentoGTD()
+    itens = banco.listar_itens()
+
+    eventos = []
+    try:
+        from . import agenda
+        if hasattr(agenda, "eventos_hoje"):
+            evs = agenda.eventos_hoje() or []
+            for e in evs:
+                inicio = e.get("inicio")
+                hora_str = inicio.strftime("%H:%M") if hasattr(inicio, "strftime") else "Dia todo"
+                eventos.append({"titulo": e.get("titulo", ""), "horario": hora_str})
+    except Exception:
+        eventos = []
+
+    res = metodo.visao_dia(itens, eventos)
+    return jsonify(ok=True, **res)
+
+
+@app.get("/gtd/pomodoro/estado")
+def gtd_pomodoro_estado_endpoint():
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    from .gtd.metodos import pomodoro
+    return jsonify(ok=True, **pomodoro.obter_estado())
+
+
+@app.post("/gtd/pomodoro/<acao>")
+def gtd_pomodoro_acao_endpoint(acao: str):
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    from .gtd.metodos import pomodoro
+    from .gtd import ArmazenamentoGTD
+
+    dados = request.get_json(silent=True) or {}
+    a = acao.strip().lower()
+
+    if a == "iniciar":
+        item_id = dados.get("item_id")
+        try:
+            duracao = int(dados.get("duracao_min", 25))
+        except (ValueError, TypeError):
+            duracao = 25
+        modo = dados.get("modo", "foco")
+        res = pomodoro.iniciar(item_id=item_id, duracao_min=duracao, modo=modo)
+        return jsonify(ok=True, **res)
+
+    if a == "pausar":
+        res = pomodoro.pausar()
+        return jsonify(ok=True, **res)
+
+    if a == "parar":
+        res = pomodoro.parar()
+        return jsonify(ok=True, **res)
+
+    if a == "concluir":
+        banco = ArmazenamentoGTD()
+        res = pomodoro.concluir(db=banco)
+        try:
+            from .notificacoes import notificar
+            notificar(
+                evento="pomodoro_fim",
+                titulo="Pomodoro Concluido",
+                corpo=f"Sessao finalizada com sucesso. {res.get('tarefa_associada', '')}".strip(),
+            )
+        except Exception:
+            pass
+        return jsonify(ok=True, **res)
+
+    return jsonify(ok=False, erro="acao pomodoro desconhecida"), 400
+
+
+@app.post("/gtd/notificacoes/teste")
+def gtd_notificacao_teste_endpoint():
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    dados = request.get_json(silent=True) or {}
+    canal = dados.get("canal")
+    canais_especificos = [canal] if canal else None
+    titulo = dados.get("titulo") or "Teste de Notificacao"
+    corpo = dados.get("corpo") or "Esta e uma notificacao de teste do Nextor GTD."
+
+    from .notificacoes import notificar
+    from .gtd.configuracao import carregar_config
+    cfg = carregar_config()
+    res = notificar(
+        evento="lembrete",
+        titulo=titulo,
+        corpo=corpo,
+        canais_especificos=canais_especificos,
+        config_usuario=cfg,
+    )
+    return jsonify(ok=True, **res)
+
 
 def main():
     exigir_token_mestre_valido()

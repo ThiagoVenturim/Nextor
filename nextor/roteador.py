@@ -246,6 +246,23 @@ def rotear(frase: str, canal: str = "local", id_dispositivo: str | None = None) 
         _registra(frase, "deck")
         return {"intencao": "deck", "resposta": _fazer_deck(m.group(2).strip(" ?."))}
 
+    # GTD e Produtividade Pessoal (Issues #42, #43, #44)
+    m_gtd_captura = re.search(r"^(?:anota|anotar|anote|nova)\s+tarefa\s+(.+)$", limpa, flags=re.IGNORECASE)
+    if m_gtd_captura:
+        tarefa_txt = m_gtd_captura.group(1).strip(" ?.")
+        _registra(frase, "gtd_capturar")
+        return {"intencao": "gtd_capturar", "resposta": _fazer_gtd_capturar(tarefa_txt)}
+
+    if base.strip(" ?.") in ("o que tenho pra hoje", "o que tenho para hoje", "o que eu tenho pra hoje", "o que eu tenho para hoje", "meu dia no gtd", "gtd hoje"):
+        _registra(frase, "gtd_dia")
+        return {"intencao": "gtd_dia", "resposta": _fazer_gtd_dia()}
+
+    m_leitura = re.search(r"^li\s+(\d+)\s+pagina", base.strip(" ?."), flags=re.IGNORECASE)
+    if m_leitura:
+        qtd_p = int(m_leitura.group(1))
+        _registra(frase, "leitura_progresso")
+        return {"intencao": "leitura_progresso", "resposta": _fazer_leitura_progresso(qtd_p)}
+
     for p in PALAVRAS_ANOTAR:
         if base.startswith(p) or f" {p} " in f" {base} ":
             texto = re.sub(rf".*\b{p}\b( que| o que| para)?", "", limpa, count=1, flags=re.IGNORECASE).strip(" ,:")
@@ -410,6 +427,42 @@ def rotear(frase: str, canal: str = "local", id_dispositivo: str | None = None) 
 
     _registra(frase, "conversar")
     return {"intencao": "conversar", "resposta": _fazer_conversar(limpa or frase)}
+
+
+def _fazer_gtd_capturar(texto: str) -> str:
+    try:
+        from .gtd import capturar
+        item = capturar(texto)
+        return f"Anotado na sua caixa de entrada: {item.titulo}."
+    except Exception as e:
+        return f"Nao consegui anotar no GTD: {e}"
+
+
+def _fazer_gtd_dia() -> str:
+    try:
+        from .gtd import agenda_do_dia
+        res = agenda_do_dia()
+        return res.get("resumo_falado", "Nao foi possivel obter o resumo do dia agora.")
+    except Exception as e:
+        return f"Nao consegui consultar a agenda do dia: {e}"
+
+
+def _fazer_leitura_progresso(paginas: int) -> str:
+    try:
+        from .gtd import atualizar_progresso, listar_leituras
+        leituras = listar_leituras(estado="lendo") or listar_leituras(estado="quero_ler")
+        if not leituras:
+            from .gtd.armazenamento import ArmazenamentoGTD
+            banco = ArmazenamentoGTD()
+            total = banco.registrar_progresso_leitura("geral", paginas)
+            meta = getattr(config, "LEITURA_META_DIARIA", 20)
+            status = "Meta batida!" if total >= meta else f"Faltam {max(0, meta - total)} paginas."
+            return f"Registradas {paginas} paginas lidas. Total hoje: {total} de {meta}. {status}"
+        res = atualizar_progresso(leituras[0].id, paginas)
+        status = "Meta batida!" if res["meta_atingida"] else f"Faltam {res['faltam_paginas']} paginas para a meta."
+        return f"Registradas {paginas} paginas em '{res['leitura']['titulo']}'. Total hoje: {res['paginas_lidas_hoje']}/{res['meta_diaria']}. {status}"
+    except Exception as e:
+        return f"Nao consegui atualizar o progresso de leitura: {e}"
 
 
 def _fazer_anotar(texto: str) -> str:
