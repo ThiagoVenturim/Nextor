@@ -301,11 +301,64 @@ def tratar_comando_anotar(texto: str) -> str:
     return chamar_assistente(f"anota {texto.strip()}")
 
 
+def tratar_comando_gtd_capturar(texto: str) -> str:
+    """Captura diretamente uma ideia ou tarefa para a caixa de entrada GTD."""
+    t = (texto or "").strip()
+    if not t:
+        return "Uso: /inbox <texto da tarefa>"
+    try:
+        from .gtd import capturar
+        item = capturar(t)
+        return f"Item adicionado ao inbox: {item.titulo}"
+    except Exception as e:
+        return f"Nao foi possivel adicionar ao inbox: {e}"
+
+
+def tratar_comando_gtd_hoje() -> str:
+    """Retorna o resumo da agenda do dia GTD."""
+    try:
+        from .gtd import agenda_do_dia
+        res = agenda_do_dia()
+        return res.get("resumo_falado", "Agenda do dia indisponivel.")
+    except Exception as e:
+        return f"Nao foi possivel carregar a agenda do dia: {e}"
+
+
+def tratar_comando_gtd_leitura(arg: str) -> str:
+    """Registra leitura diaria somando paginas ao livro atual ou meta."""
+    try:
+        num = int(arg.strip())
+        if num <= 0:
+            return "Informe um numero positivo de paginas: /li <n>"
+        from .gtd import atualizar_progresso, listar_leituras
+        leituras = listar_leituras(estado="lendo") or listar_leituras(estado="quero_ler")
+        if not leituras:
+            from .gtd.armazenamento import ArmazenamentoGTD
+            banco = ArmazenamentoGTD()
+            total = banco.registrar_progresso_leitura("geral", num)
+            meta = getattr(config, "LEITURA_META_DIARIA", 20)
+            status = "Meta batida!" if total >= meta else f"Faltam {max(0, meta - total)} paginas."
+            return f"Registradas {num} paginas. Total hoje: {total}/{meta}. {status}"
+        res = atualizar_progresso(leituras[0].id, num)
+        status = "Meta batida!" if res["meta_atingida"] else f"Faltam {res['faltam_paginas']} paginas para a meta."
+        return f"Registradas {num} paginas em '{res['leitura']['titulo']}'. Total hoje: {res['paginas_lidas_hoje']}/{res['meta_diaria']}. {status}"
+    except ValueError:
+        return "Informe um numero de paginas valido: /li <n>"
+    except Exception as e:
+        return f"Nao foi possivel registrar a leitura: {e}"
+
+
 def tratar_comando(comando: str, argumento: str = "") -> str:
     """Roteia comandos iniciados por barra (/quiz, /resumo, /anotar, etc)."""
     cmd = comando.strip().lower()
     arg = argumento.strip()
 
+    if cmd in ("/hoje", "/dia"):
+        return tratar_comando_gtd_hoje()
+    if cmd in ("/li", "/ler", "/leitura"):
+        return tratar_comando_gtd_leitura(arg)
+    if cmd in ("/inbox", "/capturar", "/tarefa"):
+        return tratar_comando_gtd_capturar(arg)
     if cmd in ("/quiz", "/perguntas", "/teste"):
         return tratar_comando_quiz(arg)
     if cmd in ("/resumo", "/resumos", "/materiais"):
@@ -451,7 +504,11 @@ def processar_update(
         arg = partes[1] if len(partes) > 1 else ""
         resposta = tratar_comando(cmd, arg)
     else:
-        resposta = chamar_assistente(texto_processar)
+        dono_chat = str(os.getenv("TELEGRAM_DONO_CHAT_ID", "") or getattr(config, "TELEGRAM_DONO_CHAT_ID", "")).strip()
+        if dono_chat and (str(chat_id).strip() == dono_chat or str(user_id).strip() == dono_chat):
+            resposta = tratar_comando_gtd_capturar(texto_processar)
+        else:
+            resposta = chamar_assistente(texto_processar)
 
     # 4. Envio de resposta
     if enviar_resposta and chat_id and (bot_token or config.TELEGRAM_BOT_TOKEN):
