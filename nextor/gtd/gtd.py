@@ -27,6 +27,7 @@ ORDEM_CONTEXTOS_DIA = (
     "@faculdade",
     "@casa",
     "@academia",
+    "@estudo",
     "@leitura",
     "@qualquer",
 )
@@ -138,6 +139,12 @@ def processar(
 
         if estado_alvo == "feito":
             item.concluido_em = datetime.now().isoformat(timespec="seconds")
+            if item.origem == "coach" or (item.ref_externa and item.ref_externa.startswith("coach:")):
+                try:
+                    from ..coach.integracao_gtd import sincronizar_conclusao_gtd
+                    sincronizar_conclusao_gtd(item.id, db_gtd=banco)
+                except Exception:
+                    pass
         else:
             item.concluido_em = None
 
