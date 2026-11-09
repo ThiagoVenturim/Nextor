@@ -11,6 +11,7 @@ CONTEXTOS_PERMITIDOS = (
     "@trabalho",
     "@academia",
     "@leitura",
+    "@estudo",
     "@qualquer",
 )
 

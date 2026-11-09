@@ -141,6 +141,11 @@ NOTION_DB_TAREFAS = os.getenv("NOTION_DB_TAREFAS", "").strip()
 NOTION_DB_LEITURAS = os.getenv("NOTION_DB_LEITURAS", "").strip()
 TELEGRAM_DONO_CHAT_ID = os.getenv("TELEGRAM_DONO_CHAT_ID", "").strip()
 
+# Coach de estudos (Issue #57)
+COACH_DIR = Path(os.getenv("NEXTOR_COACH_DIR", "")).resolve() if os.getenv("NEXTOR_COACH_DIR") else (Path.home() / ".nextor")
+COACH_DB = Path(os.getenv("NEXTOR_COACH_DB", "")).resolve() if os.getenv("NEXTOR_COACH_DB") else (COACH_DIR / "coach.db")
+COACH_TRILHAS_DIR = Path(os.getenv("NEXTOR_COACH_TRILHAS_DIR", "")).resolve() if os.getenv("NEXTOR_COACH_TRILHAS_DIR") else (COACH_DIR / "trilhas")
+
 # Caminhos de dados (ficam na raiz, fora do git)
 ANOTACOES = RAIZ / "anotacoes.md"
 MP3 = RAIZ / "nextor_fala.mp3"
