@@ -15,7 +15,20 @@ Exemplo de configuracao num cliente MCP (stdio):
 """
 from datetime import datetime
 
-from mcp.server.mcpserver import MCPServer
+try:
+    from mcp.server.mcpserver import MCPServer
+except ImportError:
+    class MCPServer:
+        def __init__(self, name: str):
+            self.name = name
+
+        def tool(self, description: str = ""):
+            def decorator(f):
+                return f
+            return decorator
+
+        def run(self, *args, **kwargs):
+            pass
 
 from . import config
 
@@ -95,7 +108,12 @@ def leitura_progresso(paginas: int, leitura_id: str = "") -> str:
         if not leituras_ativas:
             leituras_ativas = listar_leituras(estado="quero_ler")
         if not leituras_ativas:
-            return "Nenhuma leitura ativa cadastrada no momento."
+            from .gtd.armazenamento import ArmazenamentoGTD
+            banco = ArmazenamentoGTD()
+            total = banco.registrar_progresso_leitura("geral", paginas)
+            meta = getattr(config, "LEITURA_META_DIARIA", 20)
+            status = "Meta batida!" if total >= meta else f"Faltam {max(0, meta - total)} paginas."
+            return f"Registradas {paginas} paginas lidas. Total hoje: {total} de {meta}. {status}"
         id_alvo = leituras_ativas[0].id
 
     res = atualizar_progresso(id_alvo, paginas)
@@ -153,6 +171,100 @@ def notificacao_teste(canal: str = "", mensagem: str = "Teste de notificacao Nex
     if res["despachados"]:
         return f"Notificacao enviada com sucesso para: {', '.join(res['despachados'])}."
     return "Nenhum canal ativo ou configurado para envio."
+
+
+@mcp.tool(description="Consulta a acao de estudo do dia recomendada pelo Coach de Estudos.")
+def coach_acao_do_dia(plano_id: str = "") -> str:
+    import json
+    from .coach import ArmazenamentoCoach, acao_do_dia, obter_ou_criar_plano_padrao
+    banco = ArmazenamentoCoach()
+    plano = banco.obter_plano(plano_id) if plano_id else obter_ou_criar_plano_padrao(banco)
+    if not plano:
+        return "Nenhum plano de estudos ativo encontrado."
+    acao = acao_do_dia(plano, db=banco)
+    if not acao:
+        # Verifica se o dia esta saturado ou se tudo foi concluido
+        res = banco.listar_acoes(plano.id, estado="pendente")
+        if not res:
+            return "Parabens! Todas as acoes da sua trilha de estudos estao concluidas."
+        return "Sua agenda hoje possui compromissos prioritarios ou esta cheia. Recomendado descansar ou focar nas entregas."
+    rec = banco.obter_recurso(acao.recurso_id)
+    titulo_rec = rec.titulo if rec else "Estudo do dia"
+    tipo = rec.tipo if rec else "aula"
+    duracao = rec.duracao_min if rec else 15
+    link = f" Link: {rec.url}" if (rec and rec.url) else ""
+    return f"Acao de estudo de hoje: {titulo_rec} ({duracao} min, tipo: {tipo}).{link}"
+
+
+@mcp.tool(description="Conclui uma acao de estudo, ganha XP, avanca streak e atualiza o nivel no Coach.")
+def coach_concluir(recurso_id: str = "", plano_id: str = "") -> str:
+    from .coach import ArmazenamentoCoach, acao_do_dia, concluir, obter_ou_criar_plano_padrao
+    banco = ArmazenamentoCoach()
+    plano = banco.obter_plano(plano_id) if plano_id else obter_ou_criar_plano_padrao(banco)
+    if not plano:
+        return "Nenhum plano de estudos ativo encontrado."
+
+    r_id = recurso_id
+    if not r_id:
+        acao_pend = acao_do_dia(plano, db=banco, verificar_dia_saturado=False)
+        if not acao_pend:
+            return "Nenhuma acao de estudo pendente para concluir hoje."
+        r_id = acao_pend.recurso_id
+
+    res = concluir(plano=plano.id, recurso=r_id, db=banco)
+    rec = banco.obter_recurso(r_id)
+    titulo = rec.titulo if rec else "Licao"
+    msg = (
+        f"Licao '{titulo}' concluida com sucesso! "
+        f"+{res['xp_ganho']} XP. Total: {res['xp_total']} XP (Nivel {res['nivel']}). "
+        f"Sequencia (streak): {res['streak']} dias."
+    )
+    if res.get("subiu_de_nivel"):
+        msg += f" Parabens! Voce subiu para o nivel {res['nivel']}!"
+    return msg
+
+
+@mcp.tool(description="Consulta o progresso geral, XP, nivel, streak e proximas licoes do plano de estudos.")
+def coach_progresso(plano_id: str = "") -> str:
+    from .coach import ArmazenamentoCoach, obter_ou_criar_plano_padrao, resumo
+    banco = ArmazenamentoCoach()
+    plano = banco.obter_plano(plano_id) if plano_id else obter_ou_criar_plano_padrao(banco)
+    if not plano:
+        return "Nenhum plano de estudos ativo encontrado."
+    r = resumo(plano, db=banco)
+    trilha_tit = r.get("trilha", {}).get("titulo", "Trilha") if r.get("trilha") else "Trilha"
+    return (
+        f"Trilha '{trilha_tit}': {r['concluidas']}/{r['total_acoes']} licoes feitas ({r['percentual']}%). "
+        f"Nivel {r['nivel']} com {r['xp_total']} XP acumulados. "
+        f"Sequencia de estudo: {r['streak']} dias consecutivos."
+    )
+
+
+@mcp.tool(description="Cria uma nova trilha de estudos personalizada no Coach.")
+def coach_criar_trilha(
+    titulo: str,
+    habilidade: str,
+    nivel: str = "iniciante",
+    descricao: str = "",
+    recursos_json: str = "[]",
+) -> str:
+    import json
+    from .coach import criar_trilha
+    recs = []
+    if recursos_json:
+        try:
+            recs = json.loads(recursos_json)
+        except Exception:
+            recs = []
+    t = criar_trilha(
+        id_trilha="",
+        titulo=titulo,
+        habilidade=habilidade,
+        nivel=nivel,
+        descricao=descricao,
+        recursos=recs,
+    )
+    return f"Trilha '{t.titulo}' criada com sucesso (ID: {t.id}) com {len(t.recursos)} recursos."
 
 
 def main():

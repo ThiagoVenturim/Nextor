@@ -1857,6 +1857,144 @@ def gtd_notificacao_teste_endpoint():
     return jsonify(ok=True, **res)
 
 
+# -------------------------------------------------------------
+# Coach de Estudos (Issue #57)
+# -------------------------------------------------------------
+
+def autorizado_coach() -> bool:
+    """Verifica autenticacao estrita para rotas do Coach de Estudos via header em tempo constante."""
+    return autorizado_gtd()
+
+
+@app.get("/coach/trilhas")
+def coach_listar_trilhas_endpoint():
+    if not autorizado_coach():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    from .coach import carregar_todas_trilhas
+    trilhas = carregar_todas_trilhas()
+    return jsonify(ok=True, trilhas=[t.to_dict() for t in trilhas])
+
+
+@app.post("/coach/trilhas")
+def coach_criar_trilha_endpoint():
+    if not autorizado_coach():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    dados = request.get_json(silent=True) or {}
+    titulo = (dados.get("titulo") or "").strip()
+    habilidade = (dados.get("habilidade") or "").strip()
+    if not titulo:
+        return jsonify(ok=False, erro="titulo e obrigatorio"), 400
+    from .coach import criar_trilha
+    trilha = criar_trilha(
+        id_trilha=dados.get("id", ""),
+        titulo=titulo,
+        habilidade=habilidade or "geral",
+        nivel=dados.get("nivel", "iniciante"),
+        descricao=dados.get("descricao", ""),
+        recursos=dados.get("recursos", []),
+    )
+    return jsonify(ok=True, trilha=trilha.to_dict()), 201
+
+
+@app.get("/coach/planos")
+def coach_listar_planos_endpoint():
+    if not autorizado_coach():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    from .coach import ArmazenamentoCoach
+    banco = ArmazenamentoCoach()
+    planos = banco.listar_planos(ativo_apenas=False)
+    return jsonify(ok=True, planos=[p.to_dict() for p in planos])
+
+
+@app.post("/coach/planos")
+def coach_criar_plano_endpoint():
+    if not autorizado_coach():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    dados = request.get_json(silent=True) or {}
+    trilha_id = (dados.get("trilha_id") or "ingles_iniciante").strip()
+    dias_semana = int(dados.get("dias_semana", 5))
+    minutos_dia = int(dados.get("minutos_dia", 30))
+    data_inicio = dados.get("data_inicio")
+
+    from .coach import criar_plano
+    try:
+        plano = criar_plano(
+            trilha=trilha_id,
+            ritmo={"dias_semana": dias_semana, "minutos_dia": minutos_dia},
+            data_inicio=data_inicio,
+        )
+        return jsonify(ok=True, plano=plano.to_dict()), 201
+    except Exception as e:
+        return jsonify(ok=False, erro=str(e)), 400
+
+
+@app.get("/coach/acao-do-dia")
+def coach_acao_do_dia_endpoint():
+    if not autorizado_coach():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    plano_id = request.args.get("plano_id", "").strip()
+    data = request.args.get("data")
+    from .coach import ArmazenamentoCoach, acao_do_dia, obter_ou_criar_plano_padrao
+    banco = ArmazenamentoCoach()
+    plano = banco.obter_plano(plano_id) if plano_id else obter_ou_criar_plano_padrao(banco)
+    if not plano:
+        return jsonify(ok=False, erro="nenhum plano encontrado"), 404
+
+    acao = acao_do_dia(plano, data=data, db=banco)
+    if not acao:
+        return jsonify(ok=True, acao=None, motivo="dia cheio ou sem acoes pendentes")
+
+    rec = banco.obter_recurso(acao.recurso_id)
+    return jsonify(
+        ok=True,
+        acao=acao.to_dict(),
+        recurso=rec.to_dict() if rec else None,
+    )
+
+
+@app.post("/coach/concluir")
+def coach_concluir_endpoint():
+    if not autorizado_coach():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    dados = request.get_json(silent=True) or {}
+    plano_id = (dados.get("plano_id") or "").strip()
+    recurso_id = (dados.get("recurso_id") or "").strip()
+    data = dados.get("data")
+
+    from .coach import ArmazenamentoCoach, acao_do_dia, concluir, obter_ou_criar_plano_padrao
+    banco = ArmazenamentoCoach()
+    plano = banco.obter_plano(plano_id) if plano_id else obter_ou_criar_plano_padrao(banco)
+    if not plano:
+        return jsonify(ok=False, erro="nenhum plano encontrado"), 404
+
+    if not recurso_id:
+        acao_pend = acao_do_dia(plano, data=data, db=banco, verificar_dia_saturado=False)
+        if not acao_pend:
+            return jsonify(ok=False, erro="nenhuma acao pendente encontrada"), 400
+        recurso_id = acao_pend.recurso_id
+
+    try:
+        resultado = concluir(plano=plano.id, recurso=recurso_id, data=data, db=banco)
+        return jsonify(**resultado)
+    except Exception as e:
+        return jsonify(ok=False, erro=str(e)), 400
+
+
+@app.get("/coach/resumo")
+def coach_resumo_endpoint():
+    if not autorizado_coach():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    plano_id = request.args.get("plano_id", "").strip()
+    from .coach import ArmazenamentoCoach, obter_ou_criar_plano_padrao, resumo
+    banco = ArmazenamentoCoach()
+    plano = banco.obter_plano(plano_id) if plano_id else obter_ou_criar_plano_padrao(banco)
+    if not plano:
+        return jsonify(ok=False, erro="nenhum plano encontrado"), 404
+
+    r = resumo(plano, db=banco)
+    return jsonify(ok=True, **r)
+
+
 def main():
     exigir_token_mestre_valido()
     from .automacoes import iniciar_agendador

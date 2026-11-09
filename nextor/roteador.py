@@ -263,6 +263,21 @@ def rotear(frase: str, canal: str = "local", id_dispositivo: str | None = None) 
         _registra(frase, "leitura_progresso")
         return {"intencao": "leitura_progresso", "resposta": _fazer_leitura_progresso(qtd_p)}
 
+    # Coach de Estudos (Issue #57)
+    m_coach_concluir = re.search(r"^(?:conclui|concluir|terminei|marca\s+como\s+feita?)\s+(?:a\s+|o\s+)?(?:licao|estudo|aula)(?:\s+de\s+(.+))?[ ?.]*$", base.strip(), flags=re.IGNORECASE)
+    if m_coach_concluir or any(k in base for k in ("conclui a licao", "conclui o estudo", "terminei a licao", "conclui licao")):
+        materia_alvo = m_coach_concluir.group(1).strip() if (m_coach_concluir and m_coach_concluir.group(1)) else ""
+        _registra(frase, "coach_concluir")
+        return {"intencao": "coach_concluir", "resposta": _fazer_coach_concluir_estudo(materia_alvo)}
+
+    if any(k in base for k in ("meu estudo de hoje", "qual meu estudo de hoje", "o que tenho para estudar hoje", "o que estudar hoje", "estudo de hoje", "minha licao de hoje", "qual a licao de hoje", "estudo hoje")):
+        _registra(frase, "coach_estudo_hoje")
+        return {"intencao": "coach_estudo_hoje", "resposta": _fazer_coach_estudo_hoje()}
+
+    if any(k in base for k in ("meu progresso no estudo", "meu progresso nos estudos", "meu streak de estudo", "pontos no estudo")):
+        _registra(frase, "coach_progresso")
+        return {"intencao": "coach_progresso", "resposta": _fazer_coach_progresso()}
+
     for p in PALAVRAS_ANOTAR:
         if base.startswith(p) or f" {p} " in f" {base} ":
             texto = re.sub(rf".*\b{p}\b( que| o que| para)?", "", limpa, count=1, flags=re.IGNORECASE).strip(" ,:")
@@ -463,6 +478,58 @@ def _fazer_leitura_progresso(paginas: int) -> str:
         return f"Registradas {paginas} paginas em '{res['leitura']['titulo']}'. Total hoje: {res['paginas_lidas_hoje']}/{res['meta_diaria']}. {status}"
     except Exception as e:
         return f"Nao consegui atualizar o progresso de leitura: {e}"
+
+
+def _fazer_coach_estudo_hoje() -> str:
+    try:
+        from .coach import ArmazenamentoCoach, acao_do_dia, obter_ou_criar_plano_padrao
+        banco = ArmazenamentoCoach()
+        plano = obter_ou_criar_plano_padrao(banco)
+        acao = acao_do_dia(plano, db=banco)
+        if not acao:
+            res = banco.listar_acoes(plano.id, estado="pendente")
+            if not res:
+                return "Parabens! Voce concluiu todas as licoes da sua trilha de estudos."
+            return "Hoje sua agenda esta cheia ou com entregas prioritarias. Recomendado focar nas entregas ou descansar."
+        rec = banco.obter_recurso(acao.recurso_id)
+        titulo = rec.titulo if rec else "Licao de estudo"
+        duracao = rec.duracao_min if rec else 15
+        tipo = rec.tipo if rec else "aula"
+        link_str = f" Link: {rec.url}" if (rec and rec.url) else ""
+        return f"Seu estudo de hoje e: {titulo} ({duracao} minutos, tipo: {tipo}).{link_str}"
+    except Exception as e:
+        return f"Nao consegui consultar seu estudo de hoje: {e}"
+
+
+def _fazer_coach_concluir_estudo(detalhes: str = "") -> str:
+    try:
+        from .coach import ArmazenamentoCoach, acao_do_dia, concluir, obter_ou_criar_plano_padrao
+        banco = ArmazenamentoCoach()
+        plano = obter_ou_criar_plano_padrao(banco)
+        acao = acao_do_dia(plano, db=banco, verificar_dia_saturado=False)
+        if not acao:
+            return "Nao ha licao pendente para concluir agora."
+        res = concluir(plano=plano.id, recurso=acao.recurso_id, db=banco)
+        rec = banco.obter_recurso(acao.recurso_id)
+        titulo = rec.titulo if rec else "Licao"
+        msg = f"Concluido: {titulo}! Voce ganhou {res['xp_ganho']} XP. Total: {res['xp_total']} XP, nivel {res['nivel']}, sequencia de {res['streak']} dias."
+        if res.get("subiu_de_nivel"):
+            msg += f" Parabens, voce alcancou o nivel {res['nivel']}!"
+        return msg
+    except Exception as e:
+        return f"Nao consegui registrar a conclusao do estudo: {e}"
+
+
+def _fazer_coach_progresso() -> str:
+    try:
+        from .coach import ArmazenamentoCoach, obter_ou_criar_plano_padrao, resumo
+        banco = ArmazenamentoCoach()
+        plano = obter_ou_criar_plano_padrao(banco)
+        r = resumo(plano, db=banco)
+        trilha_nome = r.get("trilha", {}).get("titulo", "Estudos") if r.get("trilha") else "Estudos"
+        return f"No seu plano de {trilha_nome}: {r['concluidas']} de {r['total_acoes']} licoes feitas ({r['percentual']}%). Nivel {r['nivel']}, {r['xp_total']} XP, sequencia de {r['streak']} dias."
+    except Exception as e:
+        return f"Nao consegui consultar seu progresso: {e}"
 
 
 def _fazer_anotar(texto: str) -> str:
