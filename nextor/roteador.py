@@ -66,6 +66,41 @@ def rotear(frase: str, canal: str = "local", id_dispositivo: str | None = None) 
         _registra(frase, "identidade")
         return {"intencao": "identidade", "resposta": companheiro.definir_identidade(identidade)["frase"]}
 
+    # NexRead: tradutor de artigo/pagina ao vivo com estudo (Issue #55)
+    m_nr_salvar = re.search(
+        r"^(?:salva|salvar)\s+(?:a\s+|o\s+)?(?:leitura|artigo|pagina)\s+(?:do\s+nexread\s+)?(?:em|na\s+disciplina|para)\s+(.+?)[ ?.]*$",
+        limpa,
+        flags=re.IGNORECASE,
+    )
+    if m_nr_salvar and ("nexread" in base or "leitura" in base or "pagina" in base):
+        disc_nr = m_nr_salvar.group(1).strip(" ?.")
+        _registra(frase, "nexread_salvar_estudos")
+        return {"intencao": "nexread_salvar_estudos", "resposta": _fazer_nexread_salvar_estudos(disc_nr)}
+
+    m_nr_chat = re.search(
+        r"^(?:no\s+nexread[, ]+|nexread[, ]+)?(?:conversa|conversar|pergunta|perguntar|discutir|explica|explicar)\s+(?:sobre\s+o\s+artigo|no\s+nexread)\s*[:,-]?\s*(.*)$",
+        limpa,
+        flags=re.IGNORECASE,
+    )
+    if m_nr_chat:
+        pergunta_nr = m_nr_chat.group(1).strip(" ?.")
+        _registra(frase, "nexread_conversar")
+        return {"intencao": "nexread_conversar", "resposta": _fazer_nexread_conversar(pergunta_nr, acao="perguntar")}
+
+    if any(k in base for k in ("resumir no nexread", "nexread resumir", "resuma o artigo do nexread", "resumir artigo aberto")):
+        _registra(frase, "nexread_conversar")
+        return {"intencao": "nexread_conversar", "resposta": _fazer_nexread_conversar("", acao="resumir")}
+
+    m_nr_trad = re.search(
+        r"^(?:nexread\s+traduz\w*|traduz\w*\s+(?:a\s+|esta\s+)?pagina(?:\s+ao\s+vivo)?|traduz\w*\s+no\s+nexread)\s*[:,-]?\s*(.+)$",
+        limpa,
+        flags=re.IGNORECASE,
+    )
+    if m_nr_trad:
+        conteudo_nr = m_nr_trad.group(1).strip()
+        _registra(frase, "nexread_traduzir")
+        return {"intencao": "nexread_traduzir", "resposta": _fazer_nexread_traduzir(conteudo_nr)}
+
     # Skill de texto (traduzir / resumir / escrever) - antes das outras intencoes.
     if "traduz" in base:
         m = re.search(r"traduz\w*\s+(.*?)\s+para\s+(.+)$", limpa, flags=re.IGNORECASE)
@@ -996,6 +1031,42 @@ def _fazer_classroom_avisos(disciplina: str = "") -> str:
         return google_classroom.resumo_avisos_falado(avisos, disciplina=disciplina)
     except Exception as e:
         return f"Nao consegui consultar os avisos do Google Sala de Aula agora: {e}"
+
+
+def _fazer_nexread_traduzir(conteudo: str) -> str:
+    try:
+        from .nexread import traduzir_pagina_ao_vivo
+        artigo = traduzir_pagina_ao_vivo(texto=conteudo, aberta_pelo_usuario=True)
+        trecho = artigo.blocos[0].texto_traduzido if artigo.blocos else artigo.titulo_traduzido
+        return f"Pagina traduzida no NexRead: {trecho}"
+    except Exception as e:
+        return f"Nao consegui traduzir a pagina no NexRead: {e}"
+
+
+def _fazer_nexread_conversar(pergunta: str, acao: str = "perguntar") -> str:
+    try:
+        from .nexread import ArmazenamentoNexRead, conversar_sobre_artigo
+        banco = ArmazenamentoNexRead()
+        artigos = banco.listar_artigos(limite=1)
+        if not artigos:
+            return "Nenhum artigo aberto no NexRead no momento."
+        res = conversar_sobre_artigo(artigo_id=artigos[0].id, pergunta=pergunta, acao=acao, db=banco)
+        return res.get("resposta", "Sem resposta disponivel.")
+    except Exception as e:
+        return f"Nao consegui conversar sobre o artigo no NexRead: {e}"
+
+
+def _fazer_nexread_salvar_estudos(disciplina: str) -> str:
+    try:
+        from .nexread import ArmazenamentoNexRead, salvar_na_biblioteca_estudos
+        banco = ArmazenamentoNexRead()
+        artigos = banco.listar_artigos(limite=1)
+        if not artigos:
+            return "Nenhum artigo aberto no NexRead para salvar nos estudos."
+        res = salvar_na_biblioteca_estudos(artigo_id=artigos[0].id, disciplina_nome=disciplina, db=banco)
+        return res.get("aviso", f"Artigo salvo em {disciplina}.")
+    except Exception as e:
+        return f"Nao consegui salvar a leitura do NexRead nos estudos: {e}"
 
 
 if __name__ == "__main__":

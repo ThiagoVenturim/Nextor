@@ -146,6 +146,13 @@ COACH_DIR = Path(os.getenv("NEXTOR_COACH_DIR", "")).resolve() if os.getenv("NEXT
 COACH_DB = Path(os.getenv("NEXTOR_COACH_DB", "")).resolve() if os.getenv("NEXTOR_COACH_DB") else (COACH_DIR / "coach.db")
 COACH_TRILHAS_DIR = Path(os.getenv("NEXTOR_COACH_TRILHAS_DIR", "")).resolve() if os.getenv("NEXTOR_COACH_TRILHAS_DIR") else (COACH_DIR / "trilhas")
 
+# NexRead: tradutor de artigo/pagina ao vivo com marcacao, gravacao e conversa com IA (Issue #55)
+NEXREAD_DIR = Path(os.getenv("NEXTOR_NEXREAD_DIR", "")).resolve() if os.getenv("NEXTOR_NEXREAD_DIR") else (Path.home() / ".nextor")
+NEXREAD_DB = Path(os.getenv("NEXTOR_NEXREAD_DB", "")).resolve() if os.getenv("NEXTOR_NEXREAD_DB") else (NEXREAD_DIR / "nexread.db")
+NEXREAD_TRADUTOR = os.getenv("NEXTOR_NEXREAD_TRADUTOR", "local").strip().lower()
+NEXREAD_IDIOMA_PADRAO = os.getenv("NEXTOR_NEXREAD_IDIOMA", "pt-BR").strip()
+LIBRETRANSLATE_URL = os.getenv("NEXTOR_LIBRETRANSLATE_URL", "http://localhost:5000/translate").strip()
+
 # Caminhos de dados (ficam na raiz, fora do git)
 ANOTACOES = RAIZ / "anotacoes.md"
 MP3 = RAIZ / "nextor_fala.mp3"

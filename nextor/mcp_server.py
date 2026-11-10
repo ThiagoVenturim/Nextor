@@ -338,6 +338,85 @@ def coach_criar_trilha(
     return f"Trilha '{t.titulo}' criada com sucesso (ID: {t.id}) com {len(t.recursos)} recursos."
 
 
+@mcp.tool(description="Traduz ao vivo um artigo ou pagina aberta pelo usuario no NexRead mantendo os blocos de layout.")
+def nexread_traduzir_pagina(
+    conteudo_ou_html: str,
+    idioma_destino: str = "pt-BR",
+    titulo: str = "",
+    url: str = "",
+    modo_layout: str = "bilingue",
+) -> str:
+    from .nexread import traduzir_pagina_ao_vivo
+    artigo = traduzir_pagina_ao_vivo(
+        conteudo_html=conteudo_ou_html,
+        url=url,
+        titulo=titulo,
+        idioma_destino=idioma_destino,
+        modo_layout=modo_layout,
+        aberta_pelo_usuario=True,
+    )
+    resumo_blocos = " ".join(b.texto_traduzido for b in artigo.blocos[:2])
+    return (
+        f"Artigo traduzido no NexRead (ID: {artigo.id}): '{artigo.titulo_traduzido}' "
+        f"({len(artigo.blocos)} blocos). Trecho inicial: {resumo_blocos}"
+    )
+
+
+@mcp.tool(description="Marca e anota um trecho de um artigo aberto no NexRead.")
+def nexread_marcar_trecho(
+    artigo_id: str,
+    trecho: str,
+    nota: str = "",
+    cor: str = "amarelo",
+) -> str:
+    from .nexread import marcar_trecho
+    m = marcar_trecho(artigo_id=artigo_id, trecho=trecho, nota=nota, cor=cor)
+    detalhe_nota = f" com nota '{m.nota}'" if m.nota else ""
+    return f"Trecho marcado em {m.cor} no artigo {artigo_id} (ID: {m.id}){detalhe_nota}: \"{m.trecho_original}\""
+
+
+@mcp.tool(description="Registra uma nota de voz ou gravacao de estudo vinculada a um artigo no NexRead.")
+def nexread_gravar_nota(
+    artigo_id: str,
+    transcricao: str,
+    titulo: str = "Nota de voz do estudo",
+    duracao_seg: int = 0,
+) -> str:
+    from .nexread import gravar_nota_leitura
+    g = gravar_nota_leitura(
+        artigo_id=artigo_id,
+        transcricao=transcricao,
+        titulo=titulo,
+        duracao_seg=duracao_seg,
+    )
+    return f"Gravacao '{g.titulo}' salva no artigo {artigo_id} (ID: {g.id}): {g.transcricao}"
+
+
+@mcp.tool(description="Salva o artigo traduzido, marcacoes e gravacoes do NexRead na biblioteca do modo estudante.")
+def nexread_salvar_estudos(artigo_id: str, disciplina: str) -> str:
+    from .nexread import salvar_na_biblioteca_estudos
+    res = salvar_na_biblioteca_estudos(artigo_id=artigo_id, disciplina_nome=disciplina)
+    return res.get("aviso") or f"Artigo salvo na disciplina {disciplina}."
+
+
+@mcp.tool(description="Conversa com a IA sobre o tema do artigo no NexRead (perguntar, resumir, discutir) citando as fontes do texto.")
+def nexread_conversar(
+    artigo_id: str,
+    pergunta: str = "",
+    acao: str = "perguntar",
+    buscar_fontes_cientificas: bool = False,
+) -> str:
+    from .nexread import conversar_sobre_artigo
+    res = conversar_sobre_artigo(
+        artigo_id=artigo_id,
+        pergunta=pergunta,
+        acao=acao,
+        buscar_fontes_cientificas=buscar_fontes_cientificas,
+    )
+    fontes_str = "; ".join(res.get("fontes") or [])
+    return f"{res.get('resposta', '')} (Fontes: {fontes_str})"
+
+
 def main():
     mcp.run(transport="stdio")
 

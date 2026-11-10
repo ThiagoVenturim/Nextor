@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NexRead - Leitura e Traducao ao Vivo</title>
+  <link rel="manifest" href="/nexread/manifest.webmanifest">
+  <meta name="theme-color" content="#0f172a">
+  <link rel="stylesheet" href="/nexread/app.css">
+</head>
+<body>
+  <div class="nexread-app">
+    <header class="nexread-header">
+      <div class="marca">
+        <span class="marca-badge">NEXTOR</span>
+        <h1 class="marca-titulo">NexRead</h1>
+        <span class="marca-sub">Traducao de artigo/pagina ao vivo com estudo</span>
+      </div>
+      <div class="header-controles">
+        <input type="password" id="input-token" class="input-token" placeholder="Token Nextor (X-Nextor-Token)">
+        <select id="select-motor" class="select-controle" title="Motor de traducao">
+          <option value="local">Modelo Local (Ollama)</option>
+          <option value="libretranslate">LibreTranslate Local</option>
+          <option value="nllb">NLLB-200 Local</option>
+          <option value="opus_mt">Opus-MT (Helsinki-NLP)</option>
+          <option value="faccoder">LLM via faccoder-core</option>
+          <option value="claude">Claude (Nuvem)</option>
+        </select>
+        <select id="select-layout" class="select-controle" title="Modo de exibicao">
+          <option value="bilingue">Bilingue (Empilhado)</option>
+          <option value="lado_a_lado">Lado a Lado</option>
+          <option value="substituir">Apenas Traduzido</option>
+        </select>
+      </div>
+    </header>
+
+    <main class="nexread-workspace">
+      <!-- Coluna Principal: Entrada da Pagina Aberta + Leitor com Layout Preservado -->
+      <section class="coluna-leitura">
+        <div class="painel-abertura">
+          <div class="linha-inputs">
+            <input type="text" id="input-titulo" class="input-padrao" placeholder="Titulo do artigo ou pagina (opcional)">
+            <input type="url" id="input-url" class="input-padrao" placeholder="URL da pagina aberta (ex: https://arxiv.org/abs/...)">
+            <select id="select-idioma" class="select-controle">
+              <option value="pt-BR">Traduzir para: Portugues (pt-BR)</option>
+              <option value="en-US">Traduzir para: Ingles (en-US)</option>
+              <option value="es-ES">Traduzir para: Espanhol (es-ES)</option>
+            </select>
+          </div>
+          <textarea id="input-conteudo" class="textarea-conteudo" rows="4" placeholder="Cole o HTML ou texto da pagina que voce abriu para traduzir mantendo o layout..."></textarea>
+          <div class="barra-acoes-abertura">
+            <button id="btn-traduzir" class="btn-primario">Traduzir Pagina ao Vivo</button>
+            <span id="status-leitura" class="status-leitura">Pronto. So traduz a pagina que voce abriu.</span>
+          </div>
+        </div>
+
+        <!-- Area do Artigo Traduzido Mantendo Layout -->
+        <div class="leitor-container">
+          <div class="leitor-topo">
+            <h2 id="artigo-titulo-exibicao">Abra ou cole um artigo para iniciar</h2>
+            <div class="acoes-biblioteca">
+              <input type="text" id="input-disciplina" class="input-pequeno" placeholder="Disciplina (ex: IA)">
+              <button id="btn-salvar-estudos" class="btn-secundario">Salvar na Biblioteca de Estudos</button>
+            </div>
+          </div>
+          <div id="leitor-html" class="leitor-corpo">
+            <p class="placeholder-leitor">O artigo traduzido preservando cabecalhos, paragrafos, citacoes e marcacoes aparecera aqui.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Coluna Lateral: Marcacoes, Gravacao de Estudo e Conversa com a IA -->
+      <aside class="coluna-estudo">
+        <!-- Bloco 1: Marcar Trecho e Anotar -->
+        <div class="card-estudo">
+          <h3>Marcar Trecho e Anotar</h3>
+          <input type="text" id="input-trecho" class="input-padrao" placeholder="Selecione no texto ou digite o trecho...">
+          <textarea id="input-nota-marcacao" class="textarea-curta" rows="2" placeholder="Sua anotacao de estudo sobre este trecho..."></textarea>
+          <div class="linha-marcacao">
+            <select id="select-cor" class="select-controle">
+              <option value="amarelo">Destaque Amarelo</option>
+              <option value="verde">Destaque Verde</option>
+              <option value="azul">Destaque Azul</option>
+              <option value="rosa">Destaque Rosa</option>
+            </select>
+            <button id="btn-marcar" class="btn-primario">Marcar Trecho</button>
+          </div>
+          <div id="lista-marcacoes" class="lista-itens"></div>
+        </div>
+
+        <!-- Bloco 2: Gravar Nota de Voz / Estudo -->
+        <div class="card-estudo">
+          <h3>Gravar Nota de Estudo</h3>
+          <input type="text" id="input-titulo-gravacao" class="input-padrao" placeholder="Titulo da gravacao (ex: Reflexao secao 2)">
+          <textarea id="input-transcricao" class="textarea-curta" rows="2" placeholder="Transcricao ou ditado da nota de voz..."></textarea>
+          <div class="linha-marcacao">
+            <button id="btn-ditar-voz" class="btn-secundario">Ditar pelo Microfone</button>
+            <button id="btn-salvar-gravacao" class="btn-primario">Salvar Gravacao</button>
+          </div>
+          <div id="lista-gravacoes" class="lista-itens"></div>
+        </div>
+
+        <!-- Bloco 3: Conversar com a IA sobre este tema -->
+        <div class="card-estudo card-chat">
+          <h3>Conversar com a IA sobre este tema</h3>
+          <div class="botoes-rapidos-ia">
+            <button class="btn-chip" data-acao="resumir">Resumir com Fontes</button>
+            <button class="btn-chip" data-acao="discutir">Discutir Implicacoes</button>
+          </div>
+          <div id="chat-historico" class="chat-historico"></div>
+          <div class="chat-entrada">
+            <textarea id="input-pergunta-ia" class="textarea-curta" rows="2" placeholder="Pergunte sobre o artigo (respostas citam os blocos do texto)..."></textarea>
+            <label class="checkbox-artigos">
+              <input type="checkbox" id="check-buscar-artigos">
+              <span>Cruzar com artigos cientificos (OpenAlex / arXiv)</span>
+            </label>
+            <button id="btn-perguntar-ia" class="btn-primario">Enviar para a IA</button>
+          </div>
+        </div>
+      </aside>
+    </main>
+  </div>
+  <script src="/nexread/app.js"></script>
+</body>
+</html>

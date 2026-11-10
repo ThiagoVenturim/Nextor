@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>NexRead Extensao</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="nexread-popup">
+  <div class="popup-header">
+    <strong>NexRead</strong>
+    <span>Modo Estudante Nextor</span>
+  </div>
+  <div class="popup-form">
+    <label>Servidor Nextor Local</label>
+    <input type="url" id="ext-url-servidor" value="http://localhost:5005">
+    <label>Token Mestre (X-Nextor-Token)</label>
+    <input type="password" id="ext-token" placeholder="Cole seu token seguro">
+    <label>Motor de Traducao (preferir local)</label>
+    <select id="ext-motor">
+      <option value="local">Modelo Local (Ollama)</option>
+      <option value="libretranslate">LibreTranslate Local</option>
+      <option value="nllb">NLLB-200 Local</option>
+      <option value="opus_mt">Opus-MT (Helsinki-NLP)</option>
+      <option value="faccoder">LLM via faccoder-core</option>
+      <option value="claude">Claude</option>
+    </select>
+    <label>Disciplina para Salvar</label>
+    <input type="text" id="ext-disciplina" placeholder="Ex: Pesquisa IA">
+    <div class="popup-botoes">
+      <button id="ext-btn-traduzir">Traduzir Pagina Aberta</button>
+      <button id="ext-btn-marcar">Marcar Selecao</button>
+      <button id="ext-btn-salvar">Salvar nos Estudos</button>
+      <button id="ext-btn-painel">Abrir Painel Lateral IA</button>
+    </div>
+    <p id="ext-status" class="popup-status">So traduz a pagina que voce abriu.</p>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
