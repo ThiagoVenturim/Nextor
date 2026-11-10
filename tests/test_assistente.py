@@ -4,13 +4,16 @@ Sem rede, sem hardware real, sem audio, sem chamada externa.
 Cobre hash sha256 de tokens, comparacao constant-time, sanitizacao de log,
 revogacao estrita por id e ausencia de efeito colateral de audio.
 """
+import hmac
 import os
 from pathlib import Path
 import tempfile
 import unittest
 from unittest import mock
 
-from nextor import adaptadores, config, servico
+os.environ["NEXTOR_VOZ_SAIDA"] = "nenhuma"
+
+from nextor import adaptadores, alexa_skill, config, servico, telegram_bot
 
 
 class BaseAdaptadoresTestCase(unittest.TestCase):
@@ -400,6 +403,152 @@ class TestAssistenteAdminEndpoints(BaseAdaptadoresTestCase):
         logs = resp.get_json()["logs"]
         self.assertEqual(len(logs), 1)
         self.assertEqual(logs[0]["adaptador"], "telegram")
+
+
+class TestUnificacaoAdaptadores(BaseAdaptadoresTestCase):
+    def test_comparar_tokens_usa_hmac_compare_digest(self):
+        with mock.patch.object(hmac, "compare_digest", wraps=hmac.compare_digest) as mock_hmac:
+            self.assertTrue(adaptadores.comparar_tokens("nxt_token_abc_123", "nxt_token_abc_123"))
+            self.assertGreaterEqual(mock_hmac.call_count, 1)
+            self.assertFalse(adaptadores.comparar_tokens("nxt_token_abc_123", "nxt_token_abc_124"))
+            self.assertFalse(adaptadores.comparar_tokens("", "nxt_token_abc_123"))
+            self.assertFalse(adaptadores.comparar_tokens(None, "nxt_token_abc_123"))
+
+    def test_obter_token_adaptador_preserva_estado_e_respeita_revogacao(self):
+        tk1 = alexa_skill.obter_token_adaptador()
+        self.assertTrue(tk1.startswith("nxt_"))
+        adaptadores.registrar_uso("alexa")
+        adaptadores.registrar_uso("alexa")
+
+        # Segunda chamada retorna o mesmo token sem apagar nem zerar total_requisicoes
+        tk2 = alexa_skill.obter_token_adaptador()
+        self.assertEqual(tk1, tk2)
+        item = adaptadores.buscar_por_id("alexa")
+        self.assertEqual(item["total_requisicoes"], 2)
+        self.assertTrue(item["ativo"])
+
+        # Se revogado, obter_token_adaptador nao reativa o adaptador
+        adaptadores.revogar("alexa")
+        alexa_skill.obter_token_adaptador()
+        self.assertFalse(adaptadores.buscar_por_id("alexa")["ativo"])
+
+    def test_sincronizacao_tokens_ambiente_siri_google_alexa_telegram(self):
+        with mock.patch.dict(
+            os.environ,
+            {
+                "SIRI_ADAPTADOR_TOKEN": "tk-env-siri-999",
+                "GOOGLE_ADAPTADOR_TOKEN": "tk-env-google-888",
+            },
+        ), mock.patch("nextor.servico.rotear", return_value={"resposta": "agenda limpa", "intencao": "agenda"}):
+            r_siri = self.client.post(
+                "/v1/assistente",
+                json={"texto": "o que tenho hoje"},
+                headers={"Authorization": "Bearer tk-env-siri-999"},
+            )
+            self.assertEqual(r_siri.status_code, 200)
+            self.assertEqual(r_siri.get_json()["adaptador"], "siri")
+
+            r_google = self.client.post(
+                "/v1/assistente",
+                json={"queryResult": {"queryText": "resumo de noticias"}},
+                headers={"X-Nextor-Token": "tk-env-google-888"},
+            )
+            self.assertEqual(r_google.status_code, 200)
+            self.assertEqual(r_google.get_json()["adaptador"], "google")
+
+    def test_rota_por_adaptador_rejeita_token_de_outro_adaptador(self):
+        adaptadores.cadastrar("siri", "Siri", token="tk-siri-only")
+        adaptadores.cadastrar("google", "Google", token="tk-google-only")
+
+        with mock.patch("nextor.servico.rotear", return_value={"resposta": "ok", "intencao": "conversa"}):
+            # Token da Siri na rota da Siri -> 200
+            r_ok = self.client.post(
+                "/v1/assistente/siri",
+                json={"texto": "oi"},
+                headers={"Authorization": "Bearer tk-siri-only"},
+            )
+            self.assertEqual(r_ok.status_code, 200)
+
+            # Token da Siri tentando usar a rota do Google -> 403
+            r_negado = self.client.post(
+                "/v1/assistente/google",
+                json={"texto": "oi"},
+                headers={"Authorization": "Bearer tk-siri-only"},
+            )
+            self.assertEqual(r_negado.status_code, 403)
+
+    def test_payload_alexa_no_endpoint_unificado_e_fallback_local(self):
+        adaptadores.cadastrar("alexa", "Skill Alexa", token="tk-alexa-unificado")
+        payload_alexa = {
+            "version": "1.0",
+            "request": {
+                "type": "IntentRequest",
+                "intent": {
+                    "name": "ComandoLivreIntent",
+                    "slots": {
+                        "comando": {"name": "comando", "value": "qual a minha agenda"}
+                    },
+                },
+            },
+        }
+        with mock.patch.dict(os.environ, {"ALEXA_VERIFICAR_ASSINATURA": "0"}), \
+                mock.patch("urllib.request.urlopen", side_effect=ConnectionRefusedError("sem socket")), \
+                mock.patch("nextor.roteador.rotear", return_value={"resposta": "Voce tem audiencia as 14h.", "intencao": "agenda"}):
+            resp = self.client.post(
+                "/v1/assistente/alexa",
+                json=payload_alexa,
+                headers={"Authorization": "Bearer tk-alexa-unificado"},
+            )
+            self.assertEqual(resp.status_code, 200)
+            dados = resp.get_json()
+            self.assertEqual(dados["response"]["outputSpeech"]["text"], "Voce tem audiencia as 14h.")
+
+        # Se revogar o adaptador alexa, tanto /v1/alexa quanto /v1/assistente/alexa retornam 403
+        adaptadores.revogar("alexa")
+        with mock.patch.dict(os.environ, {"ALEXA_VERIFICAR_ASSINATURA": "0"}):
+            r_rev1 = self.client.post(
+                "/v1/assistente/alexa",
+                json=payload_alexa,
+                headers={"Authorization": "Bearer tk-alexa-unificado"},
+            )
+            self.assertEqual(r_rev1.status_code, 403)
+
+            r_rev2 = self.client.post(
+                "/v1/alexa",
+                json=payload_alexa,
+                headers={"Authorization": "Bearer tk-alexa-unificado"},
+            )
+            self.assertEqual(r_rev2.status_code, 403)
+
+    def test_payload_telegram_no_endpoint_unificado_e_revogacao(self):
+        adaptadores.cadastrar("telegram", "Bot Telegram", token="tk-tg-unificado")
+        update_tg = {
+            "update_id": 100,
+            "message": {
+                "from": {"id": 555},
+                "chat": {"id": 555},
+                "text": "anota revisar contrato",
+            },
+        }
+        with mock.patch.dict(os.environ, {"TELEGRAM_USUARIOS_AUTORIZADOS": "555"}), \
+                mock.patch("urllib.request.urlopen", side_effect=ConnectionRefusedError("sem socket")), \
+                mock.patch("nextor.roteador.rotear", return_value={"resposta": "Anotei: revisar contrato", "intencao": "anotar"}):
+            resp = self.client.post(
+                "/v1/assistente/telegram",
+                json=update_tg,
+                headers={"Authorization": "Bearer tk-tg-unificado"},
+            )
+            self.assertEqual(resp.status_code, 200)
+            dados = resp.get_json()
+            self.assertTrue(dados["ok"])
+            self.assertEqual(dados["adaptador"], "telegram")
+            self.assertEqual(dados["resposta"], "Anotei: revisar contrato")
+
+        # Revogar adaptador telegram bloqueia tambem o webhook dedicado /v1/telegram/webhook
+        adaptadores.revogar("telegram")
+        with mock.patch.dict(os.environ, {"TELEGRAM_USUARIOS_AUTORIZADOS": "555"}):
+            r_wh = self.client.post("/v1/telegram/webhook", json=update_tg)
+            self.assertEqual(r_wh.status_code, 403)
 
 
 if __name__ == "__main__":
