@@ -8,17 +8,17 @@ Este guia descreve como configurar do zero uma skill personalizada da Amazon Ale
 
 ```
 Dispositivo Echo / Alexa App
-            │
-            ▼ (HTTPS com assinatura criptografica Amazon)
+            |
+            v (HTTPS com assinatura criptografica Amazon)
 Cloudflare Tunnel / Tailscale Funnel
-            │
-            ▼ (HTTPS -> HTTP local seguro)
-Nextor Endpoint: /v1/alexa
-            │
-            ▼
-Verificacao de Assinatura Amazon + Token
-            │
-            ▼
+            |
+            v (HTTPS -> HTTP local seguro)
+Nextor Endpoint: /v1/alexa (ou /v1/assistente/alexa)
+            |
+            v
+Verificacao de Assinatura Amazon + Token (hmac.compare_digest)
+            |
+            v
 Endpoint /v1/assistente -> Roteador Nextor -> Cerebro / Habilidades
 ```
 
