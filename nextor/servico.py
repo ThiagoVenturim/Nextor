@@ -1995,6 +1995,178 @@ def coach_resumo_endpoint():
     return jsonify(ok=True, **r)
 
 
+# ============================================================================
+# Endpoints do Calendario, Reunioes e Timeboxing (Issue #51)
+# ============================================================================
+
+@app.get("/gtd/agenda/dia")
+def gtd_agenda_dia_endpoint():
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    from . import agenda
+    evs = agenda.eventos_dia()
+    analise = agenda.analisar_dia(evs)
+    # Serializa datetimes para string no retorno JSON
+    evs_json = []
+    for e in evs:
+        item_e = dict(e)
+        if hasattr(item_e.get("inicio"), "isoformat"):
+            item_e["inicio"] = item_e["inicio"].isoformat()
+        if hasattr(item_e.get("fim"), "isoformat"):
+            item_e["fim"] = item_e["fim"].isoformat()
+        evs_json.append(item_e)
+
+    analise_json = dict(analise)
+    analise_json["blocos_livres"] = [
+        {
+            **b,
+            "inicio": b["inicio"].isoformat() if hasattr(b.get("inicio"), "isoformat") else str(b.get("inicio")),
+            "fim": b["fim"].isoformat() if hasattr(b.get("fim"), "isoformat") else str(b.get("fim")),
+        }
+        for b in analise.get("blocos_livres", [])
+    ]
+    analise_json["conflitos"] = [
+        {
+            "evento1": c["evento1"],
+            "evento2": c["evento2"],
+            "duracao_minutos": c["duracao_minutos"],
+            "inicio_conflito": c["inicio_conflito"].isoformat() if hasattr(c.get("inicio_conflito"), "isoformat") else str(c.get("inicio_conflito")),
+            "fim_conflito": c["fim_conflito"].isoformat() if hasattr(c.get("fim_conflito"), "isoformat") else str(c.get("fim_conflito")),
+        }
+        for c in analise.get("conflitos", [])
+    ]
+    analise_json["sugestoes_timeboxing"] = [
+        {
+            **s,
+            "inicio": s["inicio"].isoformat() if hasattr(s.get("inicio"), "isoformat") else str(s.get("inicio")),
+            "fim": s["fim"].isoformat() if hasattr(s.get("fim"), "isoformat") else str(s.get("fim")),
+        }
+        for s in analise.get("sugestoes_timeboxing", [])
+    ]
+
+    return jsonify(ok=True, eventos=evs_json, analise=analise_json)
+
+
+@app.get("/gtd/agenda/semana")
+def gtd_agenda_semana_endpoint():
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    from . import agenda
+    evs = agenda.eventos_semana()
+    evs_json = []
+    for e in evs:
+        item_e = dict(e)
+        if hasattr(item_e.get("inicio"), "isoformat"):
+            item_e["inicio"] = item_e["inicio"].isoformat()
+        if hasattr(item_e.get("fim"), "isoformat"):
+            item_e["fim"] = item_e["fim"].isoformat()
+        evs_json.append(item_e)
+    return jsonify(ok=True, eventos=evs_json, total=len(evs_json))
+
+
+@app.get("/gtd/agenda/proxima-reuniao")
+def gtd_proxima_reuniao_endpoint():
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    from . import agenda
+    prox = agenda.proxima_reuniao()
+    if prox:
+        prox_json = dict(prox)
+        if hasattr(prox_json.get("inicio"), "isoformat"):
+            prox_json["inicio"] = prox_json["inicio"].isoformat()
+        if hasattr(prox_json.get("fim"), "isoformat"):
+            prox_json["fim"] = prox_json["fim"].isoformat()
+    else:
+        prox_json = None
+    return jsonify(ok=True, proxima_reuniao=prox_json)
+
+
+@app.get("/gtd/agenda/blocos-livres")
+def gtd_blocos_livres_endpoint():
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    from . import agenda
+    evs = agenda.eventos_dia()
+    blocos = agenda.calcular_blocos_livres(evs)
+    sugestoes = agenda.sugerir_timeboxing(blocos)
+    blocos_json = [
+        {
+            **b,
+            "inicio": b["inicio"].isoformat() if hasattr(b.get("inicio"), "isoformat") else str(b.get("inicio")),
+            "fim": b["fim"].isoformat() if hasattr(b.get("fim"), "isoformat") else str(b.get("fim")),
+        }
+        for b in blocos
+    ]
+    sugestoes_json = [
+        {
+            **s,
+            "inicio": s["inicio"].isoformat() if hasattr(s.get("inicio"), "isoformat") else str(s.get("inicio")),
+            "fim": s["fim"].isoformat() if hasattr(s.get("fim"), "isoformat") else str(s.get("fim")),
+        }
+        for s in sugestoes
+    ]
+    return jsonify(ok=True, blocos_livres=blocos_json, sugestoes_timeboxing=sugestoes_json)
+
+
+@app.post("/gtd/agenda/tarefa-de-evento")
+def gtd_tarefa_de_evento_endpoint():
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    dados = request.get_json(silent=True) or {}
+    evento = dados.get("evento") or dados
+    if not isinstance(evento, dict) or not (evento.get("titulo") or evento.get("summary")):
+        return jsonify(ok=False, erro="evento_invalido"), 400
+    contexto = dados.get("contexto", "@trabalho")
+
+    from .gtd import criar_tarefa_de_evento
+    item = criar_tarefa_de_evento(evento, contexto=contexto)
+    return jsonify(ok=True, item=item.to_dict())
+
+
+@app.post("/gtd/agenda/evento-de-tarefa")
+def gtd_evento_de_tarefa_endpoint():
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    dados = request.get_json(silent=True) or {}
+    item_id = (dados.get("item_id") or dados.get("id") or "").strip()
+    if not item_id:
+        return jsonify(ok=False, erro="item_id_obrigatorio"), 400
+    horario = str(dados.get("horario", "09:00")).strip()
+    duracao = int(dados.get("duracao_minutos", 60))
+
+    from .gtd import criar_evento_de_tarefa
+    try:
+        evento = criar_evento_de_tarefa(item_id, horario=horario, duracao_minutos=duracao)
+        evento_json = dict(evento)
+        if hasattr(evento_json.get("inicio"), "isoformat"):
+            evento_json["inicio"] = evento_json["inicio"].isoformat()
+        if hasattr(evento_json.get("fim"), "isoformat"):
+            evento_json["fim"] = evento_json["fim"].isoformat()
+        return jsonify(ok=True, evento=evento_json)
+    except ValueError as e:
+        return jsonify(ok=False, erro=str(e)), 404
+
+
+@app.post("/gtd/agenda/abrir-reuniao")
+def gtd_abrir_reuniao_endpoint():
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    dados = request.get_json(silent=True) or {}
+    link = dados.get("link_video") or dados.get("link") or ""
+    titulo = dados.get("titulo") or "Reuniao"
+
+    from .notificacoes import notificar
+    from .gtd.configuracao import carregar_config
+    cfg = carregar_config()
+    res = notificar(
+        evento="lembrete",
+        titulo="Acesso a Reuniao",
+        corpo=f"Link de acesso para '{titulo}': {link}" if link else f"Reuniao '{titulo}' sem link informado.",
+        config_usuario=cfg,
+    )
+    return jsonify(ok=True, despachado=res.get("sucesso", False), link=link)
+
+
 def main():
     exigir_token_mestre_valido()
     from .automacoes import iniciar_agendador

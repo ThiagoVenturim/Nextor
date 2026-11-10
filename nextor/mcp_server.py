@@ -19,12 +19,13 @@ try:
     from mcp.server.mcpserver import MCPServer
 except ImportError:
     class MCPServer:
+        """Fallback leve quando a biblioteca mcp nao esta instalada no ambiente."""
         def __init__(self, name: str):
             self.name = name
 
         def tool(self, description: str = ""):
-            def decorator(f):
-                return f
+            def decorator(fn):
+                return fn
             return decorator
 
         def run(self, *args, **kwargs):
@@ -61,6 +62,76 @@ def agenda(quando: str = "hoje") -> str:
     if quando.startswith("prox") or quando == "semana":
         return resumo_falado(eventos_proximos(7), prefixo_dia=True)
     return resumo_falado(eventos_hoje())
+
+
+@mcp.tool(description="Agenda do dia detalhada com compromissos, reunioes, blocos livres e alertas de sobrecarga.")
+def agenda_dia(quando: str = "hoje") -> str:
+    from .agenda import eventos_dia, analisar_dia
+    evs = eventos_dia()
+    analise = analisar_dia(evs)
+
+    partes = []
+    if evs:
+        partes.append(f"Compromissos de hoje ({len(evs)}):")
+        for e in evs:
+            hora = e["inicio"].strftime("%H:%M") if hasattr(e["inicio"], "strftime") else "Dia todo"
+            tipo = " (Reuniao)" if e.get("eh_reuniao") else ""
+            link = f" - Link: {e['link_video']}" if e.get("link_video") else ""
+            partes.append(f"- {hora}: {e['titulo']}{tipo}{link}")
+    else:
+        partes.append("Nenhum compromisso marcado para hoje.")
+
+    if analise.get("dia_cheio"):
+        partes.append(f"\nAlerta de dia cheio: {analise.get('motivo_dia_cheio')}")
+
+    blocos = analise.get("blocos_livres", [])
+    if blocos:
+        partes.append(f"\nEspacos livres ({analise.get('horas_livres', 0)}h total):")
+        for b in blocos:
+            partes.append(f"- {b['inicio_str']} as {b['fim_str']} ({b['duracao_minutos']} min)")
+
+    sugestoes = analise.get("sugestoes_timeboxing", [])
+    if sugestoes:
+        partes.append("\nSugestoes de timeboxing:")
+        for s in sugestoes:
+            partes.append(f"- {s['inicio_str']} as {s['fim_str']}: {s['titulo']} ({s['contexto']})")
+
+    return "\n".join(partes)
+
+
+@mcp.tool(description="Informa a proxima reuniao agendada com horario e link de acesso.")
+def proxima_reuniao() -> str:
+    from .agenda import proxima_reuniao as _proxima_reuniao
+    prox = _proxima_reuniao()
+    if not prox:
+        return "Nenhuma reuniao agendada para os proximos dias."
+
+    ini = prox["inicio"]
+    hora_str = ini.strftime("%H:%M") if hasattr(ini, "strftime") else str(ini)
+    data_str = ini.strftime("%d/%m") if hasattr(ini, "strftime") else ""
+    link = f" Link: {prox['link_video']}" if prox.get("link_video") else " (sem link de video)"
+    return f"Proxima reuniao: '{prox['titulo']}' em {data_str} as {hora_str}.{link}"
+
+
+@mcp.tool(description="Lista os blocos de tempo livres do dia com sugestoes de foco e descanso.")
+def blocos_livres(quando: str = "hoje") -> str:
+    from .agenda import eventos_dia, calcular_blocos_livres, sugerir_timeboxing
+    evs = eventos_dia()
+    blocos = calcular_blocos_livres(evs)
+    if not blocos:
+        return "Nenhum bloco livre disponivel no horario de expediente hoje."
+
+    sugestoes = sugerir_timeboxing(blocos)
+    linhas = ["Blocos livres de hoje:"]
+    for b in blocos:
+        linhas.append(f"- {b['inicio_str']} as {b['fim_str']} ({b['duracao_minutos']} minutos)")
+
+    if sugestoes:
+        linhas.append("\nSugestoes de foco:")
+        for s in sugestoes:
+            linhas.append(f"- {s['inicio_str']} as {s['fim_str']}: {s['titulo']} ({s['contexto']})")
+
+    return "\n".join(linhas)
 
 
 @mcp.tool(description="Resumo das noticias recentes de um assunto (padrao: o do .env).")
@@ -113,7 +184,7 @@ def leitura_progresso(paginas: int, leitura_id: str = "") -> str:
             total = banco.registrar_progresso_leitura("geral", paginas)
             meta = getattr(config, "LEITURA_META_DIARIA", 20)
             status = "Meta batida!" if total >= meta else f"Faltam {max(0, meta - total)} paginas."
-            return f"Registradas {paginas} paginas lidas. Total hoje: {total} de {meta}. {status}"
+            return f"Registradas {paginas} paginas. Total hoje: {total}/{meta}. {status}"
         id_alvo = leituras_ativas[0].id
 
     res = atualizar_progresso(id_alvo, paginas)

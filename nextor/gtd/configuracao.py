@@ -40,6 +40,16 @@ def obter_config_padrao() -> Dict[str, Any]:
             "tarefa_atrasada": ["telegram"],
             "pr_para_revisar": ["telegram"],
             "pomodoro_fim": ["voz", "telegram"],
+            "reuniao_lembrete": ["telegram"],
+            "reuniao_inicio": ["telegram"],
+        },
+        "agenda": {
+            "lembrete_minutos_antes": 10,
+            "abrir_link_automatico": True,
+            "canais_aviso": ["telegram"],
+            "expediente_inicio": "08:00",
+            "expediente_fim": "18:00",
+            "limite_horas_dia_cheio": 6.0,
         },
         "integracoes": {
             "notion": True,
@@ -131,6 +141,34 @@ def salvar_config(novos_dados: Dict[str, Any], caminho_customizado: Optional[Pat
         except (ValueError, TypeError):
             pass
 
+    if "agenda" in novos_dados and isinstance(novos_dados["agenda"], dict):
+        ag = novos_dados["agenda"]
+        ag_atual = atual.get("agenda") or {}
+        try:
+            lembrete_min = max(1, int(ag.get("lembrete_minutos_antes", ag_atual.get("lembrete_minutos_antes", 10))))
+        except (ValueError, TypeError):
+            lembrete_min = 10
+
+        try:
+            limite_cheio = max(1.0, float(ag.get("limite_horas_dia_cheio", ag_atual.get("limite_horas_dia_cheio", 6.0))))
+        except (ValueError, TypeError):
+            limite_cheio = 6.0
+
+        canais_aviso = ag.get("canais_aviso", ag_atual.get("canais_aviso", ["telegram"]))
+        if isinstance(canais_aviso, list):
+            canais_aviso = [str(c).strip().lower() for c in canais_aviso]
+        else:
+            canais_aviso = ["telegram"]
+
+        atual["agenda"] = {
+            "lembrete_minutos_antes": lembrete_min,
+            "abrir_link_automatico": bool(ag.get("abrir_link_automatico", ag_atual.get("abrir_link_automatico", True))),
+            "canais_aviso": canais_aviso,
+            "expediente_inicio": str(ag.get("expediente_inicio", ag_atual.get("expediente_inicio", "08:00"))).strip(),
+            "expediente_fim": str(ag.get("expediente_fim", ag_atual.get("expediente_fim", "18:00"))).strip(),
+            "limite_horas_dia_cheio": limite_cheio,
+        }
+
     if "wizard_concluido" in novos_dados:
         atual["wizard_concluido"] = bool(novos_dados["wizard_concluido"])
 
@@ -181,6 +219,9 @@ def obter_config_completa(caminho_customizado: Optional[Path] = None) -> Dict[st
         {"nome": "pomodoro_parar", "descricao": "Interrompe a sessao pomodoro ativa"},
         {"nome": "leitura_progresso", "descricao": "Registra paginas lidas na meta diaria"},
         {"nome": "notificacao_teste", "descricao": "Dispara notificacao de teste pelos canais ativos"},
+        {"nome": "agenda_dia", "descricao": "Consulta a agenda do dia com reunioes e blocos livres"},
+        {"nome": "proxima_reuniao", "descricao": "Consulta a proxima reuniao agendada e link de video"},
+        {"nome": "blocos_livres", "descricao": "Calcula os blocos de horario livre e sugere timeboxing"},
     ]
 
     # Agentes especializados disponiveis

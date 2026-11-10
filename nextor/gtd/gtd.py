@@ -176,20 +176,29 @@ def agenda_do_dia(db: Optional[ArmazenamentoGTD] = None) -> Dict[str, Any]:
 
     # 1. Google Agenda
     eventos: List[Dict[str, Any]] = []
+    analise_agenda: Dict[str, Any] = {}
     try:
         from .. import agenda
         if hasattr(agenda, "eventos_hoje"):
             evs = agenda.eventos_hoje() or []
+            if hasattr(agenda, "analisar_dia"):
+                analise_agenda = agenda.analisar_dia(evs)
             for e in evs:
                 inicio = e.get("inicio")
                 hora_str = inicio.strftime("%H:%M") if isinstance(inicio, datetime) else "Dia todo"
                 eventos.append({
+                    "uid": e.get("uid", ""),
                     "titulo": e.get("titulo", ""),
                     "horario": hora_str,
                     "dia_inteiro": e.get("dia_inteiro", False),
+                    "eh_reuniao": e.get("eh_reuniao", False),
+                    "link_video": e.get("link_video"),
+                    "participantes": e.get("participantes", []),
+                    "duracao_minutos": e.get("duracao_minutos", 0),
                 })
     except Exception:
         eventos = []
+        analise_agenda = {}
 
     # 2. Proximas acoes do GTD
     todas_proximas = banco.listar_itens(estado="proxima")
@@ -234,10 +243,20 @@ def agenda_do_dia(db: Optional[ArmazenamentoGTD] = None) -> Dict[str, Any]:
 
     # Resumo falado
     partes_resumo = []
+    total_reunioes = analise_agenda.get("total_reunioes", sum(1 for e in eventos if e.get("eh_reuniao")))
     if eventos:
-        partes_resumo.append(f"Voce tem {len(eventos)} compromissos na agenda.")
+        if total_reunioes > 0:
+            partes_resumo.append(f"Voce tem {len(eventos)} compromissos na agenda, sendo {total_reunioes} reuniao(oes).")
+        else:
+            partes_resumo.append(f"Voce tem {len(eventos)} compromissos na agenda.")
     else:
         partes_resumo.append("Nenhum compromisso marcado na agenda.")
+
+    if analise_agenda.get("conflitos"):
+        partes_resumo.append(f"Atencao: {len(analise_agenda['conflitos'])} conflito(s) de horario detectado(s).")
+
+    if analise_agenda.get("dia_cheio"):
+        partes_resumo.append("Dia cheio com pouca folga entre compromissos.")
 
     qtd_urgentes = len(atrasadas) + len(hoje_acoes)
     if qtd_urgentes > 0:
@@ -260,11 +279,118 @@ def agenda_do_dia(db: Optional[ArmazenamentoGTD] = None) -> Dict[str, Any]:
     return {
         "data": hoje_iso,
         "eventos_agenda": eventos,
+        "reunioes": analise_agenda.get("reunioes", [e for e in eventos if e.get("eh_reuniao")]),
+        "blocos_livres": analise_agenda.get("blocos_livres", []),
+        "conflitos": analise_agenda.get("conflitos", []),
+        "dia_cheio": analise_agenda.get("dia_cheio", False),
+        "motivo_dia_cheio": analise_agenda.get("motivo_dia_cheio", ""),
+        "sugestoes_timeboxing": analise_agenda.get("sugestoes_timeboxing", []),
         "acoes_urgentes": atrasadas + hoje_acoes,
         "proximas_acoes": acoes_prioritarias,
         "leitura": leitura_info,
         "resumo_falado": resumo_falado,
     }
+
+
+def criar_tarefa_de_evento(
+    evento: Dict[str, Any],
+    contexto: str = "@trabalho",
+    db: Optional[ArmazenamentoGTD] = None,
+) -> Item:
+    """Cria uma tarefa no GTD a partir de um evento do calendario."""
+    banco = _obter_db(db)
+    titulo = str(evento.get("titulo") or evento.get("summary") or "Tarefa do Calendario").strip()
+    inicio = evento.get("inicio")
+    prazo = None
+    if isinstance(inicio, datetime):
+        prazo = inicio.date().isoformat()
+    elif isinstance(inicio, date):
+        prazo = inicio.isoformat()
+    elif isinstance(inicio, str) and len(inicio) >= 10:
+        prazo = inicio[:10]
+
+    nota_partes = []
+    if evento.get("descricao"):
+        nota_partes.append(str(evento["descricao"]).strip())
+    if evento.get("link_video"):
+        nota_partes.append(f"Link de video: {evento['link_video']}")
+    if evento.get("local"):
+        nota_partes.append(f"Local: {evento['local']}")
+
+    nota = "\n".join(nota_partes)
+    uid = str(evento.get("uid") or f"agenda:{titulo}-{prazo}")
+    ref_externa = f"agenda:{uid}" if not uid.startswith("agenda:") else uid
+
+    # Evita duplicatas se ja existir
+    existente = banco.buscar_item_por_ref(ref_externa)
+    if existente:
+        return existente
+
+    item = Item(
+        id=str(uuid.uuid4()),
+        titulo=titulo,
+        nota=nota,
+        contexto=normalizar_contexto(contexto),
+        estado="proxima",
+        prazo=prazo,
+        energia="media",
+        origem="agenda",
+        ref_externa=ref_externa,
+    )
+    return banco.salvar_item(item)
+
+
+def criar_evento_de_tarefa(
+    item_id: str,
+    horario: str = "09:00",
+    duracao_minutos: int = 60,
+    db: Optional[ArmazenamentoGTD] = None,
+) -> Dict[str, Any]:
+    """Cria a representacao de um evento de calendario a partir de uma tarefa GTD com prazo."""
+    banco = _obter_db(db)
+    item = banco.obter_item(item_id)
+    if not item:
+        raise ValueError(f"Item com id '{item_id}' nao encontrado.")
+
+    prazo_str = item.prazo or date.today().isoformat()
+    try:
+        ano, mes, dia = map(int, prazo_str.split("-"))
+        d_prazo = date(ano, mes, dia)
+    except Exception:
+        d_prazo = date.today()
+
+    try:
+        h, m = map(int, horario.strip().split(":"))
+    except Exception:
+        h, m = 9, 0
+
+    from ..agenda import TZ
+    inicio = datetime(d_prazo.year, d_prazo.month, d_prazo.day, h, m, tzinfo=TZ)
+    fim = inicio + timedelta(minutes=duracao_minutos)
+
+    evento = {
+        "uid": f"gtd:item:{item.id}",
+        "titulo": item.titulo,
+        "inicio": inicio,
+        "fim": fim,
+        "dia_inteiro": False,
+        "duracao_minutos": duracao_minutos,
+        "descricao": item.nota or f"Tarefa do GTD [{item.contexto}]",
+        "local": "",
+        "url": "",
+        "participantes": [],
+        "link_video": None,
+        "eh_reuniao": False,
+        "item_id": item.id,
+    }
+
+    # Atualiza a nota do item para registrar agendamento
+    marca = f"[Agendado para {prazo_str} {horario}]"
+    if marca not in item.nota:
+        item.nota = f"{item.nota}\n{marca}".strip()
+        banco.salvar_item(item)
+
+    return evento
 
 
 def revisao_semanal(db: Optional[ArmazenamentoGTD] = None) -> Dict[str, Any]:
