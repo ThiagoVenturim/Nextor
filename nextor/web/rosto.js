@@ -124,6 +124,10 @@
     api('/voz', { idioma: $('idioma').value }).catch(function (err) { $('humor').textContent = err.message; });
   });
 
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function () {});
+  }
+
   if (!token) {
     $('aviso').hidden = false;
     window.Bichinho.render($('bichinho'), { expressao: 'sonolento' });
