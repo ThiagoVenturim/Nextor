@@ -82,12 +82,13 @@ O servico ja traz um agendador proprio: automacoes em horarios fixos, sem Docker
 Home Assistant, sem Agendador do Windows. Acoes: `rotina` (bom dia), `agenda`, `noticias`,
 `falar` e `comando`. Ficam em `automacoes.json` (fora do git); vem com a rotina das 7h.
 
-Painel web (navegador/celular na rede de casa):
+Painel web e PWA instalavel (navegador, celular, tablet ou desktop na rede de casa):
 ```
-http://localhost:5005/painel?token=SEU_TOKEN
+http://localhost:5005/painel
+http://localhost:5005/download
 ```
-De la da para falar, anotar, ouvir agenda/noticias e criar ou remover automacoes.
-API: `GET/POST/DELETE /automacoes` (POST com `hora`, `acao`, `texto`).
+De la da para falar, anotar, ouvir agenda/noticias, criar ou remover automacoes e instalar o Nextor como aplicativo no Android, iPhone, Windows, Linux e Mac (com shell offline via Service Worker). Veja o guia de instalacao e empacotamento em `docs/MULTIPLATAFORMA.md`.
+API: `GET/POST/DELETE /automacoes` (POST com `hora`, `acao`, `texto`) e `GET /v1/plataformas`.
 
 ## MCP (conectar o Claude ou outro assistente ao Nextor)
 
