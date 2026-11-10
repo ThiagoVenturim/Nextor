@@ -14,6 +14,8 @@ from .gtd import (
     listar_por_contexto,
     agenda_do_dia,
     revisao_semanal,
+    criar_tarefa_de_evento,
+    criar_evento_de_tarefa,
 )
 from .leitura import (
     criar_leitura,
@@ -37,6 +39,8 @@ __all__ = [
     "listar_por_contexto",
     "agenda_do_dia",
     "revisao_semanal",
+    "criar_tarefa_de_evento",
+    "criar_evento_de_tarefa",
     "criar_leitura",
     "listar_leituras",
     "obter_leitura",
