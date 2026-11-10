@@ -2176,6 +2176,211 @@ def gtd_abrir_reuniao_endpoint():
     return jsonify(ok=True, despachado=res.get("sucesso", False), link=link)
 
 
+# ============================================================================
+# NexRead: Tradutor de Artigo/Pagina ao Vivo com Estudo (Issue #55)
+# ============================================================================
+
+def autorizado_nexread() -> bool:
+    """Verifica autenticacao estrita para rotas da API do NexRead via header em tempo constante."""
+    return autorizado_gtd()
+
+
+@app.get("/nexread")
+@app.get("/nexread/")
+@app.get("/nexread/app")
+def nexread_pwa_index():
+    pasta_pwa = WEB / "nexread"
+    return send_from_directory(pasta_pwa, "index.html")
+
+
+@app.get("/nexread/<path:filename>")
+def nexread_pwa_estaticos(filename: str):
+    pasta_pwa = WEB / "nexread"
+    arquivo = (pasta_pwa / filename).resolve()
+    if not str(arquivo).startswith(str(pasta_pwa.resolve())):
+        return jsonify(erro="acesso negado"), 403
+    if arquivo.is_file():
+        return send_from_directory(pasta_pwa, filename)
+    return send_from_directory(pasta_pwa, "index.html")
+
+
+@app.post("/nexread/traduzir")
+def nexread_traduzir_endpoint():
+    if not autorizado_nexread():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    dados = request.get_json(silent=True) or {}
+    aberta_pelo_usuario = dados.get("aberta_pelo_usuario", True)
+    if isinstance(aberta_pelo_usuario, str):
+        aberta_pelo_usuario = aberta_pelo_usuario.strip().lower() not in ("0", "false", "nao")
+
+    from .nexread import traduzir_pagina_ao_vivo
+    try:
+        artigo = traduzir_pagina_ao_vivo(
+            conteudo_html=dados.get("conteudo_html", ""),
+            texto=dados.get("texto", ""),
+            url=dados.get("url", ""),
+            caminho_pdf=dados.get("caminho_pdf") or None,
+            titulo=dados.get("titulo", ""),
+            autor=dados.get("autor", ""),
+            idioma_destino=dados.get("idioma_destino") or None,
+            idioma_origem=dados.get("idioma_origem", "auto"),
+            motor=dados.get("motor") or None,
+            modo_layout=dados.get("modo_layout", "bilingue"),
+            disciplina=dados.get("disciplina", ""),
+            aberta_pelo_usuario=bool(aberta_pelo_usuario),
+        )
+        return jsonify(ok=True, artigo=artigo.to_dict(), html_traduzido=artigo.html_traduzido), 201
+    except ValueError as e:
+        return jsonify(ok=False, erro=str(e)), 400
+
+
+@app.get("/nexread/artigos")
+def nexread_listar_artigos_endpoint():
+    if not autorizado_nexread():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    from .nexread import ArmazenamentoNexRead
+    banco = ArmazenamentoNexRead()
+    disc = request.args.get("disciplina")
+    artigos = banco.listar_artigos(disciplina=disc)
+    return jsonify(ok=True, artigos=[a.to_dict() for a in artigos])
+
+
+@app.get("/nexread/artigos/<artigo_id>")
+def nexread_obter_artigo_endpoint(artigo_id: str):
+    if not autorizado_nexread():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    from .nexread import ArmazenamentoNexRead
+    banco = ArmazenamentoNexRead()
+    artigo = banco.obter_artigo(artigo_id)
+    if not artigo:
+        return jsonify(ok=False, erro="artigo nao encontrado"), 404
+    marcacoes = banco.listar_marcacoes(artigo.id)
+    gravacoes = banco.listar_gravacoes(artigo.id)
+    conversas = banco.listar_mensagens_chat(artigo.id)
+    return jsonify(
+        ok=True,
+        artigo=artigo.to_dict(),
+        marcacoes=[m.to_dict() for m in marcacoes],
+        gravacoes=[g.to_dict() for g in gravacoes],
+        conversas=[c.to_dict() for c in conversas],
+    )
+
+
+@app.route("/nexread/marcacoes", methods=["GET", "POST"])
+def nexread_marcacoes_endpoint():
+    if not autorizado_nexread():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    from .nexread import ArmazenamentoNexRead, marcar_trecho
+    banco = ArmazenamentoNexRead()
+    if request.method == "GET":
+        artigo_id = request.args.get("artigo_id")
+        lista = banco.listar_marcacoes(artigo_id=artigo_id)
+        return jsonify(ok=True, marcacoes=[m.to_dict() for m in lista])
+
+    dados = request.get_json(silent=True) or {}
+    artigo_id = (dados.get("artigo_id") or "").strip()
+    trecho = (dados.get("trecho") or dados.get("trecho_original") or "").strip()
+    if not artigo_id or not trecho:
+        return jsonify(ok=False, erro="artigo_id e trecho sao obrigatorios"), 400
+
+    try:
+        marcacao = marcar_trecho(
+            artigo_id=artigo_id,
+            trecho=trecho,
+            nota=dados.get("nota", ""),
+            cor=dados.get("cor", "amarelo"),
+            bloco_id=dados.get("bloco_id", ""),
+            trecho_traduzido=dados.get("trecho_traduzido", ""),
+            tags=dados.get("tags") or [],
+            db=banco,
+        )
+        artigo = banco.obter_artigo(artigo_id)
+        return jsonify(
+            ok=True,
+            marcacao=marcacao.to_dict(),
+            html_traduzido=artigo.html_traduzido if artigo else "",
+        ), 201
+    except ValueError as e:
+        return jsonify(ok=False, erro=str(e)), 400
+
+
+@app.delete("/nexread/marcacoes/<marcacao_id>")
+def nexread_remover_marcacao_endpoint(marcacao_id: str):
+    if not autorizado_nexread():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    from .nexread import ArmazenamentoNexRead
+    banco = ArmazenamentoNexRead()
+    removido = banco.remover_marcacao(marcacao_id)
+    if not removido:
+        return jsonify(ok=False, erro="marcacao nao encontrada"), 404
+    return jsonify(ok=True, removido=True)
+
+
+@app.post("/nexread/gravacoes")
+def nexread_gravacoes_endpoint():
+    if not autorizado_nexread():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    dados = request.get_json(silent=True) or {}
+    artigo_id = (dados.get("artigo_id") or "").strip()
+    transcricao = (dados.get("transcricao") or dados.get("texto") or "").strip()
+    if not artigo_id or not transcricao:
+        return jsonify(ok=False, erro="artigo_id e transcricao sao obrigatorios"), 400
+
+    from .nexread import gravar_nota_leitura
+    try:
+        gravacao = gravar_nota_leitura(
+            artigo_id=artigo_id,
+            transcricao=transcricao,
+            titulo=dados.get("titulo", "Nota de voz do estudo"),
+            caminho_audio=dados.get("caminho_audio", ""),
+            duracao_seg=int(dados.get("duracao_seg") or 0),
+            bloco_id=dados.get("bloco_id", ""),
+        )
+        return jsonify(ok=True, gravacao=gravacao.to_dict()), 201
+    except ValueError as e:
+        return jsonify(ok=False, erro=str(e)), 400
+
+
+@app.post("/nexread/salvar-estudos")
+def nexread_salvar_estudos_endpoint():
+    if not autorizado_nexread():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    dados = request.get_json(silent=True) or {}
+    artigo_id = (dados.get("artigo_id") or "").strip()
+    disciplina = (dados.get("disciplina") or "").strip()
+    if not artigo_id or not disciplina:
+        return jsonify(ok=False, erro="artigo_id e disciplina sao obrigatorios"), 400
+
+    from .nexread import salvar_na_biblioteca_estudos
+    try:
+        res = salvar_na_biblioteca_estudos(artigo_id=artigo_id, disciplina_nome=disciplina)
+        return jsonify(**res), 200
+    except ValueError as e:
+        return jsonify(ok=False, erro=str(e)), 400
+
+
+@app.post("/nexread/conversar")
+def nexread_conversar_endpoint():
+    if not autorizado_nexread():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    dados = request.get_json(silent=True) or {}
+    artigo_id = (dados.get("artigo_id") or "").strip()
+    if not artigo_id:
+        return jsonify(ok=False, erro="artigo_id e obrigatorio"), 400
+
+    from .nexread import conversar_sobre_artigo
+    try:
+        res = conversar_sobre_artigo(
+            artigo_id=artigo_id,
+            pergunta=dados.get("pergunta", ""),
+            acao=dados.get("acao", "perguntar"),
+            buscar_fontes_cientificas=bool(dados.get("buscar_fontes_cientificas", False)),
+        )
+        return jsonify(**res), 200
+    except ValueError as e:
+        return jsonify(ok=False, erro=str(e)), 400
+
+
 def main():
     exigir_token_mestre_valido()
     from .automacoes import iniciar_agendador
