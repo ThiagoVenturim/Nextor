@@ -102,8 +102,9 @@ noticias, falar) para um assistente compativel com MCP se conectar e usar.
 Num cliente MCP (ex.: Claude Desktop), aponte para esse comando (transporte stdio),
 com `cwd` na pasta do projeto.
 
-Endpoints (POST, com `?token=...`):
-- `/comando`  entrada unica: entende a frase e roteia (anotar/agenda/noticias/conversar)
+Endpoints (POST, com `?token=...` ou `Authorization: Bearer ...`):
+- `/v1/assistente` ponto de entrada unico para assistentes externos (Siri, Alexa, Google Assistant/HA, Telegram, clientes HTTP): texto entra, texto sai em JSON, sem efeito colateral de falar no Nest; exige token individual por adaptador (`hmac.compare_digest`), aplica limite de requisicoes e registra log sanitizado (veja `docs/ASSISTENTES.md`)
+- `/comando`  entrada local com voz: entende a frase, roteia e fala a resposta no Nest/PC
 - `/anotar`   salva a nota e confirma em voz
 - `/falar`    fala o texto
 - `/conversar` pensa com a IA local e responde em voz (conhece notas e agenda)
@@ -111,13 +112,7 @@ Endpoints (POST, com `?token=...`):
 - `/noticias` resume e fala as noticias (`?assunto=...`)
 - `/notas`    (GET) lista as notas
 
-Comando unico (recomendado para o atalho do iPhone): mande a fala para `/comando` e o
-Nextor decide o que fazer. Ex.: "ei Nextor, anota comprar pao", "o que tenho amanha",
-"me traz as noticias sobre IA".
-
-Primeira configuracao: `.venv/Scripts/python.exe nextor_setup.py` (define nome, token, etc.).
-
-O atalho do iPhone esta descrito em `ATALHO_IPHONE.md`.
+Atalho do iPhone (Siri): aponte para `/v1/assistente` com o token do adaptador `siri` para que a propria Siri leia a resposta no iPhone/AirPods, ou para `/comando` se quiser ouvir no Nest Mini. Veja `docs/ATALHO_IPHONE.md` e `docs/ASSISTENTES.md`.
 
 ## Google Agenda
 

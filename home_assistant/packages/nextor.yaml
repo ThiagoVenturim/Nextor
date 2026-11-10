@@ -11,6 +11,13 @@
 # host.docker.internal = a maquina Windows onde o servico do Nextor roda (porta 5005).
 
 rest_command:
+  nextor_assistente:
+    url: "http://host.docker.internal:5005/v1/assistente"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ token }}"
+      Content-Type: "application/json"
+    payload: '{"texto": {{ texto | to_json }}}'
   nextor_comando:
     url: "http://host.docker.internal:5005/comando?token={{ token }}"
     method: POST

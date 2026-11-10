@@ -55,7 +55,7 @@ TAMANHO_MINIMO_TOKEN = 24
 
 def validar_token_mestre(token: str | None = None) -> bool:
     tk = (token if token is not None else config.TOKEN) or ""
-    if tk == TOKEN_PADRAO_INVALIDO or len(tk) < TAMANHO_MINIMO_TOKEN:
+    if hmac.compare_digest(tk.encode("utf-8"), TOKEN_PADRAO_INVALIDO.encode("utf-8")) or len(tk) < TAMANHO_MINIMO_TOKEN:
         return False
     return True
 
@@ -700,69 +700,128 @@ def estudos_artigos_salvar_endpoint():
     res = artigos_cientificos.salvar_artigo_na_disciplina(artigo, disciplina_nome=disc)
     return jsonify(res), 200 if res.get("ok") else 400
 
-# --- Assistentes externos (Siri, Alexa, Telegram, etc) -------------------------
+# --- Assistentes externos (Siri, Alexa, Google, Telegram, etc) -----------------
+
+def _extrair_token_adaptador_request() -> str:
+    """Extrai o token de adaptador priorizando um token cadastrado em adaptadores."""
+    from . import adaptadores
+
+    candidatos: list[str] = []
+    tk_query = (request.args.get("token") or "").strip()
+    if tk_query:
+        candidatos.append(tk_query)
+    for hdr in ("X-Nextor-Token", "X-Telegram-Bot-Api-Secret-Token"):
+        val = (request.headers.get(hdr) or "").strip()
+        if val and val not in candidatos:
+            candidatos.append(val)
+    auth = (request.headers.get("Authorization") or "").strip()
+    if auth.lower().startswith("bearer "):
+        val_b = auth[7:].strip()
+        if val_b and val_b not in candidatos:
+            candidatos.append(val_b)
+
+    for cand in candidatos:
+        if adaptadores.buscar_por_token(cand) is not None:
+            return cand
+    return candidatos[0] if candidatos else ""
+
+
+def _resolver_dispositivo_assistente() -> str | None:
+    from . import dispositivos
+
+    for tk_cand in (
+        request.headers.get("X-Dispositivo-Token", ""),
+        request.headers.get("X-Nextor-Token", ""),
+        _obter_token(),
+    ):
+        tk_limpo = (tk_cand or "").strip()
+        if tk_limpo:
+            disp_atual = dispositivos.buscar_por_token(tk_limpo)
+            if disp_atual:
+                return disp_atual["id"]
+    dados_json = request.get_json(silent=True) if request.is_json else None
+    if isinstance(dados_json, dict) and dados_json.get("dispositivo"):
+        return str(dados_json.get("dispositivo")).strip()
+    return request.values.get("dispositivo")
+
 
 @app.post("/v1/assistente")
-def assistente_endpoint():
-    """Ponto de entrada unico para assistentes externos.
+@app.post("/v1/assistente/<id_adaptador_rota>")
+def assistente_endpoint(id_adaptador_rota: str | None = None):
+    """Ponto de entrada unico para assistentes externos (Siri, Alexa, Google, Telegram, etc).
 
     Texto entra, texto sai, sem efeito colateral de tocar voz no Nest ou PC.
-    Requer token valido por adaptador (Bearer, X-Nextor-Token ou ?token=).
-    Aplica rate limiting e registra cada requisicao em log.
+    Requer token valido por adaptador (Bearer, X-Nextor-Token ou ?token=) verificado
+    com hmac.compare_digest em tempo constante. Aplica rate limiting e registra log.
+    Aceita tanto payload normalizado de texto quanto payloads nativos da Alexa e Telegram.
     """
     from . import adaptadores
 
-    token = request.args.get("token") or request.headers.get("X-Nextor-Token")
-    if not token:
-        auth = request.headers.get("Authorization", "")
-        if auth.lower().startswith("bearer "):
-            token = auth[7:].strip()
-
-    adaptador = adaptadores.buscar_por_token(token) if token else None
-    if not adaptador:
-        return jsonify(ok=False, erro="token de adaptador invalido"), 401
-    if not adaptador.get("ativo", True):
-        return jsonify(ok=False, erro="adaptador revogado"), 403
-
-    permitido, restantes, reset_em = adaptadores.verificar_limite(
-        adaptador["id"], adaptador.get("limite_por_minuto", 60)
+    token = _extrair_token_adaptador_request()
+    adaptador, erro_dict, status_erro, headers_erro = adaptadores.autenticar_requisicao(
+        token,
+        id_esperado=id_adaptador_rota,
     )
-    if not permitido:
-        adaptadores.registrar_log(adaptador["id"], "", intencao="", status_http=429, detalhe="limite excedido")
-        resp = jsonify(ok=False, erro="limite de requisicoes excedido", reset_em_segundos=reset_em)
-        resp.status_code = 429
-        resp.headers["Retry-After"] = str(int(reset_em) + 1)
+    if erro_dict is not None or adaptador is None:
+        resp = jsonify(erro_dict or {"ok": False, "erro": "token de adaptador invalido"})
+        resp.status_code = status_erro
+        for k, v in headers_erro.items():
+            resp.headers[k] = v
         return resp
 
-    if rotear is None:
-        adaptadores.registrar_log(adaptador["id"], "", intencao="", status_http=503, detalhe="roteador indisponivel")
-        return jsonify(ok=False, erro="roteador indisponivel"), 503
+    dados_json = request.get_json(silent=True) if request.is_json else None
 
-    texto = pega_texto()
-    if not texto:
-        adaptadores.registrar_log(adaptador["id"], "", intencao="", status_http=400, detalhe="texto vazio")
-        return jsonify(ok=False, erro="texto vazio"), 400
+    # 1. Suporte a payload nativo da Amazon Alexa no endpoint unificado
+    if isinstance(dados_json, dict) and isinstance(dados_json.get("request"), dict) and dados_json["request"].get("type"):
+        from . import alexa_skill
 
-    from . import dispositivos
-    token_atual = _obter_token()
-    disp_atual = dispositivos.buscar_por_token(token_atual) if token_atual else None
-    if disp_atual:
-        id_disp = disp_atual["id"]
-    else:
-        id_disp = (request.is_json and (request.get_json(silent=True) or {}).get("dispositivo")) or request.values.get("dispositivo")
-    r = rotear(texto, canal="remoto", id_dispositivo=id_disp)
-    from .companheiro import companheiro
-    companheiro.atualizar(ultima_mensagem=texto, ultima_resposta=r.get("resposta", ""))
+        headers_dict = dict(request.headers)
+        headers_dict["x-nextor-token"] = token
+        resp_alexa, status_alexa = alexa_skill.processar_requisicao_alexa(
+            dados=dados_json,
+            raw_body=request.get_data(),
+            headers=headers_dict,
+            token_esperado=token,
+        )
+        tipo_req = str(dados_json["request"].get("type", ""))
+        if status_alexa == 200 and tipo_req != "IntentRequest":
+            adaptadores.registrar_uso(adaptador["id"])
+            adaptadores.registrar_log(adaptador["id"], tipo_req, intencao="alexa", status_http=200)
+        return jsonify(resp_alexa), status_alexa
 
-    adaptadores.registrar_uso(adaptador["id"])
-    adaptadores.registrar_log(adaptador["id"], texto, intencao=r.get("intencao", ""), status_http=200)
+    # 2. Suporte a payload nativo de Update do Telegram no endpoint unificado
+    if isinstance(dados_json, dict) and isinstance(dados_json.get("message") or dados_json.get("edited_message"), dict):
+        from . import telegram_bot
 
-    return jsonify(
-        ok=True,
-        resposta=r.get("resposta", ""),
-        intencao=r.get("intencao", ""),
-        adaptador=adaptador["id"],
+        resultado_tg = telegram_bot.processar_update(
+            dados_json,
+            enviar_resposta=False,
+            headers={"x-nextor-token": token},
+            token_esperado=token,
+        )
+        status_tg = 200 if resultado_tg.get("ok") else (403 if not resultado_tg.get("autorizado", True) else 400)
+        resultado_tg["adaptador"] = adaptador["id"]
+        return jsonify(resultado_tg), status_tg
+
+    # 3. Fluxo padrao unificado (Siri, Google Assistant / Home Assistant, clientes HTTP)
+    texto = pega_texto() or adaptadores.extrair_texto_payload(
+        dados=dados_json if isinstance(dados_json, dict) else None,
+        form=request.form,
+        args=request.args,
     )
+    id_disp = _resolver_dispositivo_assistente()
+    corpo, status_http, headers_extra = adaptadores.processar_texto_assistente(
+        texto=texto,
+        token=token,
+        id_dispositivo=id_disp,
+        fn_rotear=rotear,
+        adaptador_autenticado=adaptador,
+    )
+    resp = jsonify(corpo)
+    resp.status_code = status_http
+    for k, v in headers_extra.items():
+        resp.headers[k] = v
+    return resp
 
 
 @app.route("/v1/assistente/adaptadores", methods=["GET", "POST"])
@@ -825,8 +884,20 @@ def telegram_webhook_endpoint():
     dados = request.get_json(silent=True)
     if not dados:
         return jsonify(ok=False, erro="payload_invalido"), 400
-    resultado = telegram_bot.processar_update(dados, enviar_resposta=False)
-    status_code = 200 if resultado.get("ok") else (403 if not resultado.get("autorizado", True) else 400)
+    headers_dict = dict(request.headers)
+    token_query = request.args.get("token")
+    if token_query and "x-nextor-token" not in {k.lower(): v for k, v in headers_dict.items()}:
+        headers_dict["x-nextor-token"] = token_query
+    resultado = telegram_bot.processar_update(dados, enviar_resposta=False, headers=headers_dict)
+    erro = resultado.get("erro", "")
+    if erro == "token_invalido":
+        status_code = 401
+    elif erro == "adaptador_revogado" or not resultado.get("autorizado", True):
+        status_code = 403
+    elif resultado.get("ok"):
+        status_code = 200
+    else:
+        status_code = 400
     return jsonify(resultado), status_code
 
 
@@ -1354,7 +1425,7 @@ def dispositivo_ativo_endpoint():
     from . import dispositivos
     token = _obter_token()
     disp = dispositivos.buscar_por_token(token)
-    if token != config.TOKEN and not disp:
+    if not autorizado() and not disp:
         return jsonify(ok=False, erro="nao autorizado"), 401
     ativo = dispositivos.dispositivo_ativo()
     return jsonify(ok=True, ativo=ativo)
@@ -1366,7 +1437,7 @@ def dispositivo_handoff_endpoint():
     from . import dispositivos
     token = _obter_token()
     disp_origem = dispositivos.buscar_por_token(token)
-    if token != config.TOKEN and not disp_origem:
+    if not autorizado() and not disp_origem:
         return jsonify(ok=False, erro="nao autorizado"), 401
 
     dados = request.get_json(silent=True) or request.values

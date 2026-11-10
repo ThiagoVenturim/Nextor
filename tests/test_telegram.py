@@ -19,16 +19,24 @@ import urllib.error
 
 os.environ["NEXTOR_VOZ_SAIDA"] = "nenhuma"
 
-from nextor import config, servico, telegram_bot
+from nextor import adaptadores, config, servico, telegram_bot
 
 
 class BaseTelegramTestCase(unittest.TestCase):
     def setUp(self):
         self.tmp_dir = tempfile.TemporaryDirectory()
         self.caminho_tmp = Path(self.tmp_dir.name)
+        self.patch_arq = mock.patch.object(adaptadores, "ARQUIVO", self.caminho_tmp / "adaptadores.json")
+        self.patch_log = mock.patch.object(adaptadores, "ARQUIVO_LOG", self.caminho_tmp / "assistentes.log")
+        self.patch_arq.start()
+        self.patch_log.start()
+        adaptadores.resetar_estado_testes()
         self.client = servico.app.test_client()
 
     def tearDown(self):
+        adaptadores.resetar_estado_testes()
+        self.patch_arq.stop()
+        self.patch_log.stop()
         self.tmp_dir.cleanup()
 
 

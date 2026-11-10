@@ -22,13 +22,16 @@ nextor/                 pacote principal (o codigo)
   roteador.py           entende a frase e escolhe a habilidade
   rotina.py             rotina matinal (bom dia + agenda + noticias)
   automacoes.py         agendador proprio (automacoes por horario)
-  servico.py            API HTTP local (Flask) + painel web + token
+  adaptadores.py        tokens revogaveis por adaptador (hmac.compare_digest), rate limit e log
+  alexa_skill.py        adaptador da Amazon Alexa (verificacao X.509/RSA -> /v1/assistente)
+  telegram_bot.py       adaptador do Telegram (texto e voz Vosk -> /v1/assistente)
+  servico.py            API HTTP local (Flask) + /v1/assistente + painel web + token
   nexread/              tradutor de artigo/pagina ao vivo com marcacao, gravacao e conversa com IA
 scripts/
   setup.py              configuracao de primeira vez (escreve o .env)
   agendar_rotina.ps1    agenda a rotina diaria no Windows
 home_assistant/         ponte opcional (voz pelo Nest via Google)
-docs/                   PLANO, VISAO, REFERENCIAS, ATALHO_IPHONE, este arquivo
+docs/                   PLANO, VISAO, REFERENCIAS, ASSISTENTES, ATALHO_IPHONE, ALEXA, este arquivo
 .env                    segredos e preferencias (fora do git)
 ```
 

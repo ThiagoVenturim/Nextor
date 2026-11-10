@@ -96,6 +96,11 @@ CANVAS_TOKEN = os.getenv("CANVAS_TOKEN", "").strip()
 GOOGLE_CLASSROOM_TOKEN = os.getenv("GOOGLE_CLASSROOM_TOKEN", "").strip()
 GOOGLE_CLASSROOM_CREDENTIALS = os.getenv("GOOGLE_CLASSROOM_CREDENTIALS", "").strip()
 
+# Adaptadores de assistentes (Issue #8)
+SIRI_ADAPTADOR_TOKEN = os.getenv("SIRI_ADAPTADOR_TOKEN", "").strip()
+GOOGLE_ADAPTADOR_TOKEN = os.getenv("GOOGLE_ADAPTADOR_TOKEN", "").strip()
+MCP_ADAPTADOR_TOKEN = os.getenv("MCP_ADAPTADOR_TOKEN", "").strip()
+
 # Telegram
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 TELEGRAM_USUARIOS_AUTORIZADOS = os.getenv("TELEGRAM_USUARIOS_AUTORIZADOS", "").strip()

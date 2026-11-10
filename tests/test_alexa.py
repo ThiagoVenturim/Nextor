@@ -23,9 +23,12 @@ from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.hazmat.primitives.serialization import Encoding
 from cryptography.x509.oid import NameOID
 
+from pathlib import Path
+import tempfile
+
 os.environ["NEXTOR_VOZ_SAIDA"] = "nenhuma"
 
-from nextor import alexa_skill, config, servico
+from nextor import adaptadores, alexa_skill, config, servico
 
 
 def _gerar_chave_rsa():
@@ -390,7 +393,20 @@ class TestProcessarRequisicaoAlexa(unittest.TestCase):
 
 class TestEndpointAlexaFlask(unittest.TestCase):
     def setUp(self):
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.caminho_tmp = Path(self.tmp_dir.name)
+        self.patch_arq = mock.patch.object(adaptadores, "ARQUIVO", self.caminho_tmp / "adaptadores.json")
+        self.patch_log = mock.patch.object(adaptadores, "ARQUIVO_LOG", self.caminho_tmp / "assistentes.log")
+        self.patch_arq.start()
+        self.patch_log.start()
+        adaptadores.resetar_estado_testes()
         self.client = servico.app.test_client()
+
+    def tearDown(self):
+        adaptadores.resetar_estado_testes()
+        self.patch_arq.stop()
+        self.patch_log.stop()
+        self.tmp_dir.cleanup()
 
     def test_payload_invalido_retorna_400(self):
         resp = self.client.post("/v1/alexa", data="corpo_nao_json")

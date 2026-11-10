@@ -40,7 +40,8 @@ O servico do Nextor precisa estar rodando no Windows (porta 5005). O HA o alcanc
 
 ## 3. O que ja funciona (sem custo)
 
-- Webhook: `POST http://<ip-do-HA>:8123/api/webhook/nextor_comando` com JSON
+- Endpoint unificado `/v1/assistente` (`rest_command.nextor_assistente`): envia texto com token de adaptador (`GOOGLE_ADAPTADOR_TOKEN`) e recebe a resposta em JSON, sem falar no Nest.
+- Webhook com voz no Nest: `POST http://<ip-do-HA>:8123/api/webhook/nextor_comando` com JSON
   `{"texto": "o que tenho amanha"}` faz o Nextor entender e falar no Nest.
 - Rotina "bom dia" as 7h: Nextor fala agenda e noticias (ajuste o horario no pacote).
 

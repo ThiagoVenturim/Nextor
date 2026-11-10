@@ -6,6 +6,7 @@ Integra os comandos /quiz, /resumo e /anotar ao modo estudante e despacha mensag
 para o endpoint /v1/assistente.
 """
 from datetime import datetime
+import hmac
 import json
 import logging
 import os
@@ -39,36 +40,34 @@ def obter_usuarios_autorizados() -> Set[str]:
 
 
 def usuario_autorizado(user_id: Any) -> bool:
-    """Verifica se o ID do usuario do Telegram esta na lista de autorizados."""
+    """Verifica em tempo constante se o ID do usuario do Telegram esta na lista de autorizados."""
     if user_id is None:
+        return False
+    candidato = str(user_id).strip()
+    if not candidato:
         return False
     autorizados = obter_usuarios_autorizados()
     if not autorizados:
         return False
-    return str(user_id).strip() in autorizados
+    encontrado = False
+    for permitido in autorizados:
+        if hmac.compare_digest(candidato.encode("utf-8"), permitido.encode("utf-8")):
+            encontrado = True
+    return encontrado
 
 
 def obter_token_adaptador() -> str:
     """Obtem o token do adaptador do Telegram para chamar /v1/assistente."""
-    token = os.getenv("TELEGRAM_ADAPTADOR_TOKEN", "") or config.TELEGRAM_ADAPTADOR_TOKEN
-    if token:
-        return token
-
     try:
         from . import adaptadores
-        # Se ja existir adaptador 'telegram', usa seu token ou recria se necessario
-        disp = adaptadores.buscar_por_id("telegram")
-        if not disp:
-            novo = adaptadores.cadastrar("telegram", "Bot Telegram")
-            return novo.get("token", "")
-        # Como o hash fica gravado e o token puro so sai na criacao,
-        # geramos novo token para o telegram se nao houver token em env
-        adaptadores.remover("telegram")
-        novo = adaptadores.cadastrar("telegram", "Bot Telegram")
-        return novo.get("token", "")
+        return adaptadores.obter_token_adaptador(
+            "telegram",
+            "Bot Telegram",
+            env_var="TELEGRAM_ADAPTADOR_TOKEN",
+        )
     except Exception as e:
         log.warning("Nao foi possivel obter token de adaptador automatico: %s", e)
-        return config.TOKEN
+        return os.getenv("TELEGRAM_ADAPTADOR_TOKEN", "") or config.TELEGRAM_ADAPTADOR_TOKEN or config.TOKEN
 
 
 def chamar_assistente(
@@ -76,45 +75,18 @@ def chamar_assistente(
     token_adaptador: Optional[str] = None,
     base_url: Optional[str] = None,
 ) -> str:
-    """Despacha uma mensagem de texto para o endpoint /v1/assistente do Nextor."""
-    texto_limpo = texto.strip()
-    if not texto_limpo:
-        return "Texto vazio."
-
-    token = token_adaptador or obter_token_adaptador()
-    url = f"{base_url or f'http://localhost:{config.PORTA}'}/v1/assistente"
-    payload = json.dumps({"texto": texto_limpo}).encode("utf-8")
-
-    req = urllib.request.Request(
-        url,
-        data=payload,
-        method="POST",
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {token}",
-        },
+    """Despacha uma mensagem de texto para o endpoint unificado /v1/assistente do Nextor."""
+    from . import adaptadores
+    return adaptadores.chamar_assistente(
+        texto=texto,
+        id_adaptador="telegram",
+        nome_adaptador="Bot Telegram",
+        env_var="TELEGRAM_ADAPTADOR_TOKEN",
+        token_adaptador=token_adaptador,
+        base_url=base_url,
+        urlopen_fn=urllib.request.urlopen,
+        tratar_erro_http=True,
     )
-
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            dados = json.loads(resp.read().decode("utf-8"))
-            return dados.get("resposta", "Sem resposta.")
-    except urllib.error.HTTPError as e:
-        corpo = e.read().decode("utf-8", errors="ignore")
-        try:
-            dados_erro = json.loads(corpo)
-            msg_erro = dados_erro.get("erro", str(e))
-        except Exception:
-            msg_erro = str(e)
-        return f"Erro ao consultar assistente ({e.code}): {msg_erro}"
-    except Exception as e:
-        # Fallback local direto se servico HTTP nao estiver ativo (ex: testes sem socket)
-        try:
-            from .roteador import rotear
-            r = rotear(texto_limpo)
-            return r.get("resposta", "Processado localmente.")
-        except Exception:
-            return f"Servico do assistente indisponivel ({e.__class__.__name__})."
 
 
 def transcrever_audio(caminho_ou_bytes: Path | str | bytes) -> str:
@@ -369,9 +341,9 @@ def tratar_comando(comando: str, argumento: str = "") -> str:
         return (
             "Ola! Sou o Nextor no Telegram.\n\n"
             "Comandos de estudo disponiveis:\n"
-            "• /quiz [disciplina] - Inicia uma questao de quiz\n"
-            "• /resumo [disciplina] - Mostra o resumo das materias\n"
-            "• /anotar [texto] - Salva um lembrete ou anotacao\n\n"
+            "- /quiz [disciplina] - Inicia uma questao de quiz\n"
+            "- /resumo [disciplina] - Mostra o resumo das materias\n"
+            "- /anotar [texto] - Salva um lembrete ou anotacao\n\n"
             "Voce tambem pode enviar qualquer pergunta em texto ou gravar uma mensagem de voz."
         )
 
@@ -436,8 +408,39 @@ def processar_update(
     bot_token: Optional[str] = None,
     enviar_resposta: bool = True,
     baixador_audio: Optional[Callable[[str, Optional[str]], bytes]] = None,
+    headers: Optional[dict] = None,
+    token_esperado: Optional[str] = None,
 ) -> dict[str, Any]:
     """Processa um update de mensagem recebido do Telegram (via webhook ou polling)."""
+    from . import adaptadores
+
+    disp_tg = adaptadores.buscar_por_id("telegram")
+    if disp_tg and not disp_tg.get("ativo", True):
+        return {
+            "ok": False,
+            "autorizado": False,
+            "erro": "adaptador_revogado",
+            "resposta": "Adaptador do Telegram revogado.",
+        }
+
+    if headers is not None or token_esperado is not None:
+        token_conf = (token_esperado or os.getenv("TELEGRAM_ADAPTADOR_TOKEN", "") or config.TELEGRAM_ADAPTADOR_TOKEN).strip()
+        token_recebido = adaptadores.extrair_token_requisicao(headers=headers or {})
+        if token_conf:
+            valido = bool(token_recebido and hmac.compare_digest(token_recebido, token_conf))
+            if not valido and token_recebido:
+                adp_tk = adaptadores.buscar_por_token(token_recebido)
+                if adp_tk and hmac.compare_digest(str(adp_tk.get("id", "")), "telegram") and adp_tk.get("ativo", True):
+                    valido = True
+            if not valido:
+                return {"ok": False, "autorizado": False, "erro": "token_invalido"}
+        elif token_recebido:
+            adp_tk = adaptadores.buscar_por_token(token_recebido)
+            if not adp_tk:
+                return {"ok": False, "autorizado": False, "erro": "token_invalido"}
+            if not adp_tk.get("ativo", True):
+                return {"ok": False, "autorizado": False, "erro": "adaptador_revogado"}
+
     mensagem = update.get("message") or update.get("edited_message")
     if not mensagem:
         return {"ok": False, "motivo": "update_sem_mensagem"}
@@ -505,7 +508,14 @@ def processar_update(
         resposta = tratar_comando(cmd, arg)
     else:
         dono_chat = str(os.getenv("TELEGRAM_DONO_CHAT_ID", "") or getattr(config, "TELEGRAM_DONO_CHAT_ID", "")).strip()
-        if dono_chat and (str(chat_id).strip() == dono_chat or str(user_id).strip() == dono_chat):
+        eh_dono = bool(
+            dono_chat
+            and (
+                hmac.compare_digest(str(chat_id or "").strip(), dono_chat)
+                or hmac.compare_digest(str(user_id or "").strip(), dono_chat)
+            )
+        )
+        if eh_dono:
             resposta = tratar_comando_gtd_capturar(texto_processar)
         else:
             resposta = chamar_assistente(texto_processar)
