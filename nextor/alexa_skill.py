@@ -257,22 +257,16 @@ def validar_application_id(dados: dict, app_id_esperado: Optional[str] = None) -
 
 def obter_token_adaptador() -> str:
     """Obtem o token do adaptador Alexa para chamar /v1/assistente."""
-    token = os.getenv("ALEXA_ADAPTADOR_TOKEN", "") or config.ALEXA_ADAPTADOR_TOKEN
-    if token:
-        return token
-
     try:
         from . import adaptadores
-        disp = adaptadores.buscar_por_id("alexa")
-        if not disp:
-            novo = adaptadores.cadastrar("alexa", "Skill Alexa")
-            return novo.get("token", "")
-        adaptadores.remover("alexa")
-        novo = adaptadores.cadastrar("alexa", "Skill Alexa")
-        return novo.get("token", "")
+        return adaptadores.obter_token_adaptador(
+            "alexa",
+            "Skill Alexa",
+            env_var="ALEXA_ADAPTADOR_TOKEN",
+        )
     except Exception as e:
         log.warning("Nao foi possivel obter token de adaptador automatico para Alexa: %s", e)
-        return config.TOKEN
+        return os.getenv("ALEXA_ADAPTADOR_TOKEN", "") or config.ALEXA_ADAPTADOR_TOKEN or config.TOKEN
 
 
 def chamar_assistente(
@@ -280,39 +274,18 @@ def chamar_assistente(
     token_adaptador: Optional[str] = None,
     base_url: Optional[str] = None,
 ) -> str:
-    """Despacha uma mensagem de texto para o endpoint /v1/assistente do Nextor."""
-    texto_limpo = texto.strip()
-    if not texto_limpo:
-        return "Texto vazio."
-
-    token = token_adaptador or obter_token_adaptador()
-    url = f"{base_url or f'http://localhost:{config.PORTA}'}/v1/assistente"
-    payload = json.dumps({"texto": texto_limpo}).encode("utf-8")
-
-    req = urllib.request.Request(
-        url,
-        data=payload,
-        method="POST",
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {token}",
-        },
+    """Despacha uma mensagem de texto para o endpoint unificado /v1/assistente do Nextor."""
+    from . import adaptadores
+    return adaptadores.chamar_assistente(
+        texto=texto,
+        id_adaptador="alexa",
+        nome_adaptador="Skill Alexa",
+        env_var="ALEXA_ADAPTADOR_TOKEN",
+        token_adaptador=token_adaptador,
+        base_url=base_url,
+        urlopen_fn=urllib.request.urlopen,
+        tratar_erro_http=False,
     )
-
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            dados = json.loads(resp.read().decode("utf-8"))
-            if dados.get("ok"):
-                return dados.get("resposta", "") or dados.get("texto", "")
-            return dados.get("erro", "Erro no processamento da requisicao.")
-    except Exception as e:
-        log.warning("Falha ao chamar /v1/assistente para Alexa (%s). Usando roteador direto.", e)
-        try:
-            from . import roteador
-            return roteador.interpretar(texto_limpo)
-        except Exception as e_rot:
-            log.error("Falha no roteador direto: %s", e_rot)
-            return "Nao foi possivel processar seu pedido no momento."
 
 
 def construir_resposta_alexa(
@@ -382,21 +355,32 @@ def processar_requisicao_alexa(
         else (os.getenv("ALEXA_VERIFICAR_ASSINATURA", "1").strip().lower() not in ("0", "false", "nao"))
     )
 
-    # 1. Validacao opcional de token via header ou query
+    # 1. Validacao de token por adaptador (hmac.compare_digest) e revogacao
+    from . import adaptadores
+
+    disp_alexa = adaptadores.buscar_por_id("alexa")
+    if disp_alexa and not disp_alexa.get("ativo", True):
+        log.warning("Acesso negado: adaptador Alexa esta revogado")
+        return {"ok": False, "erro": "adaptador_revogado"}, 403
+
     token_conf = (token_esperado or os.getenv("ALEXA_ADAPTADOR_TOKEN", "") or config.ALEXA_ADAPTADOR_TOKEN).strip()
+    token_recebido = adaptadores.extrair_token_requisicao(headers=headers)
     if token_conf:
-        token_recebido = (
-            headers.get("x-nextor-token")
-            or headers.get("X-Nextor-Token")
-            or ""
-        )
-        if not token_recebido and "authorization" in {k.lower(): v for k, v in headers.items()}:
-            for k, v in headers.items():
-                if k.lower() == "authorization" and v.startswith("Bearer "):
-                    token_recebido = v[7:].strip()
-        if not token_recebido or not hmac.compare_digest(token_recebido, token_conf):
+        valido_conf = bool(token_recebido and hmac.compare_digest(token_recebido, token_conf))
+        if not valido_conf and token_recebido:
+            adp_tk = adaptadores.buscar_por_token(token_recebido)
+            if adp_tk and hmac.compare_digest(str(adp_tk.get("id", "")), "alexa") and adp_tk.get("ativo", True):
+                valido_conf = True
+        if not valido_conf:
             log.warning("Acesso negado: token do adaptador Alexa ausente ou divergente")
             return {"ok": False, "erro": "token_invalido"}, 401
+    elif token_recebido:
+        adp_tk = adaptadores.buscar_por_token(token_recebido)
+        if not adp_tk:
+            log.warning("Acesso negado: token do adaptador Alexa invalido")
+            return {"ok": False, "erro": "token_invalido"}, 401
+        if not adp_tk.get("ativo", True):
+            return {"ok": False, "erro": "adaptador_revogado"}, 403
 
     # 2. Verificacao de assinatura Amazon (obrigatoria em producao)
     if deve_verificar:
