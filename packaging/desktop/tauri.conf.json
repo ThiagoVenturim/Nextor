@@ -1,0 +1,41 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Nextor",
+  "version": "0.1.0",
+  "identifier": "io.github.thiagoventurim.nextor",
+  "build": {
+    "frontendDist": "../../nextor/web",
+    "devUrl": "http://localhost:5005/painel"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Nextor",
+        "width": 1024,
+        "height": 740,
+        "minWidth": 360,
+        "minHeight": 560,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; connect-src 'self' http://localhost:* http://127.0.0.1:* http://192.168.*:* http://10.*:* http://100.*:*; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "msi",
+      "nsis",
+      "deb",
+      "appimage",
+      "dmg",
+      "app"
+    ],
+    "icon": [
+      "../../nextor/web/icone-192.png",
+      "../../nextor/web/icone-512.png"
+    ]
+  }
+}

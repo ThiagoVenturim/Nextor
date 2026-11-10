@@ -1,0 +1,72 @@
+{
+  "id": "/",
+  "name": "Nextor - Assistente Pessoal",
+  "short_name": "Nextor",
+  "description": "Painel multiplataforma do Nextor para comandos de voz, agenda, estudos, GTD e automacoes locais.",
+  "start_url": "/painel",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "orientation": "any",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "categories": ["productivity", "utilities", "education"],
+  "icons": [
+    {
+      "src": "/icone-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icone-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icone-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icone-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Painel Principal",
+      "short_name": "Painel",
+      "description": "Comandos, agenda, noticias e automacoes",
+      "url": "/painel",
+      "icons": [{ "src": "/icone-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Produtividade GTD",
+      "short_name": "GTD",
+      "description": "Caixa de entrada, foco Pomodoro e tarefas",
+      "url": "/gtd",
+      "icons": [{ "src": "/icone-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Rosto do Nextor",
+      "short_name": "Rosto",
+      "description": "Companheiro visual e conversa por voz",
+      "url": "/rosto",
+      "icons": [{ "src": "/icone-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Instaladores",
+      "short_name": "Baixar",
+      "description": "Apps para Windows, Linux, Mac, Android e iPhone",
+      "url": "/download",
+      "icons": [{ "src": "/icone-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}

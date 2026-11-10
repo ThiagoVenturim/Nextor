@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Nextor - Painel Universal</title>
+  <meta name="description" content="Interface universal do Nextor para Android, iPhone, Web, Windows, Linux e Mac.">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Nextor">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icone-192.png">
+  <link rel="apple-touch-icon" href="/icone-192.png">
+  <link rel="stylesheet" href="/web/painel.css">
+</head>
+<body>
+  <div class="shell-container">
+    <header class="topbar">
+      <div class="brand-group">
+        <h1 class="brand-title">Nextor</h1>
+        <span class="brand-subtitle">painel local multiplataforma</span>
+      </div>
+      <div class="status-bar">
+        <div id="status-conexao" class="status-pill" data-online="true" aria-live="polite">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span id="status-conexao-texto">Conectado</span>
+        </div>
+      </div>
+    </header>
+
+    <nav class="nav-universal" aria-label="Modulos do Nextor">
+      <a href="/painel" class="nav-link" aria-current="page">Painel</a>
+      <a href="/gtd" class="nav-link">GTD e Foco</a>
+      <a href="/rosto" class="nav-link">Rosto</a>
+      <a href="/download" class="nav-link">Apps e Download</a>
+    </nav>
+
+    <section id="banner-instalar" class="install-banner" hidden aria-label="Instalacao do aplicativo">
+      <div>
+        <strong>Instalar o Nextor neste dispositivo</strong>
+        <p class="help-text" style="margin-bottom:0">Funciona como aplicativo dedicado com suporte a shell offline.</p>
+      </div>
+      <button id="btn-instalar-pwa" type="button">Instalar app</button>
+    </section>
+
+    <main>
+      <section class="card" aria-labelledby="titulo-comandos">
+        <h2 id="titulo-comandos" class="card-title">Comando rapido e voz</h2>
+        <label for="texto" class="field-label">Mensagem, pergunta ou anotacao</label>
+        <input id="texto" type="text" placeholder="Ex.: anota revisar contrato amanha as 14h">
+        <div class="row">
+          <button type="button" onclick="cmd('/comando')">Enviar comando</button>
+          <button type="button" class="btn-secondary" onclick="cmd('/anotar')">Salvar nota</button>
+          <button type="button" class="btn-secondary" onclick="cmd('/falar')">Falar no Nest</button>
+        </div>
+        <div class="row">
+          <button type="button" class="btn-secondary" onclick="go('/agenda')">Ouvir agenda de hoje</button>
+          <button type="button" class="btn-secondary" onclick="go('/noticias')">Ouvir resumo de noticias</button>
+        </div>
+        <div id="log" role="status" aria-live="polite">Pronto para receber comandos.</div>
+      </section>
+
+      <section class="card" aria-labelledby="titulo-automacoes">
+        <h2 id="titulo-automacoes" class="card-title">Automacoes por horario</h2>
+        <div class="row">
+          <div>
+            <label for="hora" class="field-label">Horario (HH:MM)</label>
+            <input id="hora" type="text" placeholder="07:00">
+          </div>
+          <div>
+            <label for="acao" class="field-label">Acao</label>
+            <select id="acao">
+              <option value="rotina">Bom dia completo</option>
+              <option value="agenda">Agenda do dia</option>
+              <option value="noticias">Resumo de noticias</option>
+              <option value="falar">Falar frase</option>
+              <option value="comando">Executar comando</option>
+            </select>
+          </div>
+        </div>
+        <label for="atexto" class="field-label">Texto complementar (para falar ou comando)</label>
+        <input id="atexto" type="text" placeholder="Texto opcional da automacao">
+        <button type="button" onclick="addAuto()">Adicionar automacao</button>
+        <div id="autos" class="auto-list"></div>
+      </section>
+
+      <section class="card" aria-labelledby="titulo-conexao">
+        <h2 id="titulo-conexao" class="card-title">Conexao com o Nextor</h2>
+        <p class="help-text">
+          O cerebro e os dados ficam na sua maquina. Em casa, conecte pela rede local; fora de casa, use VPN privada (ex.: Tailscale).
+        </p>
+        <label for="servidor-url" class="field-label">Endereco do servidor (vazio = este mesmo endereco)</label>
+        <input id="servidor-url" type="url" placeholder="http://192.168.1.100:5005">
+        <label for="token-input" class="field-label">Token de acesso (NEXTOR_TOKEN ou token do dispositivo)</label>
+        <input id="token-input" type="password" placeholder="Cole seu token de no minimo 24 caracteres">
+        <button id="btn-salvar-conexao" type="button" class="btn-secondary">Salvar conexao neste aparelho</button>
+      </section>
+    </main>
+  </div>
+  <script src="/web/painel.js"></script>
+</body>
+</html>

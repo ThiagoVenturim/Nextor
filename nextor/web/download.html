@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Nextor - Instalar em Todas as Plataformas</title>
+  <meta name="description" content="Baixe e instale o Nextor para Android, iPhone (iOS), Windows, Linux, Mac e Web.">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Nextor">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icone-192.png">
+  <link rel="apple-touch-icon" href="/icone-192.png">
+  <link rel="stylesheet" href="/web/painel.css">
+</head>
+<body>
+  <div class="shell-container">
+    <header class="topbar">
+      <div class="brand-group">
+        <h1 class="brand-title">Nextor</h1>
+        <span class="brand-subtitle">instaladores e aplicativo universal</span>
+      </div>
+      <div class="status-bar">
+        <span id="plataforma-detectada" class="status-pill">Detectando sistema...</span>
+      </div>
+    </header>
+
+    <nav class="nav-universal" aria-label="Modulos do Nextor">
+      <a href="/painel" class="nav-link">Painel</a>
+      <a href="/gtd" class="nav-link">GTD e Foco</a>
+      <a href="/rosto" class="nav-link">Rosto</a>
+      <a href="/download" class="nav-link" aria-current="page">Apps e Download</a>
+    </nav>
+
+    <main>
+      <section class="card" aria-labelledby="titulo-pwa">
+        <span class="platform-badge">Recomendado em qualquer aparelho</span>
+        <h2 id="titulo-pwa" class="card-title">PWA Universal (Android, iPhone, Windows, Linux e Mac)</h2>
+        <p class="help-text">
+          A interface do Nextor e uma so (PWA com shell offline via Service Worker). Voce pode instalar direto pelo navegador sem depender de lojas externas.
+        </p>
+        <div class="row">
+          <button id="btn-instalar-direto" type="button">Instalar na tela inicial</button>
+          <a href="/painel" class="btn btn-secondary">Abrir Painel Web</a>
+          <a href="/gtd" class="btn btn-secondary">Abrir Painel GTD</a>
+        </div>
+        <p id="instrucao-pwa-sistema" class="help-text" style="margin-bottom:0"></p>
+      </section>
+
+      <section class="card" aria-labelledby="titulo-plataformas">
+        <h2 id="titulo-plataformas" class="card-title">Instaladores por plataforma</h2>
+        <p class="help-text">
+          O cerebro e os dados continuam na sua maquina. Nos desktops, o empacotador sobe o servico local e abre a janela; no celular, o app conecta ao seu Nextor pela rede Wi-Fi de casa ou por VPN privada.
+        </p>
+        <div id="grade-plataformas" class="platform-grid">
+          <article class="platform-card" data-plat="windows">
+            <div>
+              <span class="platform-badge">Desktop</span>
+              <h3 class="card-title">Windows</h3>
+              <p class="help-text">Instalador .msi / .exe (Tauri) ou janela dedicada via Edge/Chrome (--app). Sobe o servico local na porta 5005 e abre o painel.</p>
+            </div>
+            <div>
+              <code>python scripts/empacotar_desktop.py --plataforma windows</code>
+            </div>
+          </article>
+
+          <article class="platform-card" data-plat="linux">
+            <div>
+              <span class="platform-badge">Desktop</span>
+              <h3 class="card-title">Linux</h3>
+              <p class="help-text">Pacotes .AppImage e .deb (Tauri) para Ubuntu, Debian, Fedora e Arch. Empacota o servico local com a interface PWA.</p>
+            </div>
+            <div>
+              <code>python scripts/empacotar_desktop.py --plataforma linux</code>
+            </div>
+          </article>
+
+          <article class="platform-card" data-plat="macos">
+            <div>
+              <span class="platform-badge">Desktop</span>
+              <h3 class="card-title">macOS</h3>
+              <p class="help-text">Imagem .dmg e bundle .app (Apple Silicon e Intel) com inicializacao automatica do servico local.</p>
+            </div>
+            <div>
+              <code>python scripts/empacotar_desktop.py --plataforma macos</code>
+            </div>
+          </article>
+
+          <article class="platform-card" data-plat="android">
+            <div>
+              <span class="platform-badge">Mobile</span>
+              <h3 class="card-title">Android</h3>
+              <p class="help-text">Instalavel direto pelo Chrome ("Instalar aplicativo") ou como pacote .apk (Capacitor / TWA) conectando por Wi-Fi ou VPN.</p>
+            </div>
+            <div>
+              <code>python scripts/empacotar_desktop.py --plataforma android</code>
+            </div>
+          </article>
+
+          <article class="platform-card" data-plat="ios">
+            <div>
+              <span class="platform-badge">Mobile</span>
+              <h3 class="card-title">iPhone e iPad (iOS)</h3>
+              <p class="help-text">Abra no Safari, toque em Compartilhar e em "Adicionar a Tela de Inicio". Integra com Siri e app Atalhos para voz.</p>
+            </div>
+            <div>
+              <code>Safari &gt; Compartilhar &gt; Adicionar a Tela de Inicio</code>
+            </div>
+          </article>
+
+          <article class="platform-card" data-plat="web">
+            <div>
+              <span class="platform-badge">Universal</span>
+              <h3 class="card-title">Navegador Web</h3>
+              <p class="help-text">Acesso imediato em qualquer sistema pela rede local (http://IP:5005/painel) com cache offline do shell.</p>
+            </div>
+            <div>
+              <code>http://localhost:5005/painel</code>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="titulo-seguranca">
+        <h2 id="titulo-seguranca" class="card-title">Acesso fora de casa e seguranca</h2>
+        <p class="help-text" style="margin-bottom:0">
+          Nunca abra portas no roteador para expor o Nextor na internet publica. Para usar o app no Android, iPhone ou notebook fora de casa, conecte os aparelhos em uma rede VPN privada (como Tailscale ou WireGuard) e informe o IP da VPN na secao Conexao do painel.
+        </p>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    'use strict';
+    let eventoPrompt = null;
+
+    function detectarSistemaLocal() {
+      const ua = navigator.userAgent.toLowerCase();
+      if (/iphone|ipad|ipod/.test(ua)) return { id: 'ios', nome: 'iPhone / iOS', dica: 'No Safari, toque no botao Compartilhar e escolha "Adicionar a Tela de Inicio".' };
+      if (/android/.test(ua)) return { id: 'android', nome: 'Android', dica: 'No Chrome, toque em "Instalar na tela inicial" ou no menu de tres pontos > "Instalar aplicativo".' };
+      if (/win/.test(ua)) return { id: 'windows', nome: 'Windows', dica: 'Clique no icone de instalacao na barra de endereco do Edge/Chrome ou gere o instalador .msi/.exe.' };
+      if (/mac/.test(ua)) return { id: 'macos', nome: 'macOS', dica: 'No Safari (Arquivo > Adicionar ao Dock) ou no Chrome (Instalar Nextor), ou use o pacote .dmg.' };
+      if (/linux/.test(ua)) return { id: 'linux', nome: 'Linux', dica: 'Instale via navegador (Chrome/Chromium) ou gere o pacote .AppImage / .deb.' };
+      return { id: 'web', nome: 'Navegador Web', dica: 'Use o botao acima para instalar como PWA no seu dispositivo.' };
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
+      }
+
+      const sis = detectarSistemaLocal();
+      const badge = document.getElementById('plataforma-detectada');
+      if (badge) badge.textContent = 'Sistema detectado: ' + sis.nome;
+
+      const dica = document.getElementById('instrucao-pwa-sistema');
+      if (dica) dica.textContent = sis.dica;
+
+      document.querySelectorAll('.platform-card').forEach((card) => {
+        if (card.getAttribute('data-plat') === sis.id) {
+          card.setAttribute('data-recomendada', 'true');
+        }
+      });
+
+      const btn = document.getElementById('btn-instalar-direto');
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        eventoPrompt = e;
+      });
+
+      if (btn) {
+        btn.addEventListener('click', async () => {
+          if (eventoPrompt) {
+            eventoPrompt.prompt();
+            await eventoPrompt.userChoice;
+            eventoPrompt = null;
+          } else {
+            if (dica) dica.textContent = sis.dica;
+          }
+        });
+      }
+    });
+  </script>
+</body>
+</html>
