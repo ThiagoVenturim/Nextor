@@ -554,7 +554,34 @@ def _fazer_gtd_dia() -> str:
     try:
         from .gtd import agenda_do_dia
         res = agenda_do_dia()
-        return res.get("resumo_falado", "Nao foi possivel obter o resumo do dia agora.")
+        fala = res.get("resumo_falado", "Nao foi possivel obter o resumo do dia agora.")
+        try:
+            from .companheiro import companheiro
+            acoes = list(res.get("atrasadas") or []) + list(res.get("hoje") or []) + list(res.get("proximas_sugeridas") or [])
+            itens = [
+                {
+                    "id": a.get("id", ""),
+                    "titulo": a.get("titulo", ""),
+                    "fonte": "gtd",
+                    "prazo": a.get("prazo") or "",
+                    "atrasada": a in (res.get("atrasadas") or []),
+                    "para_hoje": a in (res.get("hoje") or []),
+                }
+                for a in acoes[:10]
+            ]
+            companheiro.atualizar(
+                ultima_resposta=fala,
+                legenda=fala,
+                resultado={
+                    "tipo": "tarefas",
+                    "titulo": "Agenda e tarefas de hoje",
+                    "resumo": fala,
+                    "itens": itens,
+                },
+            )
+        except Exception:
+            pass
+        return fala
     except Exception as e:
         return f"Nao consegui consultar a agenda do dia: {e}"
 
@@ -726,7 +753,24 @@ def _fazer_texto(acao: str, conteudo: str, idioma: str = "ingles") -> str:
         if acao == "traduzir":
             return traduzir(conteudo, idioma)["aviso"]
         if acao == "resumir":
-            return resumir_texto(conteudo)["aviso"]
+            res = resumir_texto(conteudo)
+            try:
+                from .companheiro import companheiro
+                texto_res = res.get("texto", "")
+                linhas = [ln.lstrip("-* ").strip() for ln in texto_res.splitlines() if ln.strip()]
+                companheiro.atualizar(
+                    ultima_resposta=res["aviso"],
+                    legenda=res["aviso"],
+                    resultado={
+                        "tipo": "resumo",
+                        "titulo": "Resumo",
+                        "resumo": texto_res,
+                        "itens": [{"ponto": p, "fonte": res.get("arquivo", "")} for p in linhas[:6]],
+                    },
+                )
+            except Exception:
+                pass
+            return res["aviso"]
         return escrever(conteudo)["aviso"]
     except Exception:
         return "Nao consegui gerar o texto agora."
@@ -735,9 +779,19 @@ def _fazer_texto(acao: str, conteudo: str, idioma: str = "ingles") -> str:
 def _fazer_conversar(frase: str) -> str:
     try:
         from .cerebro import conversar
-        return conversar(frase)
+        from .companheiro import companheiro
+        companheiro.atualizar(atividade="pensando", ultima_mensagem=frase, erro="")
+        resp = conversar(frase)
+        companheiro.atualizar(atividade="ocioso", ultima_resposta=resp, legenda=resp)
+        return resp
     except Exception:
-        return "Estou aqui, mas meu cerebro esta fora do ar agora."
+        msg = "Estou aqui, mas meu cerebro esta fora do ar agora."
+        try:
+            from .companheiro import companheiro
+            companheiro.registrar_erro(msg)
+        except Exception:
+            pass
+        return msg
 
 
 def _fazer_estudos_criar_disciplina(nome: str) -> str:
@@ -942,6 +996,31 @@ def _fazer_pendencias(apenas_hoje: bool = False) -> str:
         if apenas_hoje:
             lista = [p for p in lista if p.get("para_hoje") or p.get("atrasada")]
         fala = pendencias.gerar_resumo_falado(lista, apenas_hoje=apenas_hoje)
+
+        try:
+            from .companheiro import companheiro
+            companheiro.atualizar(
+                ultima_resposta=fala,
+                legenda=fala,
+                resultado={
+                    "tipo": "tarefas",
+                    "titulo": "Tarefas para hoje" if apenas_hoje else "Lista de tarefas",
+                    "resumo": fala,
+                    "itens": [
+                        {
+                            "id": p.get("id", ""),
+                            "titulo": p.get("titulo", ""),
+                            "fonte": p.get("fonte", ""),
+                            "prazo": p.get("prazo") or "",
+                            "atrasada": bool(p.get("atrasada", False)),
+                            "para_hoje": bool(p.get("para_hoje", False)),
+                        }
+                        for p in lista[:12]
+                    ],
+                },
+            )
+        except Exception:
+            pass
 
         disp_ativo = dispositivos.dispositivo_ativo()
         if disp_ativo and disp_ativo.get("id"):

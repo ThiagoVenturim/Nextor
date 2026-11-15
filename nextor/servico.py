@@ -103,17 +103,23 @@ def checa_token():
     if request.endpoint in PROTEGIDOS:
         if autorizado():
             return
-        if request.endpoint == "comando":
-            from . import dispositivos
-            disp = dispositivos.buscar_por_token(_obter_token())
-            if disp and disp.get("ativo", True):
+        from . import dispositivos
+        disp = dispositivos.buscar_por_token(_obter_token())
+        if disp and disp.get("ativo", True):
+            if request.endpoint == "comando":
+                return
+            if request.endpoint in ("estado_endpoint", "eventos_endpoint", "fala_endpoint") and request.method == "GET":
+                return
+            if request.endpoint in ("conversa_endpoint", "modo_endpoint", "identidade_endpoint", "voz_endpoint", "estado_endpoint") and "interagir" in disp.get("permissoes", []):
                 return
         return jsonify(erro="token invalido"), 401
 
 
 @app.post("/comando")
 def comando():
+    from .companheiro import companheiro
     if rotear is None:
+        companheiro.registrar_erro("roteador indisponivel")
         return jsonify(erro="roteador indisponivel"), 503
     texto = pega_texto()
     if not texto:
@@ -129,11 +135,28 @@ def comando():
         id_disp = disp_atual["id"]
     else:
         id_disp = (request.is_json and (request.get_json(silent=True) or {}).get("dispositivo")) or request.values.get("dispositivo")
-    r = rotear(texto, id_dispositivo=id_disp)
-    from .companheiro import companheiro
-    companheiro.atualizar(ultima_mensagem=texto, ultima_resposta=r["resposta"])
+    try:
+        r = rotear(texto, id_dispositivo=id_disp)
+    except Exception as e:
+        companheiro.registrar_erro(str(e) or "erro ao processar comando")
+        return jsonify(erro=str(e) or "erro ao processar comando", estado=companheiro.ver()), 503
+    campos = {
+        "ultima_mensagem": texto,
+        "ultima_resposta": r["resposta"],
+        "legenda": r["resposta"],
+        "intencao": r.get("intencao", ""),
+    }
+    if "resultado" in r and r["resultado"] is not None:
+        campos["resultado"] = r["resultado"]
+    companheiro.atualizar(**campos)
     aviso = _falar_sem_quebrar(r["resposta"])
-    return jsonify(ok=True, intencao=r["intencao"], resposta=r["resposta"], aviso=aviso)
+    return jsonify(
+        ok=True,
+        intencao=r["intencao"],
+        resposta=r["resposta"],
+        aviso=aviso,
+        resultado=companheiro.ver().get("resultado"),
+    )
 
 
 @app.post("/anotar")
@@ -150,22 +173,40 @@ def anotar():
 
 @app.post("/falar")
 def falar_endpoint():
+    from .companheiro import companheiro
     texto = pega_texto()
     if not texto:
         return jsonify(erro="texto vazio"), 400
-    falar(texto)
+    companheiro.atualizar(atividade="falando", ultima_resposta=texto, legenda=texto)
+    try:
+        falar(texto)
+    except Exception as e:
+        companheiro.registrar_erro(str(e) or "erro ao falar")
+        raise
+    companheiro.atualizar(atividade="ocioso")
     return jsonify(ok=True, falado=texto)
 
 
 @app.post("/conversar")
 def conversar_endpoint():
+    from .companheiro import companheiro
     if conversar is None:
+        companheiro.registrar_erro("cerebro indisponivel")
         return jsonify(erro="cerebro indisponivel"), 503
     texto = pega_texto()
     if not texto:
         return jsonify(erro="texto vazio"), 400
-    resposta = conversar(texto)
-    falar(resposta)
+    companheiro.atualizar(atividade="pensando", ultima_mensagem=texto, erro="")
+    try:
+        resposta = conversar(texto)
+    except Exception as e:
+        companheiro.registrar_erro(str(e) or "erro no cerebro")
+        raise
+    companheiro.atualizar(atividade="falando", ultima_resposta=resposta, legenda=resposta)
+    try:
+        falar(resposta)
+    finally:
+        companheiro.atualizar(atividade="ocioso")
     return jsonify(ok=True, pergunta=texto, resposta=resposta)
 
 
@@ -310,9 +351,34 @@ def web_arquivo(nome):
     return send_from_directory(WEB, nome)
 
 
-@app.get("/estado")
+@app.route("/estado", methods=["GET", "POST"])
 def estado_endpoint():
-    from .companheiro import companheiro
+    from .companheiro import ATIVIDADES, EXPRESSOES, companheiro
+    if request.method == "POST":
+        dados = request.get_json(silent=True) or request.values
+        campos = {}
+        if "atividade" in dados:
+            ativ = (dados.get("atividade") or "").strip().lower()
+            if ativ not in ATIVIDADES:
+                return jsonify(erro=f"atividade invalida; use {', '.join(ATIVIDADES[:6])}"), 400
+            campos["atividade"] = ativ
+        if "expressao" in dados:
+            expr = (dados.get("expressao") or "").strip().lower()
+            if expr not in EXPRESSOES:
+                return jsonify(erro=f"expressao invalida; use {', '.join(EXPRESSOES)}"), 400
+            campos["expressao"] = expr
+        for chave in ("detalhe", "erro", "legenda", "ultima_mensagem", "ultima_resposta", "intencao"):
+            if chave in dados and dados.get(chave) is not None:
+                campos[chave] = str(dados.get(chave)).strip()
+        if "gravando" in dados:
+            val_g = dados.get("gravando")
+            campos["gravando"] = val_g if isinstance(val_g, bool) else str(val_g).lower() in ("1", "true", "sim")
+        if "resultado" in dados:
+            res_val = dados.get("resultado")
+            if res_val is None or isinstance(res_val, dict):
+                campos["resultado"] = res_val
+        estado = companheiro.atualizar(**campos)
+        return jsonify(ok=True, estado=estado, **estado)
     return jsonify(companheiro.ver())
 
 
@@ -363,8 +429,9 @@ def eventos_endpoint():
 @app.post("/conversa")
 def conversa_endpoint():
     """Conversa pela tela (rosto, NexDeck). So fala no Nest se pedirem."""
-    from .companheiro import conversar_com_humor
+    from .companheiro import companheiro, conversar_com_humor
     if conversar is None:
+        companheiro.registrar_erro("cerebro indisponivel")
         return jsonify(erro="cerebro indisponivel"), 503
     dados = request.get_json(silent=True) or request.values
     texto = (dados.get("texto") or "").strip()
@@ -372,7 +439,10 @@ def conversa_endpoint():
         return jsonify(erro="texto vazio"), 400
     if len(texto) > 2000:
         return jsonify(erro="texto longo demais"), 400
-    r = conversar_com_humor(texto, conversar)
+    try:
+        r = conversar_com_humor(texto, conversar)
+    except Exception as e:
+        return jsonify(erro=str(e) or "erro no cerebro", estado=companheiro.ver()), 503
     aviso = None
     if str(dados.get("falar", "")).lower() in ("1", "true", "sim"):
         aviso = _falar_sem_quebrar(r["resposta"])
@@ -603,6 +673,25 @@ def estudos_quiz_gerar_endpoint():
     res = quiz.obter_ou_gerar_questoes_quiz(disciplina_nome=disc, quantidade=qtd)
     if not res.get("ok"):
         return jsonify(ok=False, erro=res.get("erro", "Erro ao obter questoes.")), 404
+
+    questoes = res.get("questoes") or []
+    if questoes:
+        try:
+            from .companheiro import companheiro
+            q0 = questoes[0]
+            companheiro.atualizar(
+                resultado={
+                    "tipo": "quiz",
+                    "titulo": f"Quiz de {res.get('disciplina', disc)}",
+                    "disciplina": res.get("disciplina", disc),
+                    "questao_id": q0.get("id"),
+                    "pergunta": q0.get("pergunta", ""),
+                    "opcoes": list(q0.get("opcoes", [])),
+                    "modalidade": q0.get("tipo", "multipla_escolha"),
+                }
+            )
+        except Exception:
+            pass
 
     return jsonify(res)
 
@@ -1253,6 +1342,31 @@ def pendencias_endpoint():
         item.pop("dt_prazo", None)
         item.pop("linha_original", None)
         lista_json.append(item)
+
+    try:
+        from .companheiro import companheiro
+        companheiro.atualizar(
+            ultima_resposta=resumo,
+            legenda=resumo,
+            resultado={
+                "tipo": "tarefas",
+                "titulo": "Tarefas para hoje" if apenas_hoje else "Lista de tarefas",
+                "resumo": resumo,
+                "itens": [
+                    {
+                        "id": p.get("id", ""),
+                        "titulo": p.get("titulo", ""),
+                        "fonte": p.get("fonte", ""),
+                        "prazo": p.get("prazo") or "",
+                        "atrasada": bool(p.get("atrasada", False)),
+                        "para_hoje": bool(p.get("para_hoje", False)),
+                    }
+                    for p in lista_json[:12]
+                ],
+            },
+        )
+    except Exception:
+        pass
 
     return jsonify(
         ok=True,

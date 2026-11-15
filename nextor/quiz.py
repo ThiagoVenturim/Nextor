@@ -174,6 +174,29 @@ def registrar_tentativa(
         else:
             msg = f"Incorreto. A resposta certa e {q['resposta_correta']}. {q['explicacao']} (Fonte: {q['fonte']})"
 
+        try:
+            from .companheiro import companheiro
+            companheiro.atualizar(
+                ultima_resposta=msg,
+                legenda=msg,
+                expressao="feliz" if correto else "calmo",
+                resultado={
+                    "tipo": "quiz",
+                    "titulo": "Resultado do Quiz",
+                    "questao_id": questao_id,
+                    "pergunta": q["pergunta"],
+                    "opcoes": opcoes,
+                    "correto": correto,
+                    "resposta_usuario": resposta_usuario,
+                    "resposta_correta": q["resposta_correta"],
+                    "explicacao": q["explicacao"],
+                    "fonte": q["fonte"],
+                    "mensagem": msg,
+                },
+            )
+        except Exception:
+            pass
+
         return {
             "ok": True,
             "correto": correto,
@@ -557,7 +580,25 @@ class GerenciadorSessaoQuiz:
         else:
             linhas.append("Verdadeiro ou Falso?")
 
-        return "\n".join(linhas)
+        enunciado = "\n".join(linhas)
+        try:
+            from .companheiro import companheiro
+            companheiro.atualizar(
+                ultima_resposta=enunciado,
+                legenda=enunciado,
+                resultado={
+                    "tipo": "quiz",
+                    "titulo": f"Quiz de {disciplina_nome}",
+                    "disciplina": disciplina_nome,
+                    "questao_id": questao.get("id"),
+                    "pergunta": questao.get("pergunta", ""),
+                    "opcoes": list(opcoes),
+                    "modalidade": questao.get("tipo", "multipla_escolha"),
+                },
+            )
+        except Exception:
+            pass
+        return enunciado
 
     def obter_ativa(self) -> Optional[Dict[str, Any]]:
         with self._lock:

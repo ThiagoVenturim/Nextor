@@ -387,6 +387,23 @@ def resumir_estudos(
 
     aviso_falado = "\n".join(linhas_fala)
 
+    try:
+        from .companheiro import companheiro
+        companheiro.atualizar(
+            ultima_resposta=aviso_falado,
+            legenda=aviso_falado,
+            resultado={
+                "tipo": "resumo",
+                "titulo": f"Resumo de {disc_nome} ({titulo})",
+                "disciplina": disc_nome,
+                "resumo": dados.get("resumo_geral", ""),
+                "itens": [{"ponto": t.get("ponto", ""), "fonte": t.get("fonte", "")} for t in topicos],
+                "flashcards": len(flashcards),
+            },
+        )
+    except Exception:
+        pass
+
     return {
         "ok": True,
         "disciplina": disc_nome,
