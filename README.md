@@ -239,6 +239,16 @@ O Nextor conta com biblioteca local por disciplina e recurso de gravacao e trans
 - NexRead (tradutor de artigo/pagina ao vivo com estudo): modulo em `nextor/nexread/`, PWA em `/nexread` e extensao de navegador em `nextor/web/nexread/extensao/`. Traduz apenas a pagina ou PDF que a pessoa abriu mantendo o layout (`bilingue`, `lado_a_lado` ou `substituir`), preferindo modelo local (Ollama, LibreTranslate local, NLLB-200 ou Opus-MT). Permite marcar trechos, anotar, gravar notas de voz, salvar na biblioteca de estudos (FTS5 + referencia ABNT) e conversar com a IA sobre o tema citando os blocos do proprio texto e artigos cientificos relacionados. Ferramentas expostas tambem no servidor MCP (`nexread_traduzir_pagina`, `nexread_marcar_trecho`, `nexread_gravar_nota`, `nexread_salvar_estudos`, `nexread_conversar`).
 - NexVoice (tradutor de audio ao vivo para videos, aulas e reunioes bidirecionais): modulo em `nextor/nexvoice/` e PWA em `/nexvoice`. Opera no modo `ouvir` (video, aula ou microfone -> legenda sincronizada e voz traduzida) e no modo `reuniao` bidirecional (streaming por trechos nos dois sentidos: meu idioma <-> idioma do interlocutor). Reusa fala->texto local (Whisper / faster-whisper / Vosk), traducao com modelo aberto local (Ollama, NLLB-200, Opus-MT ou LibreTranslate local) e sintese de voz neural local (`nextor.fala` com Piper). Exige aviso e confirmacao expressa de consentimento antes de traduzir ou gravar reunioes e aulas, registra auditoria em SQLite e mantem processamento estritamente local para nao enviar voz de terceiros para a nuvem. Integra com a biblioteca de estudos (FTS5 + exportacao `.srt`), gera atas bilingues de reuniao e expoe ferramentas no servidor MCP (`nexvoice_iniciar_sessao`, `nexvoice_traduzir_trecho`, `nexvoice_exportar_legendas`, `nexvoice_salvar_estudos`, `nexvoice_encerrar_sessao`).
 
+## Banco de dados plugavel, Conteineres e Kubernetes
+
+O Nextor suporta persistencia de dados plugavel atraves do SQLAlchemy Core, mantendo o SQLite como padrao com zero configuracao e permitindo utilizar bancos de dados relacionais externos (PostgreSQL, MySQL, SQL Server via ODBC).
+
+- Documentacao completa: `docs/DATABASE.md`
+- Subir local: `.\scripts\run.ps1 local` ou `./scripts/run.sh local`
+- Subir via Docker Compose: `docker compose up --build`
+- Subir com PostgreSQL via Docker Compose: `docker compose --profile postgres up --build`
+- Manifestos Kubernetes: `k8s/`
+
 ## Estado
 
 Ver o diario de construcao e o plano de estudo em `PLANO.md` e a visao do produto em

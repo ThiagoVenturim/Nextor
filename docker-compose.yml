@@ -1,0 +1,39 @@
+services:
+  app:
+    build:
+      context: .
+    ports:
+      - "${NEXTOR_PORTA:-5005}:5005"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      NEXTOR_PORTA: 5005
+      NEXTOR_VOZ_SAIDA: nenhuma
+      NEXTOR_TOKEN: ${NEXTOR_TOKEN:-gere-um-token-seguro-com-pelo-menos-24-caracteres}
+      DB_URL: ${DB_URL:-sqlite:////data/nextor.db}
+    volumes:
+      - nextor_data:/data
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    profiles: ["postgres"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-nextor}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: ${POSTGRES_DB:-nextor}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-nextor} -d $${POSTGRES_DB:-nextor}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  nextor_data:
+  postgres_data:

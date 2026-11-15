@@ -137,6 +137,9 @@ GITHUB_PROJECT_NUMERO = os.getenv("GITHUB_PROJECT_NUMERO", "").strip()
 REUNIOES_DIR = Path(os.getenv("NEXTOR_REUNIOES_DIR", "")) if os.getenv("NEXTOR_REUNIOES_DIR") else (RAIZ / "reunioes")
 GRAVACOES_TELA_DIR = Path(os.getenv("NEXTOR_GRAVACOES_TELA_DIR", "")) if os.getenv("NEXTOR_GRAVACOES_TELA_DIR") else (RAIZ / "gravacoes_tela")
 
+# Banco de dados plugavel (Issue #66 - SQLAlchemy / ODBC / PostgreSQL / MySQL / MSSQL / SQLite)
+DB_URL = os.getenv("NEXTOR_DB_URL", os.getenv("DB_URL", "")).strip()
+
 # GTD e Produtividade Pessoal (Issues #42, #43, #44)
 GTD_DIR = Path(os.getenv("NEXTOR_GTD_DIR", "")).resolve() if os.getenv("NEXTOR_GTD_DIR") else (Path.home() / ".nextor")
 GTD_DB = Path(os.getenv("NEXTOR_GTD_DB", "")).resolve() if os.getenv("NEXTOR_GTD_DB") else (GTD_DIR / "gtd.db")

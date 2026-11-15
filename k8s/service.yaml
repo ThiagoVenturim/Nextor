@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: nextor
+  labels:
+    app.kubernetes.io/name: nextor
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: nextor
+  ports:
+    - name: http
+      port: 5005
+      targetPort: http
+      protocol: TCP

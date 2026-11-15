@@ -1,4 +1,4 @@
-"""Persistencia em SQLite parametrizada para o coach de estudos do Nextor (Issue #57)."""
+"""Persistencia em SQLite ou SQLAlchemy para o coach de estudos do Nextor (Issue #57, #66)."""
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -15,13 +15,46 @@ def _obter_caminho_padrao() -> Path:
     return (Path.home() / ".nextor" / "coach.db").resolve()
 
 
-class ArmazenamentoCoach:
-    """Gerencia conexao SQLite e operacoes CRUD para o coach de estudos."""
+def _is_url(caminho_ou_url: Union[str, Path]) -> bool:
+    s = str(caminho_ou_url)
+    return any(
+        s.startswith(prefix)
+        for prefix in (
+            "sqlite://",
+            "postgresql://",
+            "postgresql+",
+            "mysql://",
+            "mysql+",
+            "mssql://",
+            "mssql+",
+        )
+    )
 
-    def __init__(self, caminho_db: Optional[Union[str, Path]] = None):
-        self.caminho = Path(caminho_db).resolve() if caminho_db else _obter_caminho_padrao()
-        self.caminho.parent.mkdir(parents=True, exist_ok=True)
-        self._inicializar_banco()
+
+class ArmazenamentoCoach:
+    """Gerencia conexao SQLite/SQLAlchemy e operacoes CRUD para o coach de estudos."""
+
+    def __init__(
+        self,
+        caminho_db: Optional[Union[str, Path]] = None,
+        db_url: Optional[str] = None,
+    ):
+        url_efetiva = (db_url or getattr(config, "DB_URL", "") or "").strip()
+        if caminho_db and _is_url(caminho_db):
+            url_efetiva = str(caminho_db)
+            caminho_db = None
+
+        if url_efetiva and not caminho_db:
+            from ..db import ArmazenamentoCoachSQLAlchemy
+            self._backend = ArmazenamentoCoachSQLAlchemy(url_efetiva)
+            self.caminho = None
+            self.db_url = url_efetiva
+        else:
+            self._backend = None
+            self.caminho = Path(caminho_db).resolve() if caminho_db else _obter_caminho_padrao()
+            self.caminho.parent.mkdir(parents=True, exist_ok=True)
+            self.db_url = None
+            self._inicializar_banco()
 
     @contextmanager
     def _conexao(self):
@@ -103,7 +136,6 @@ class ArmazenamentoCoach:
                     FOREIGN KEY (plano_id) REFERENCES planos(id) ON DELETE CASCADE
                 )
             """)
-            # Indices para busca rapida
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_recursos_trilha ON recursos(trilha_id, ordem)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_acoes_plano_data ON progresso_acoes(plano_id, data)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_acoes_estado ON progresso_acoes(plano_id, estado)")
@@ -113,6 +145,8 @@ class ArmazenamentoCoach:
     # -------------------------------------------------------------
 
     def salvar_trilha(self, trilha: Trilha) -> Trilha:
+        if self._backend is not None:
+            return self._backend.salvar_trilha(trilha)
         with self._conexao() as conn:
             cursor = conn.cursor()
             cursor.execute("""
@@ -163,6 +197,8 @@ class ArmazenamentoCoach:
         return self.obter_trilha(trilha.id) or trilha
 
     def obter_trilha(self, trilha_id: str) -> Optional[Trilha]:
+        if self._backend is not None:
+            return self._backend.obter_trilha(trilha_id)
         with self._conexao() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM trilhas WHERE id = ?", (trilha_id,))
@@ -180,6 +216,8 @@ class ArmazenamentoCoach:
             return Trilha.from_dict(dados)
 
     def listar_trilhas(self) -> List[Trilha]:
+        if self._backend is not None:
+            return self._backend.listar_trilhas()
         with self._conexao() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT id FROM trilhas ORDER BY titulo ASC")
@@ -192,6 +230,8 @@ class ArmazenamentoCoach:
         return resultado
 
     def salvar_recurso(self, recurso: Recurso) -> Recurso:
+        if self._backend is not None:
+            return self._backend.salvar_recurso(recurso)
         with self._conexao() as conn:
             cursor = conn.cursor()
             cursor.execute("""
@@ -220,6 +260,8 @@ class ArmazenamentoCoach:
         return recurso
 
     def obter_recurso(self, recurso_id: str) -> Optional[Recurso]:
+        if self._backend is not None:
+            return self._backend.obter_recurso(recurso_id)
         with self._conexao() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM recursos WHERE id = ?", (recurso_id,))
@@ -235,6 +277,8 @@ class ArmazenamentoCoach:
     # -------------------------------------------------------------
 
     def salvar_plano(self, plano: Plano) -> Plano:
+        if self._backend is not None:
+            return self._backend.salvar_plano(plano)
         with self._conexao() as conn:
             cursor = conn.cursor()
             cursor.execute("""
@@ -258,6 +302,8 @@ class ArmazenamentoCoach:
         return plano
 
     def obter_plano(self, plano_id: str) -> Optional[Plano]:
+        if self._backend is not None:
+            return self._backend.obter_plano(plano_id)
         with self._conexao() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM planos WHERE id = ?", (plano_id,))
@@ -269,6 +315,8 @@ class ArmazenamentoCoach:
             return Plano.from_dict(d)
 
     def listar_planos(self, ativo_apenas: bool = False) -> List[Plano]:
+        if self._backend is not None:
+            return self._backend.listar_planos(ativo_apenas=ativo_apenas)
         with self._conexao() as conn:
             cursor = conn.cursor()
             if ativo_apenas:
@@ -287,6 +335,8 @@ class ArmazenamentoCoach:
     # -------------------------------------------------------------
 
     def salvar_acao(self, acao: ProgressoAcao) -> ProgressoAcao:
+        if self._backend is not None:
+            return self._backend.salvar_acao(acao)
         with self._conexao() as conn:
             cursor = conn.cursor()
             cursor.execute("""
@@ -313,6 +363,8 @@ class ArmazenamentoCoach:
         return acao
 
     def obter_acao(self, acao_id: str) -> Optional[ProgressoAcao]:
+        if self._backend is not None:
+            return self._backend.obter_acao(acao_id)
         with self._conexao() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM progresso_acoes WHERE id = ?", (acao_id,))
@@ -322,6 +374,8 @@ class ArmazenamentoCoach:
             return ProgressoAcao.from_dict(dict(row))
 
     def obter_acao_por_recurso(self, plano_id: str, recurso_id: str) -> Optional[ProgressoAcao]:
+        if self._backend is not None:
+            return self._backend.obter_acao_por_recurso(plano_id, recurso_id)
         with self._conexao() as conn:
             cursor = conn.cursor()
             cursor.execute("""
@@ -341,6 +395,8 @@ class ArmazenamentoCoach:
         data: Optional[str] = None,
         estado: Optional[str] = None,
     ) -> List[ProgressoAcao]:
+        if self._backend is not None:
+            return self._backend.listar_acoes(plano_id=plano_id, data=data, estado=estado)
         with self._conexao() as conn:
             cursor = conn.cursor()
             query = "SELECT * FROM progresso_acoes WHERE plano_id = ?"
@@ -360,6 +416,8 @@ class ArmazenamentoCoach:
     # -------------------------------------------------------------
 
     def salvar_pontuacao(self, pontuacao: Pontuacao) -> Pontuacao:
+        if self._backend is not None:
+            return self._backend.salvar_pontuacao(pontuacao)
         with self._conexao() as conn:
             cursor = conn.cursor()
             cursor.execute("""
@@ -381,6 +439,8 @@ class ArmazenamentoCoach:
         return pontuacao
 
     def obter_pontuacao(self, plano_id: str) -> Optional[Pontuacao]:
+        if self._backend is not None:
+            return self._backend.obter_pontuacao(plano_id)
         with self._conexao() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM pontuacoes WHERE plano_id = ?", (plano_id,))

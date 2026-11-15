@@ -1,7 +1,8 @@
-"""Persistencia em SQLite para o GTD do Nextor.
+"""Persistencia em SQLite ou SQLAlchemy para o GTD do Nextor.
 
-Armazena itens, projetos, leituras e progresso diario em banco local.
-Utiliza exclusivamente consultas parametrizadas com placeholders '?'.
+Armazena itens, projetos, leituras e progresso diario em banco local SQLite
+ou banco plugavel via SQLAlchemy (PostgreSQL, MySQL, SQL Server via ODBC).
+Utiliza exclusivamente consultas parametrizadas.
 """
 from contextlib import contextmanager
 from datetime import date, datetime
@@ -21,13 +22,46 @@ def _obter_caminho_padrao() -> Path:
     return (Path.home() / ".nextor" / "gtd.db").resolve()
 
 
-class ArmazenamentoGTD:
-    """Gerencia a conexao SQLite e operacoes CRUD para entidades GTD."""
+def _is_url(caminho_ou_url: Union[str, Path]) -> bool:
+    s = str(caminho_ou_url)
+    return any(
+        s.startswith(prefix)
+        for prefix in (
+            "sqlite://",
+            "postgresql://",
+            "postgresql+",
+            "mysql://",
+            "mysql+",
+            "mssql://",
+            "mssql+",
+        )
+    )
 
-    def __init__(self, caminho_db: Optional[Union[str, Path]] = None):
-        self.caminho = Path(caminho_db).resolve() if caminho_db else _obter_caminho_padrao()
-        self.caminho.parent.mkdir(parents=True, exist_ok=True)
-        self._inicializar_banco()
+
+class ArmazenamentoGTD:
+    """Gerencia conexao SQLite/SQLAlchemy e operacoes CRUD para entidades GTD."""
+
+    def __init__(
+        self,
+        caminho_db: Optional[Union[str, Path]] = None,
+        db_url: Optional[str] = None,
+    ):
+        url_efetiva = (db_url or getattr(config, "DB_URL", "") or "").strip()
+        if caminho_db and _is_url(caminho_db):
+            url_efetiva = str(caminho_db)
+            caminho_db = None
+
+        if url_efetiva and not caminho_db:
+            from ..db import ArmazenamentoGTDSQLAlchemy
+            self._backend = ArmazenamentoGTDSQLAlchemy(url_efetiva)
+            self.caminho = None
+            self.db_url = url_efetiva
+        else:
+            self._backend = None
+            self.caminho = Path(caminho_db).resolve() if caminho_db else _obter_caminho_padrao()
+            self.caminho.parent.mkdir(parents=True, exist_ok=True)
+            self.db_url = None
+            self._inicializar_banco()
 
     @contextmanager
     def _conexao(self):
@@ -120,6 +154,8 @@ class ArmazenamentoGTD:
     # --- Operacoes de Itens ---
 
     def salvar_item(self, item: Item) -> Item:
+        if self._backend is not None:
+            return self._backend.salvar_item(item)
         with self._conexao() as conn:
             cursor = conn.cursor()
             meta_str = json.dumps(item.metadados) if isinstance(item.metadados, dict) else "{}"
@@ -149,6 +185,8 @@ class ArmazenamentoGTD:
         return item
 
     def obter_item(self, item_id: str) -> Optional[Item]:
+        if self._backend is not None:
+            return self._backend.obter_item(item_id)
         with self._conexao() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM itens WHERE id = ?", (item_id,))
@@ -160,6 +198,8 @@ class ArmazenamentoGTD:
     def buscar_item_por_ref(self, ref_externa: str) -> Optional[Item]:
         if not ref_externa:
             return None
+        if self._backend is not None:
+            return self._backend.buscar_item_por_ref(ref_externa)
         with self._conexao() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM itens WHERE ref_externa = ?", (ref_externa,))
@@ -174,6 +214,8 @@ class ArmazenamentoGTD:
         contexto: Optional[str] = None,
         projeto_id: Optional[str] = None,
     ) -> List[Item]:
+        if self._backend is not None:
+            return self._backend.listar_itens(estado=estado, contexto=contexto, projeto_id=projeto_id)
         query = "SELECT * FROM itens WHERE 1=1"
         params: List[Any] = []
         if estado:
@@ -193,6 +235,8 @@ class ArmazenamentoGTD:
             return [Item.from_dict(dict(row)) for row in cursor.fetchall()]
 
     def remover_item(self, item_id: str) -> bool:
+        if self._backend is not None:
+            return self._backend.remover_item(item_id)
         with self._conexao() as conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM itens WHERE id = ?", (item_id,))
@@ -203,6 +247,8 @@ class ArmazenamentoGTD:
     # --- Operacoes de Projetos ---
 
     def salvar_projeto(self, projeto: Projeto) -> Projeto:
+        if self._backend is not None:
+            return self._backend.salvar_projeto(projeto)
         with self._conexao() as conn:
             cursor = conn.cursor()
             cursor.execute("""
@@ -221,6 +267,8 @@ class ArmazenamentoGTD:
         return projeto
 
     def obter_projeto(self, projeto_id: str) -> Optional[Projeto]:
+        if self._backend is not None:
+            return self._backend.obter_projeto(projeto_id)
         with self._conexao() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM projetos WHERE id = ?", (projeto_id,))
@@ -230,6 +278,8 @@ class ArmazenamentoGTD:
         return None
 
     def listar_projetos(self, estado: Optional[str] = None) -> List[Projeto]:
+        if self._backend is not None:
+            return self._backend.listar_projetos(estado=estado)
         query = "SELECT * FROM projetos WHERE 1=1"
         params: List[Any] = []
         if estado:
@@ -242,6 +292,8 @@ class ArmazenamentoGTD:
             return [Projeto.from_dict(dict(row)) for row in cursor.fetchall()]
 
     def remover_projeto(self, projeto_id: str) -> bool:
+        if self._backend is not None:
+            return self._backend.remover_projeto(projeto_id)
         with self._conexao() as conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM projetos WHERE id = ?", (projeto_id,))
@@ -252,6 +304,8 @@ class ArmazenamentoGTD:
     # --- Operacoes de Leituras ---
 
     def salvar_leitura(self, leitura: Leitura) -> Leitura:
+        if self._backend is not None:
+            return self._backend.salvar_leitura(leitura)
         with self._conexao() as conn:
             cursor = conn.cursor()
             cursor.execute("""
@@ -277,6 +331,8 @@ class ArmazenamentoGTD:
         return leitura
 
     def obter_leitura(self, leitura_id: str) -> Optional[Leitura]:
+        if self._backend is not None:
+            return self._backend.obter_leitura(leitura_id)
         with self._conexao() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM leituras WHERE id = ?", (leitura_id,))
@@ -288,6 +344,8 @@ class ArmazenamentoGTD:
     def buscar_leitura_por_url(self, fonte_url: str) -> Optional[Leitura]:
         if not fonte_url:
             return None
+        if self._backend is not None:
+            return self._backend.buscar_leitura_por_url(fonte_url)
         with self._conexao() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM leituras WHERE fonte_url = ?", (fonte_url,))
@@ -299,6 +357,8 @@ class ArmazenamentoGTD:
     def buscar_leitura_por_titulo(self, titulo: str) -> Optional[Leitura]:
         if not titulo:
             return None
+        if self._backend is not None:
+            return self._backend.buscar_leitura_por_titulo(titulo)
         with self._conexao() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM leituras WHERE LOWER(TRIM(titulo)) = LOWER(TRIM(?))", (titulo,))
@@ -312,6 +372,8 @@ class ArmazenamentoGTD:
         estado: Optional[str] = None,
         tipo: Optional[str] = None,
     ) -> List[Leitura]:
+        if self._backend is not None:
+            return self._backend.listar_leituras(estado=estado, tipo=tipo)
         query = "SELECT * FROM leituras WHERE 1=1"
         params: List[Any] = []
         if estado:
@@ -327,6 +389,8 @@ class ArmazenamentoGTD:
             return [Leitura.from_dict(dict(row)) for row in cursor.fetchall()]
 
     def remover_leitura(self, leitura_id: str) -> bool:
+        if self._backend is not None:
+            return self._backend.remover_leitura(leitura_id)
         with self._conexao() as conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM leituras WHERE id = ?", (leitura_id,))
@@ -344,6 +408,8 @@ class ArmazenamentoGTD:
         data_registro: Optional[str] = None,
     ) -> int:
         """Registra sessao de leitura e retorna total lido na data."""
+        if self._backend is not None:
+            return self._backend.registrar_progresso_leitura(leitura_id, paginas, data_registro)
         data_efetiva = data_registro or date.today().isoformat()
         agora = datetime.now().isoformat(timespec="seconds")
         hist_id = str(uuid.uuid4())
@@ -357,6 +423,8 @@ class ArmazenamentoGTD:
         return self.paginas_lidas_na_data(data_efetiva)
 
     def paginas_lidas_na_data(self, data_registro: Optional[str] = None) -> int:
+        if self._backend is not None:
+            return self._backend.paginas_lidas_na_data(data_registro)
         data_efetiva = data_registro or date.today().isoformat()
         with self._conexao() as conn:
             cursor = conn.cursor()
@@ -376,6 +444,8 @@ class ArmazenamentoGTD:
         id_notion: str,
         last_edited_time: Optional[str] = None,
     ) -> None:
+        if self._backend is not None:
+            return self._backend.salvar_mapeamento_notion(tabela, id_local, id_notion, last_edited_time)
         with self._conexao() as conn:
             cursor = conn.cursor()
             cursor.execute("""
@@ -388,6 +458,8 @@ class ArmazenamentoGTD:
             conn.commit()
 
     def obter_mapeamento_notion(self, tabela: str, id_local: str) -> Optional[Dict[str, str]]:
+        if self._backend is not None:
+            return self._backend.obter_mapeamento_notion(tabela, id_local)
         with self._conexao() as conn:
             cursor = conn.cursor()
             cursor.execute("""
