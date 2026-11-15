@@ -13,16 +13,25 @@
 .bichinho.modo-leitura { --px-cor: #ffb45c; --px-acento: #ffe2b8; }
 .bichinho.ident-claude { --px-cor: #e8875f; }
 .bichinho.ident-agy { --px-cor: #6fb7ff; }
+.bichinho.atividade-erro, .bichinho.expressao-erro { --px-cor: #ff6b6b; --px-acento: #ffd166; }
 
 .px-painel { fill: var(--px-painel); stroke: rgba(255, 255, 255, 0.06); stroke-width: 0.15; }
 .px-off { fill: var(--px-apagado); }
 .px-on { fill: var(--px-cor); filter: drop-shadow(0 0 0.35px var(--px-cor)) drop-shadow(0 0 1.1px var(--px-cor)); }
 .px-acento { fill: var(--px-acento); filter: drop-shadow(0 0 0.8px var(--px-acento)); }
 .px-suave { opacity: 0.7; }
-.px-rec { fill: #ff4d4d; filter: drop-shadow(0 0 1px #ff4d4d); }
+.px-rec { fill: #ff4d4d; filter: drop-shadow(0 0 1.2px #ff4d4d); }
+.px-erro { fill: #ff6b6b; filter: drop-shadow(0 0 1px #ff6b6b); }
 
 /* Sem animacao: olhos abertos e boca aberta visiveis. */
 .px-olho-fechado, .px-boca-b { opacity: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bichinho, .bichinho * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
 
 @media (prefers-reduced-motion: no-preference) {
   .px-olho-aberto { animation: px-pisca-aberto 5s steps(1) infinite; }
