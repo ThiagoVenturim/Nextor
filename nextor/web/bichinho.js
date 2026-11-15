@@ -1,10 +1,10 @@
 /* Bichinho do Nextor: um rosto em painel de LEDs (pixel art) desenhado em SVG.
  * Usado pela pagina /rosto do Nextor e pelo NexDeck (mesmo arquivo nos dois projetos).
- * Estado: { identidade, modo, acessorio, expressao, atividade }.
+ * Estado: { identidade, modo, acessorio, expressao, atividade, gravando }.
  *   identidade: nextor (rosto) | claude | agy (simbolo proprio em pixels)
  *   acessorio: null | "mochila" | "gravata" | "relaxado" | "oculos"
- *   expressao: neutro | feliz | carinho | calmo | sonolento
- *   atividade: ocioso | ouvindo | pensando | falando | gravando
+ *   expressao: neutro | feliz | carinho | calmo | sonolento | erro
+ *   atividade: ocioso | ouvindo | pensando | falando | gravando | erro
  */
 (function (global) {
   'use strict';
@@ -20,6 +20,7 @@
     feliz: ['.###.', '#...#', '.....'],
     relaxado: ['#...#', '.###.'],
     sonolento: ['####', '.##.'],
+    erro: ['#...#', '.#.#.', '..#..', '.#.#.', '#...#'],
   };
   var BOCA = {
     neutro: ['#....#', '.####.'],
@@ -28,6 +29,8 @@
     calmo: ['####'],
     sonolento: ['.##.', '#..#', '.##.'],
     pensando: ['..##', '##..'],
+    ouvindo: ['..##..', '.#..#.', '..##..'],
+    erro: ['.####.', '#....#'],
     aberta: ['.####.', '#....#', '#....#', '.####.'],
     fechada: ['......', '.####.'],
   };
@@ -41,6 +44,26 @@
     agy: ['.....#.....', '....###....', '...##.##...', '..##...##..', '.##.....##.', '...........',
           '.....#.....', '....###....', '...##.##...', '..##...##..', '.##.....##.'],
   };
+
+  var NOMES = {
+    expressao: { neutro: 'tranquilo', feliz: 'feliz', carinho: 'carinhoso', calmo: 'calmo', sonolento: 'sonolento', erro: 'em alerta de erro' },
+    atividade: { ocioso: '', ouvindo: ', ouvindo', pensando: ', pensando', falando: ', falando', gravando: ', gravando', erro: ', com erro' },
+  };
+
+  function normalizarAtividade(estado) {
+    var a = String((estado && estado.atividade) || 'ocioso').toLowerCase();
+    if (a.indexOf('gravando') === 0) return 'gravando';
+    if (a === 'traduzindo_voz') return 'ouvindo';
+    if (a === 'normal' || !Object.prototype.hasOwnProperty.call(NOMES.atividade, a)) return 'ocioso';
+    return a;
+  }
+
+  function emGravacao(estado) {
+    if (!estado) return false;
+    if (estado.gravando === true) return true;
+    var a = String(estado.atividade || '').toLowerCase();
+    return a.indexOf('gravando') === 0;
+  }
 
   function el(tag, attrs, parent) {
     var node = document.createElementNS(NS, tag);
@@ -71,6 +94,12 @@
     var centros = [7, 17];
     var relaxado = acessorio === 'relaxado' || expressao === 'calmo';
 
+    if (atividade === 'erro' || expressao === 'erro') {
+      var gErro = camada(svg, 'px-on px-erro');
+      centros.forEach(function (cx) { desenho(gErro, OLHO.erro, centrado(OLHO.erro, cx), 4); });
+      return;
+    }
+
     if (expressao === 'feliz' || relaxado || expressao === 'sonolento') {
       var forma = expressao === 'feliz' ? OLHO.feliz : relaxado ? OLHO.relaxado : OLHO.sonolento;
       var g = camada(svg, 'px-on');
@@ -99,6 +128,14 @@
       desenho(camada(svg, 'px-on px-boca-b'), BOCA.fechada, centrado(BOCA.fechada, 12), 11);
       return;
     }
+    if (atividade === 'erro' || expressao === 'erro') {
+      desenho(camada(svg, 'px-on px-erro'), BOCA.erro, centrado(BOCA.erro, 12), 12);
+      return;
+    }
+    if (atividade === 'ouvindo') {
+      desenho(camada(svg, 'px-on'), BOCA.ouvindo, centrado(BOCA.ouvindo, 12), 12);
+      return;
+    }
     var forma = atividade === 'pensando' ? BOCA.pensando : (BOCA[expressao] || BOCA.neutro);
     desenho(camada(svg, 'px-on'), forma, centrado(forma, 12), expressao === 'feliz' ? 11 : 12);
   }
@@ -116,7 +153,7 @@
     if (acessorio === 'relaxado') desenho(camada(svg, 'px-on px-suave px-flutua'), ['###', '..#', '.#.', '###'], 20, 0);
   }
 
-  function atividades(svg, atividade) {
+  function atividades(svg, atividade, gravando) {
     if (atividade === 'pensando') {
       var g = camada(svg, 'px-on px-suave px-pensa');
       desenho(g, ['#'], 20, 3);
@@ -128,19 +165,29 @@
       desenho(camada(svg, 'px-on px-onda px-onda-2'), ['#', '#', '#', '#', '#'], 22, 6);
       desenho(camada(svg, 'px-on px-onda px-onda-1'), ['#', '#', '#'], 23, 7);
     }
-    if (atividade === 'gravando') desenho(camada(svg, 'px-on px-rec'), ['##', '##'], 0, 0);
+    if (atividade === 'erro') {
+      desenho(camada(svg, 'px-on px-erro'), ['##', '##', '##', '..', '##'], 21, 1);
+    }
+    if (atividade === 'gravando' || gravando) {
+      desenho(camada(svg, 'px-on px-rec'), ['###', '###', '###'], 0, 0);
+    }
   }
 
   function render(container, estado) {
     estado = estado || {};
     var expressao = estado.expressao || 'neutro';
     var acessorio = estado.acessorio || null;
-    var atividade = estado.atividade || 'ocioso';
+    var atividade = normalizarAtividade(estado);
+    var gravando = emGravacao(estado);
+    if (atividade === 'erro') expressao = 'erro';
 
     var identidade = SIMBOLO[estado.identidade] ? estado.identidade : 'nextor';
     var svg = el('svg', {
       viewBox: '-1 -1 ' + (W + 2) + ' ' + (H + 2),
-      class: 'bichinho modo-' + (estado.modo || 'normal') + ' atividade-' + atividade + ' ident-' + identidade,
+      class: 'bichinho modo-' + (estado.modo || 'normal') + ' atividade-' + atividade + ' expressao-' + expressao + ' ident-' + identidade + (gravando ? ' em-gravacao' : ''),
+      'data-atividade': atividade,
+      'data-expressao': expressao,
+      'data-gravando': String(gravando),
       role: 'img',
       'aria-label': descrever(estado),
     });
@@ -160,25 +207,30 @@
       var classe = 'px-on px-simbolo' + (atividade === 'falando' ? ' px-falando' : '');
       desenho(camada(svg, classe), SIMBOLO[identidade], 7, 4);
     }
-    atividades(svg, atividade);
+    atividades(svg, atividade, gravando);
 
     container.replaceChildren(svg);
     return svg;
   }
 
-  var NOMES = {
-    expressao: { neutro: 'tranquilo', feliz: 'feliz', carinho: 'carinhoso', calmo: 'calmo', sonolento: 'sonolento' },
-    atividade: { ocioso: '', ouvindo: ', ouvindo', pensando: ', pensando', falando: ', falando', gravando: ', gravando' },
-  };
-
   function descrever(estado) {
-    var e = NOMES.expressao[estado.expressao] || 'tranquilo';
-    var a = NOMES.atividade[estado.atividade] || '';
+    estado = estado || {};
+    var ativ = normalizarAtividade(estado);
+    var grav = emGravacao(estado);
+    var exprChave = ativ === 'erro' ? 'erro' : estado.expressao;
+    var e = NOMES.expressao[exprChave] || 'tranquilo';
+    var a = NOMES.atividade[ativ] || '';
+    if (grav && ativ !== 'gravando') a += ', gravando';
     var m = estado.modo && estado.modo !== 'normal' ? ' no modo ' + estado.modo : '';
     var nomes = { claude: 'Claude', agy: 'agy' };
     if (nomes[estado.identidade]) return nomes[estado.identidade] + ' respondendo pelo Nextor' + a;
     return 'Nextor ' + e + a + m;
   }
 
-  global.Bichinho = { render: render, descrever: descrever };
+  global.Bichinho = {
+    render: render,
+    descrever: descrever,
+    normalizarAtividade: normalizarAtividade,
+    emGravacao: emGravacao,
+  };
 })(typeof window !== 'undefined' ? window : this);

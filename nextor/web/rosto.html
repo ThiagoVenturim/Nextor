@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#10141f">
+  <meta name="theme-color" content="#0d121c">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="/manifest.webmanifest">
@@ -13,37 +13,88 @@
   <link rel="stylesheet" href="web/bichinho.css">
   <link rel="stylesheet" href="web/rosto.css">
 </head>
-<body>
+<body data-atividade="ocioso" data-gravando="false">
+  <div id="indicador-gravacao" class="indicador-gravacao" role="status" aria-live="assertive" hidden>
+    <span class="rec-ponto" aria-hidden="true"></span>
+    <strong class="rec-rotulo">GRAVANDO</strong>
+    <span id="detalhe-gravacao" class="rec-detalhe">Microfone ou tela em gravacao ativa</span>
+  </div>
+
+  <header class="topo-rosto">
+    <div id="estado-assistente" class="estado-badge" role="status" aria-live="polite" data-atividade="ocioso">
+      <span class="estado-ponto" aria-hidden="true"></span>
+      <span id="estado-rotulo" class="estado-rotulo">Ocioso</span>
+    </div>
+    <div class="topo-acoes">
+      <button id="tela-cheia" type="button" class="botao-topo" aria-pressed="false">Tela cheia</button>
+    </div>
+  </header>
+
   <main class="palco">
-    <p id="balao" class="balao" aria-live="polite" hidden></p>
-    <div id="bichinho" class="bichinho-area"></div>
-    <p id="nome" class="nome">Nextor</p>
-    <p id="humor" class="humor" aria-live="polite"></p>
+    <section class="palco-rosto" aria-label="Rosto do assistente">
+      <div id="bichinho" class="bichinho-area"></div>
+      <div class="identificacao">
+        <p id="nome" class="nome">Nextor</p>
+        <p id="humor" class="humor" aria-live="polite"></p>
+      </div>
+      <div id="alerta-erro" class="alerta-erro" role="alert" hidden>
+        <strong class="erro-prefixo">[Erro]</strong>
+        <span id="texto-erro">Falha ao comunicar com o assistente.</span>
+      </div>
+    </section>
+
+    <section class="palco-painel" aria-label="Legendas e resultados">
+      <section id="painel-legenda" class="legenda-box" aria-label="Legendas do que o Nextor fala">
+        <div class="legenda-cabecalho">
+          <span class="legenda-etiqueta">Legendas</span>
+          <span id="ultima-pergunta" class="ultima-pergunta" hidden></span>
+        </div>
+        <p id="balao" class="balao" aria-live="polite">Pronto para ouvir. Diga "ei Nextor" ou envie uma mensagem.</p>
+      </section>
+
+      <section id="painel-resultado" class="resultado-box" aria-label="Resultado na tela" aria-live="polite" hidden>
+        <div class="resultado-cabecalho">
+          <span id="resultado-tipo" class="resultado-tag">Resultado</span>
+          <h2 id="resultado-titulo" class="resultado-titulo"></h2>
+        </div>
+        <p id="resultado-resumo" class="resultado-resumo" hidden></p>
+        <ul id="resultado-lista" class="resultado-lista" hidden></ul>
+        <div id="resultado-quiz" class="resultado-quiz" hidden>
+          <p id="quiz-pergunta" class="quiz-pergunta"></p>
+          <div id="quiz-opcoes" class="quiz-opcoes" role="group" aria-label="Opcoes do quiz"></div>
+          <p id="quiz-feedback" class="quiz-feedback" hidden></p>
+        </div>
+      </section>
+    </section>
   </main>
 
-  <nav class="modos identidades" aria-label="Quem responde">
-    <button data-identidade="nextor">Nextor</button>
-    <button data-identidade="claude">Claude</button>
-    <button data-identidade="agy">agy</button>
-  </nav>
+  <footer class="controles-rosto">
+    <div class="barras-modos">
+      <nav class="modos identidades" aria-label="Quem responde">
+        <button type="button" data-identidade="nextor">Nextor</button>
+        <button type="button" data-identidade="claude">Claude</button>
+        <button type="button" data-identidade="agy">agy</button>
+      </nav>
 
-  <nav class="modos" aria-label="Modos">
-    <button data-modo="normal">Normal</button>
-    <button data-modo="estudo">Estudo</button>
-    <button data-modo="trabalho">Trabalho</button>
-    <button data-modo="tranquilidade">Tranquilidade</button>
-    <button data-modo="leitura">Leitura</button>
-  </nav>
+      <nav class="modos" aria-label="Modos">
+        <button type="button" data-modo="normal">Normal</button>
+        <button type="button" data-modo="estudo">Estudo</button>
+        <button type="button" data-modo="trabalho">Trabalho</button>
+        <button type="button" data-modo="tranquilidade">Tranquilidade</button>
+        <button type="button" data-modo="leitura">Leitura</button>
+      </nav>
+    </div>
 
-  <form id="conversa" class="conversa">
-    <input id="texto" type="text" maxlength="500" autocomplete="off" placeholder="Fale com o Nextor..." aria-label="Mensagem para o Nextor">
-    <label class="nest"><input id="com-voz" type="checkbox" checked> Voz</label>
-    <select id="idioma" class="idioma" aria-label="Idioma da voz">
-      <option value="pt-BR">PT</option><option value="en-US">EN</option>
-      <option value="es-ES">ES</option><option value="fr-FR">FR</option>
-    </select>
-    <button class="enviar">Enviar</button>
-  </form>
+    <form id="conversa" class="conversa">
+      <input id="texto" type="text" maxlength="500" autocomplete="off" placeholder="Fale com o Nextor..." aria-label="Mensagem para o Nextor">
+      <label class="nest"><input id="com-voz" type="checkbox" checked> Voz</label>
+      <select id="idioma" class="idioma" aria-label="Idioma da voz">
+        <option value="pt-BR">PT</option><option value="en-US">EN</option>
+        <option value="es-ES">ES</option><option value="fr-FR">FR</option>
+      </select>
+      <button type="submit" class="enviar">Enviar</button>
+    </form>
+  </footer>
 
   <p id="aviso" class="aviso" hidden>Abra esta pagina com o link que o Nextor mostra ao iniciar (ele leva o token).</p>
 

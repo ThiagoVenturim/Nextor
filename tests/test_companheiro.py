@@ -162,6 +162,208 @@ class TestRotas(unittest.TestCase):
         self.assertEqual(r["intencao"], "modo")
         self.assertIn("Gravata", r["resposta"])
 
+    def test_post_estado_atualiza_campos(self):
+        payload = {
+            "atividade": "ouvindo",
+            "expressao": "calmo",
+            "legenda": "Ouvindo sua pergunta...",
+            "resultado": {
+                "tipo": "tarefas",
+                "titulo": "Tarefas",
+                "itens": [{"id": "t1", "titulo": "Estudar"}],
+            },
+        }
+        r = self.c.post("/estado", json=payload, headers=self.h)
+        self.assertEqual(r.status_code, 200)
+        dados = r.get_json()
+        self.assertEqual(dados["atividade"], "ouvindo")
+        self.assertEqual(dados["expressao"], "calmo")
+        self.assertEqual(dados["legenda"], "Ouvindo sua pergunta...")
+        self.assertEqual(dados["resultado"]["tipo"], "tarefas")
+
+    def test_post_estado_validacoes(self):
+        r1 = self.c.post("/estado", json={"atividade": "invalida"}, headers=self.h)
+        self.assertEqual(r1.status_code, 400)
+        r2 = self.c.post("/estado", json={"expressao": "invalida"}, headers=self.h)
+        self.assertEqual(r2.status_code, 400)
+
+    def test_pagina_rosto_contem_elementos_acessiveis_e_recursos(self):
+        r = self.c.get("/rosto")
+        self.assertEqual(r.status_code, 200)
+        html = r.get_data(as_text=True)
+        self.assertIn('id="indicador-gravacao"', html)
+        self.assertIn('id="estado-assistente"', html)
+        self.assertIn('id="painel-legenda"', html)
+        self.assertIn('id="painel-resultado"', html)
+        self.assertIn('web/rosto.css', html)
+        self.assertIn('web/rosto.js', html)
+        self.assertIn('web/bichinho.js', html)
+
+    def test_recursos_estaticos_web_disponiveis(self):
+        for arquivo in ("bichinho.js", "bichinho.css", "rosto.js", "rosto.css", "rosto.html"):
+            r = self.c.get(f"/web/{arquivo}")
+            self.assertEqual(r.status_code, 200, f"Arquivo /web/{arquivo} deve existir")
+
+
+class TestEstadosDoAssistente(unittest.TestCase):
+    def setUp(self):
+        self.c = Companheiro()
+
+    def test_estados_principais_aceitos(self):
+        for estado in ("ocioso", "ouvindo", "pensando", "falando", "gravando", "erro"):
+            res = self.c.definir_atividade(estado)
+            self.assertEqual(res["atividade"], estado)
+
+    def test_estado_invalido_rejeitado(self):
+        with self.assertRaises(ValueError):
+            self.c.definir_atividade("voando")
+
+    def test_registrar_erro(self):
+        res = self.c.registrar_erro("Falha de conexao com o modelo")
+        self.assertEqual(res["atividade"], "erro")
+        self.assertEqual(res["expressao"], "erro")
+        self.assertEqual(res["erro"], "Falha de conexao com o modelo")
+        self.assertEqual(res["legenda"], "Falha de conexao com o modelo")
+
+    def test_definir_resultado_tarefas_quiz_resumo(self):
+        res_tarefas = {"tipo": "tarefas", "titulo": "Lista", "itens": [{"id": "1", "titulo": "Item"}]}
+        self.c.definir_resultado(res_tarefas)
+        self.assertEqual(self.c.ver()["resultado"]["tipo"], "tarefas")
+
+        res_quiz = {"tipo": "quiz", "titulo": "Quiz", "pergunta": "Qual a resposta?", "opcoes": ["A", "B"]}
+        self.c.definir_resultado(res_quiz)
+        self.assertEqual(self.c.ver()["resultado"]["tipo"], "quiz")
+
+        res_resumo = {"tipo": "resumo", "titulo": "Resumo", "resumo": "Texto sintetizado", "itens": []}
+        self.c.definir_resultado(res_resumo)
+        self.assertEqual(self.c.ver()["resultado"]["tipo"], "resumo")
+
+    def test_gravacao_externa_ativa_aulas(self):
+        fake_gravador = mock.Mock(gravando=True, disciplina="Calculo")
+        with mock.patch("nextor.aulas.gravador", fake_gravador, create=True):
+            estado = self.c.ver()
+            self.assertTrue(estado["gravando"])
+            self.assertIn("Calculo", estado["detalhe"])
+
+    def test_rosto_web_js_estados_e_resultados_no_node(self):
+        import shutil
+        import subprocess
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("node nao encontrado")
+        script = """
+const fs = require('fs');
+const vm = require('vm');
+
+class MockElement {
+  constructor(tag) {
+    this.tagName = (tag || 'DIV').toUpperCase();
+    this.children = [];
+    this.attributes = {};
+    this.style = {};
+    this.textContent = '';
+    this.hidden = false;
+  }
+  setAttribute(k, v) { this.attributes[k] = String(v); }
+  getAttribute(k) { return this.attributes[k] || null; }
+  removeAttribute(k) { delete this.attributes[k]; }
+  replaceChildren(...kids) { this.children = kids; }
+  appendChild(c) { this.children.push(c); return c; }
+  addEventListener() {}
+  focus() {}
+}
+
+const elements = {
+  'indicador-gravacao': new MockElement('div'),
+  'detalhe-gravacao': new MockElement('span'),
+  'estado-assistente': new MockElement('div'),
+  'estado-rotulo': new MockElement('span'),
+  'tela-cheia': new MockElement('button'),
+  'bichinho': new MockElement('div'),
+  'nome': new MockElement('p'),
+  'humor': new MockElement('p'),
+  'alerta-erro': new MockElement('div'),
+  'texto-erro': new MockElement('span'),
+  'painel-legenda': new MockElement('section'),
+  'ultima-pergunta': new MockElement('span'),
+  'balao': new MockElement('p'),
+  'painel-resultado': new MockElement('section'),
+  'resultado-tipo': new MockElement('span'),
+  'resultado-titulo': new MockElement('h2'),
+  'resultado-resumo': new MockElement('p'),
+  'resultado-lista': new MockElement('ul'),
+  'resultado-quiz': new MockElement('div'),
+  'quiz-pergunta': new MockElement('p'),
+  'quiz-opcoes': new MockElement('div'),
+  'quiz-feedback': new MockElement('p'),
+  'conversa': new MockElement('form'),
+  'texto': new MockElement('input'),
+  'com-voz': new MockElement('input'),
+  'idioma': new MockElement('select'),
+  'aviso': new MockElement('p')
+};
+
+const documentMock = {
+  getElementById: (id) => elements[id] || null,
+  createElement: (tag) => new MockElement(tag),
+  createElementNS: (ns, tag) => new MockElement(tag),
+  querySelectorAll: () => [],
+  documentElement: new MockElement('html'),
+  body: new MockElement('body')
+};
+
+const windowMock = {
+  document: documentMock,
+  location: { search: '?token=tk', hash: '', pathname: '/rosto' },
+  history: { replaceState: () => {} },
+  localStorage: { getItem: () => 'tk', setItem: () => {} },
+  fetch: () => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }),
+  navigator: {},
+  EventSource: function() { this.onmessage = null; },
+  MutationObserver: function() { this.observe = () => {}; }
+};
+
+const sandbox = {
+  console,
+  window: windowMock,
+  document: documentMock,
+  location: windowMock.location,
+  history: windowMock.history,
+  localStorage: windowMock.localStorage,
+  EventSource: windowMock.EventSource,
+  MutationObserver: windowMock.MutationObserver,
+  fetch: windowMock.fetch,
+  navigator: windowMock.navigator,
+  URLSearchParams
+};
+
+vm.createContext(sandbox);
+vm.runInContext(fs.readFileSync('nextor/web/bichinho.js', 'utf8'), sandbox);
+vm.runInContext(fs.readFileSync('nextor/web/rosto.js', 'utf8'), sandbox);
+
+const R = sandbox.window.NextorRosto;
+if (!R) throw new Error('NextorRosto nao encontrado');
+
+const estados = ['ocioso', 'ouvindo', 'pensando', 'falando', 'gravando', 'erro'];
+estados.forEach(st => {
+  R.desenhar({ atividade: st, ultima_resposta: 'Texto ' + st });
+  if (elements['estado-assistente'].getAttribute('data-atividade') !== st) {
+    throw new Error('Estado incorreto: ' + st);
+  }
+});
+
+R.renderResultado({ tipo: 'tarefas', titulo: 'Tarefas', itens: [{ id: '1', titulo: 'Item' }] });
+if (elements['painel-resultado'].hidden) throw new Error('painel-resultado oculto para tarefas');
+
+R.renderResultado({ tipo: 'quiz', titulo: 'Quiz', pergunta: 'Pergunta?', opcoes: ['A', 'B'] });
+if (elements['painel-resultado'].hidden) throw new Error('painel-resultado oculto para quiz');
+
+R.renderResultado({ tipo: 'resumo', titulo: 'Resumo', resumo: 'Texto', itens: [{ ponto: 'P1' }] });
+if (elements['painel-resultado'].hidden) throw new Error('painel-resultado oculto para resumo');
+"""
+        proc = subprocess.run([node, "-e", script], capture_output=True, text=True)
+        self.assertEqual(proc.returncode, 0, f"Falha no teste do rosto em JS: {proc.stderr}")
+
 
 if __name__ == "__main__":
     unittest.main()
