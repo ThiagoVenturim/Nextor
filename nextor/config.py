@@ -158,6 +158,17 @@ NEXREAD_TRADUTOR = os.getenv("NEXTOR_NEXREAD_TRADUTOR", "local").strip().lower()
 NEXREAD_IDIOMA_PADRAO = os.getenv("NEXTOR_NEXREAD_IDIOMA", "pt-BR").strip()
 LIBRETRANSLATE_URL = os.getenv("NEXTOR_LIBRETRANSLATE_URL", "http://localhost:5000/translate").strip()
 
+# NexVoice: tradutor de audio ao vivo para videos e reunioes bidirecional (Issue #56)
+NEXVOICE_DIR = Path(os.getenv("NEXTOR_NEXVOICE_DIR", "")).resolve() if os.getenv("NEXTOR_NEXVOICE_DIR") else (Path.home() / ".nextor")
+NEXVOICE_DB = Path(os.getenv("NEXTOR_NEXVOICE_DB", "")).resolve() if os.getenv("NEXTOR_NEXVOICE_DB") else (NEXVOICE_DIR / "nexvoice.db")
+NEXVOICE_STT_MOTOR = os.getenv("NEXTOR_NEXVOICE_STT", "faster_whisper").strip().lower()
+NEXVOICE_STT_MODELO = os.getenv("NEXTOR_NEXVOICE_STT_MODELO", "base").strip()
+NEXVOICE_TRADUTOR = os.getenv("NEXTOR_NEXVOICE_TRADUTOR", "local").strip().lower()
+NEXVOICE_TTS_MOTOR = os.getenv("NEXTOR_NEXVOICE_TTS", "piper").strip().lower()
+NEXVOICE_IDIOMA_MEU = os.getenv("NEXTOR_NEXVOICE_IDIOMA_MEU", "pt-BR").strip()
+NEXVOICE_IDIOMA_OUTRO = os.getenv("NEXTOR_NEXVOICE_IDIOMA_OUTRO", "en-US").strip()
+NEXVOICE_LOCAL_ESTRITO = os.getenv("NEXTOR_NEXVOICE_LOCAL_ESTRITO", "true").strip().lower() not in ("0", "false", "nao")
+
 # Caminhos de dados (ficam na raiz, fora do git)
 ANOTACOES = RAIZ / "anotacoes.md"
 MP3 = RAIZ / "nextor_fala.mp3"

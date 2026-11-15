@@ -417,6 +417,99 @@ def nexread_conversar(
     return f"{res.get('resposta', '')} (Fontes: {fontes_str})"
 
 
+@mcp.tool(
+    description=(
+        "Inicia uma sessao do NexVoice (tradutor de audio ao vivo para videos/aulas no modo 'ouvir' "
+        "ou reunioes bidirecionais no modo 'reuniao'). Exige consentimento confirmado para reunioes e aulas."
+    )
+)
+def nexvoice_iniciar_sessao(
+    titulo: str = "Sessao NexVoice",
+    modo: str = "ouvir",
+    fonte: str = "video",
+    idioma_meu: str = "pt-BR",
+    idioma_outro: str = "en-US",
+    consentimento_confirmado: bool = False,
+    consentimento_participantes: str = "",
+    disciplina: str = "",
+) -> str:
+    from .nexvoice import iniciar_sessao_nexvoice
+    sessao = iniciar_sessao_nexvoice(
+        titulo=titulo,
+        modo=modo,
+        fonte=fonte,
+        idioma_meu=idioma_meu,
+        idioma_outro=idioma_outro,
+        consentimento_confirmado=consentimento_confirmado,
+        consentimento_participantes=consentimento_participantes,
+        disciplina=disciplina,
+    )
+    aviso_str = f" {sessao.aviso_consentimento}" if sessao.aviso_consentimento else ""
+    return (
+        f"Sessao NexVoice iniciada (ID: {sessao.id}): '{sessao.titulo}' "
+        f"[modo={sessao.modo}, {sessao.idioma_outro} <-> {sessao.idioma_meu}].{aviso_str}"
+    )
+
+
+@mcp.tool(
+    description=(
+        "Processa e traduz ao vivo um trecho de fala no NexVoice (STT local -> traducao -> TTS Piper). "
+        "Use direcao='entrada' quando o video/outra pessoa fala e direcao='saida' quando voce fala na reuniao."
+    )
+)
+def nexvoice_traduzir_trecho(
+    sessao_id: str,
+    texto_fala: str = "",
+    direcao: str = "entrada",
+    locutor: str = "",
+    caminho_wav: str = "",
+) -> str:
+    from .nexvoice import processar_trecho_ao_vivo
+    trecho = processar_trecho_ao_vivo(
+        sessao_id=sessao_id,
+        texto_fala=texto_fala,
+        caminho_wav=caminho_wav or None,
+        direcao=direcao,
+        locutor=locutor,
+    )
+    return f"{trecho.legenda_formatada} (Original: {trecho.texto_original} | fala_id={trecho.fala_id})"
+
+
+@mcp.tool(description="Exporta as legendas sincronizadas (.srt) de uma sessao do NexVoice.")
+def nexvoice_exportar_legendas(sessao_id: str, bilingue: bool = True) -> str:
+    from .nexvoice import exportar_legendas_srt
+    return exportar_legendas_srt(sessao_id=sessao_id, bilingue=bilingue)
+
+
+@mcp.tool(description="Salva a transcricao bilingue e as legendas de uma sessao do NexVoice na biblioteca do modo estudante.")
+def nexvoice_salvar_estudos(sessao_id: str, disciplina: str) -> str:
+    from .nexvoice import salvar_sessao_nos_estudos
+    res = salvar_sessao_nos_estudos(sessao_id=sessao_id, disciplina_nome=disciplina)
+    return res.get("aviso") or f"Sessao salva na disciplina {disciplina}."
+
+
+@mcp.tool(description="Encerra uma sessao do NexVoice, gerando ata bilingue de reuniao e opcionalmente salvando nos estudos.")
+def nexvoice_encerrar_sessao(
+    sessao_id: str,
+    salvar_estudos: bool = False,
+    disciplina: str = "",
+    gerar_ata: bool = False,
+) -> str:
+    from .nexvoice import encerrar_sessao_nexvoice
+    res = encerrar_sessao_nexvoice(
+        sessao_id=sessao_id,
+        salvar_estudos=salvar_estudos,
+        disciplina_nome=disciplina,
+        gerar_ata=gerar_ata,
+    )
+    sessao_dict = res.get("sessao") or {}
+    total_tr = len(sessao_dict.get("trechos") or [])
+    resumo_ata = ""
+    if res.get("ata_reuniao"):
+        resumo_ata = f" Resumo da ata: {res['ata_reuniao'].get('resumo', '')}"
+    return f"Sessao NexVoice '{sessao_dict.get('titulo', sessao_id)}' encerrada ({total_tr} trechos).{resumo_ata}"
+
+
 def main():
     mcp.run(transport="stdio")
 
