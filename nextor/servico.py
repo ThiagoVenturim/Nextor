@@ -2452,6 +2452,223 @@ def nexread_conversar_endpoint():
         return jsonify(ok=False, erro=str(e)), 400
 
 
+# ============================================================================
+# NexVoice: Tradutor de Audio ao Vivo para Videos e Reunioes Bidirecional (#56)
+# ============================================================================
+
+def autorizado_nexvoice() -> bool:
+    """Verifica autenticacao estrita para rotas da API do NexVoice via header em tempo constante."""
+    return autorizado_gtd()
+
+
+@app.get("/nexvoice")
+@app.get("/nexvoice/")
+@app.get("/nexvoice/app")
+def nexvoice_pwa_index():
+    pasta_pwa = WEB / "nexvoice"
+    return send_from_directory(pasta_pwa, "index.html")
+
+
+@app.get("/nexvoice/<path:filename>")
+def nexvoice_pwa_estaticos(filename: str):
+    pasta_pwa = WEB / "nexvoice"
+    arquivo = (pasta_pwa / filename).resolve()
+    if not str(arquivo).startswith(str(pasta_pwa.resolve())):
+        return jsonify(erro="acesso negado"), 403
+    if arquivo.is_file():
+        return send_from_directory(pasta_pwa, filename)
+    return send_from_directory(pasta_pwa, "index.html")
+
+
+@app.route("/nexvoice/sessoes", methods=["GET", "POST"])
+def nexvoice_sessoes_endpoint():
+    if not autorizado_nexvoice():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    from .nexvoice import ArmazenamentoNexVoice, iniciar_sessao_nexvoice
+    banco = ArmazenamentoNexVoice()
+
+    if request.method == "GET":
+        modo = request.args.get("modo")
+        disciplina = request.args.get("disciplina")
+        estado = request.args.get("estado")
+        sessoes = banco.listar_sessoes(modo=modo, disciplina=disciplina, estado=estado)
+        return jsonify(ok=True, sessoes=[s.to_dict() for s in sessoes])
+
+    dados = request.get_json(silent=True) or {}
+    consentimento_confirmado = dados.get("consentimento_confirmado", False)
+    if isinstance(consentimento_confirmado, str):
+        consentimento_confirmado = consentimento_confirmado.strip().lower() in ("1", "true", "sim")
+
+    local_estrito = dados.get("processamento_local_estrito", True)
+    if isinstance(local_estrito, str):
+        local_estrito = local_estrito.strip().lower() not in ("0", "false", "nao")
+
+    sintetizar_voz = dados.get("sintetizar_voz", True)
+    if isinstance(sintetizar_voz, str):
+        sintetizar_voz = sintetizar_voz.strip().lower() not in ("0", "false", "nao")
+
+    try:
+        sessao = iniciar_sessao_nexvoice(
+            titulo=dados.get("titulo", "Sessao NexVoice"),
+            modo=dados.get("modo", "ouvir"),
+            fonte=dados.get("fonte") or None,
+            idioma_meu=dados.get("idioma_meu") or None,
+            idioma_outro=dados.get("idioma_outro") or None,
+            motor_stt=dados.get("motor_stt") or None,
+            motor_traducao=dados.get("motor_traducao") or None,
+            motor_tts=dados.get("motor_tts") or None,
+            sintetizar_voz=bool(sintetizar_voz),
+            processamento_local_estrito=bool(local_estrito),
+            consentimento_confirmado=bool(consentimento_confirmado),
+            consentimento_participantes=dados.get("consentimento_participantes", ""),
+            disciplina=dados.get("disciplina", ""),
+            permitir_consentimento_pendente=bool(dados.get("permitir_consentimento_pendente", False)),
+            db=banco,
+        )
+        return jsonify(ok=True, sessao=sessao.to_dict()), 201
+    except PermissionError as e:
+        return jsonify(ok=False, erro="consentimento_ou_privacidade_obrigatorio", mensagem=str(e)), 403
+    except ValueError as e:
+        return jsonify(ok=False, erro=str(e)), 400
+
+
+@app.get("/nexvoice/sessoes/<sessao_id>")
+def nexvoice_obter_sessao_endpoint(sessao_id: str):
+    if not autorizado_nexvoice():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    from .nexvoice import ArmazenamentoNexVoice
+    banco = ArmazenamentoNexVoice()
+    sessao = banco.obter_sessao(sessao_id)
+    if not sessao:
+        return jsonify(ok=False, erro="sessao nao encontrada"), 404
+    consentimentos = banco.listar_consentimentos(sessao.id)
+    return jsonify(
+        ok=True,
+        sessao=sessao.to_dict(),
+        transcricao_bilingue=sessao.transcricao_bilingue,
+        consentimentos=consentimentos,
+    )
+
+
+@app.post("/nexvoice/sessoes/<sessao_id>/consentimento")
+def nexvoice_confirmar_consentimento_endpoint(sessao_id: str):
+    if not autorizado_nexvoice():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    from .nexvoice import confirmar_consentimento_sessao
+    dados = request.get_json(silent=True) or {}
+    try:
+        sessao = confirmar_consentimento_sessao(
+            sessao_id=sessao_id,
+            participantes=dados.get("participantes", "Participantes confirmados"),
+        )
+        return jsonify(ok=True, sessao=sessao.to_dict()), 200
+    except ValueError as e:
+        return jsonify(ok=False, erro=str(e)), 404
+
+
+@app.post("/nexvoice/trechos")
+def nexvoice_processar_trecho_endpoint():
+    if not autorizado_nexvoice():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    from .nexvoice import processar_trecho_ao_vivo
+    dados = request.get_json(silent=True) or {}
+    sessao_id = (dados.get("sessao_id") or "").strip()
+    if not sessao_id:
+        return jsonify(ok=False, erro="sessao_id e obrigatorio"), 400
+
+    try:
+        trecho = processar_trecho_ao_vivo(
+            sessao_id=sessao_id,
+            texto_fala=dados.get("texto_fala") or dados.get("texto") or "",
+            caminho_wav=dados.get("caminho_wav") or None,
+            direcao=dados.get("direcao", "entrada"),
+            locutor=dados.get("locutor", ""),
+            idioma_origem=dados.get("idioma_origem") or None,
+            idioma_destino=dados.get("idioma_destino") or None,
+            inicio_seg=dados.get("inicio_seg"),
+            fim_seg=dados.get("fim_seg"),
+            sintetizar_voz=dados.get("sintetizar_voz"),
+        )
+        return jsonify(ok=True, trecho=trecho.to_dict()), 201
+    except PermissionError as e:
+        return jsonify(ok=False, erro="consentimento_ou_privacidade_obrigatorio", mensagem=str(e)), 403
+    except ValueError as e:
+        return jsonify(ok=False, erro=str(e)), 400
+
+
+@app.post("/nexvoice/stream")
+def nexvoice_processar_stream_endpoint():
+    if not autorizado_nexvoice():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    from .nexvoice import processar_stream_trechos
+    dados = request.get_json(silent=True) or {}
+    sessao_id = (dados.get("sessao_id") or "").strip()
+    trechos_lista = dados.get("trechos")
+    if not sessao_id or not isinstance(trechos_lista, list):
+        return jsonify(ok=False, erro="sessao_id e lista de trechos sao obrigatorios"), 400
+
+    try:
+        processados = processar_stream_trechos(sessao_id=sessao_id, trechos_entrada=trechos_lista)
+        return jsonify(ok=True, total=len(processados), trechos=[t.to_dict() for t in processados]), 201
+    except PermissionError as e:
+        return jsonify(ok=False, erro="consentimento_ou_privacidade_obrigatorio", mensagem=str(e)), 403
+    except ValueError as e:
+        return jsonify(ok=False, erro=str(e)), 400
+
+
+@app.get("/nexvoice/sessoes/<sessao_id>/legendas.srt")
+def nexvoice_legendas_srt_endpoint(sessao_id: str):
+    if not autorizado_nexvoice():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    from .nexvoice import exportar_legendas_srt
+    bilingue = str(request.args.get("bilingue", "true")).lower() not in ("0", "false", "nao")
+    try:
+        srt = exportar_legendas_srt(sessao_id=sessao_id, bilingue=bilingue)
+        return srt, 200, {"Content-Type": "text/plain; charset=utf-8"}
+    except ValueError as e:
+        return jsonify(ok=False, erro=str(e)), 404
+
+
+@app.post("/nexvoice/salvar-estudos")
+def nexvoice_salvar_estudos_endpoint():
+    if not autorizado_nexvoice():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    from .nexvoice import salvar_sessao_nos_estudos
+    dados = request.get_json(silent=True) or {}
+    sessao_id = (dados.get("sessao_id") or "").strip()
+    disciplina = (dados.get("disciplina") or "").strip()
+    if not sessao_id or not disciplina:
+        return jsonify(ok=False, erro="sessao_id e disciplina sao obrigatorios"), 400
+
+    try:
+        res = salvar_sessao_nos_estudos(sessao_id=sessao_id, disciplina_nome=disciplina)
+        return jsonify(**res), 200
+    except ValueError as e:
+        return jsonify(ok=False, erro=str(e)), 400
+
+
+@app.post("/nexvoice/encerrar")
+def nexvoice_encerrar_endpoint():
+    if not autorizado_nexvoice():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    from .nexvoice import encerrar_sessao_nexvoice
+    dados = request.get_json(silent=True) or {}
+    sessao_id = (dados.get("sessao_id") or "").strip()
+    if not sessao_id:
+        return jsonify(ok=False, erro="sessao_id e obrigatorio"), 400
+
+    try:
+        res = encerrar_sessao_nexvoice(
+            sessao_id=sessao_id,
+            salvar_estudos=bool(dados.get("salvar_estudos", False)),
+            disciplina_nome=dados.get("disciplina", ""),
+            gerar_ata=bool(dados.get("gerar_ata", False)),
+        )
+        return jsonify(**res), 200
+    except ValueError as e:
+        return jsonify(ok=False, erro=str(e)), 400
+
+
 def main():
     exigir_token_mestre_valido()
     from .automacoes import iniciar_agendador

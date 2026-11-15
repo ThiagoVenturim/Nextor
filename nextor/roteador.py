@@ -101,6 +101,60 @@ def rotear(frase: str, canal: str = "local", id_dispositivo: str | None = None) 
         _registra(frase, "nexread_traduzir")
         return {"intencao": "nexread_traduzir", "resposta": _fazer_nexread_traduzir(conteudo_nr)}
 
+    # NexVoice: tradutor de audio ao vivo para videos e reunioes bidirecionais (Issue #56)
+    if any(k in base for k in ("encerrar nexvoice", "parar nexvoice", "fechar nexvoice", "terminar nexvoice")):
+        _registra(frase, "nexvoice_encerrar")
+        return {"intencao": "nexvoice_encerrar", "resposta": _fazer_nexvoice_encerrar()}
+
+    m_nv_salvar = re.search(
+        r"^(?:salva|salvar)\s+(?:a\s+|o\s+)?(?:sessao|aula|traducao)\s+(?:do\s+nexvoice\s+)?(?:em|na\s+disciplina|para)\s+(.+?)[ ?.]*$",
+        limpa,
+        flags=re.IGNORECASE,
+    )
+    if m_nv_salvar and "nexvoice" in base:
+        disc_nv = m_nv_salvar.group(1).strip(" ?.")
+        _registra(frase, "nexvoice_salvar_estudos")
+        return {"intencao": "nexvoice_salvar_estudos", "resposta": _fazer_nexvoice_salvar_estudos(disc_nv)}
+
+    m_nv_falar_saida = re.search(
+        r"^(?:nexvoice\s+(?:falar|dizer|responder)|falar\s+na\s+reuniao\s+nexvoice)\s*[:,-]?\s*(.+)$",
+        limpa,
+        flags=re.IGNORECASE,
+    )
+    if m_nv_falar_saida:
+        fala_saida = m_nv_falar_saida.group(1).strip()
+        _registra(frase, "nexvoice_traduzir_trecho")
+        return {"intencao": "nexvoice_traduzir_trecho", "resposta": _fazer_nexvoice_traduzir_trecho(fala_saida, direcao="saida")}
+
+    m_nv_ouvir_entrada = re.search(
+        r"^(?:nexvoice\s+(?:ouvir|traduz\w*)|traduz\w*\s+(?:audio|fala|video)\s+no\s+nexvoice)\s*[:,-]?\s*(.+)$",
+        limpa,
+        flags=re.IGNORECASE,
+    )
+    if m_nv_ouvir_entrada:
+        fala_ent = m_nv_ouvir_entrada.group(1).strip()
+        _registra(frase, "nexvoice_traduzir_trecho")
+        return {"intencao": "nexvoice_traduzir_trecho", "resposta": _fazer_nexvoice_traduzir_trecho(fala_ent, direcao="entrada")}
+
+    m_nv_iniciar = re.search(
+        r"^(?:iniciar\s+nexvoice|abrir\s+nexvoice|nexvoice\s+iniciar|traduzir\s+reuniao\s+no\s+nexvoice|traduzir\s+video\s+no\s+nexvoice)(.*)$",
+        limpa,
+        flags=re.IGNORECASE,
+    )
+    if m_nv_iniciar:
+        complemento_nv = (m_nv_iniciar.group(1) or "").strip(" :,-?.")
+        modo_nv = "reuniao" if "reuniao" in base else "ouvir"
+        tem_consentimento = "consentimento" in base or "autorizado" in base or "acordo" in base
+        _registra(frase, "nexvoice_iniciar")
+        return {
+            "intencao": "nexvoice_iniciar",
+            "resposta": _fazer_nexvoice_iniciar(
+                titulo=complemento_nv or "Sessao NexVoice",
+                modo=modo_nv,
+                consentimento_confirmado=tem_consentimento,
+            ),
+        }
+
     # Skill de texto (traduzir / resumir / escrever) - antes das outras intencoes.
     if "traduz" in base:
         m = re.search(r"traduz\w*\s+(.*?)\s+para\s+(.+)$", limpa, flags=re.IGNORECASE)
@@ -1067,6 +1121,66 @@ def _fazer_nexread_salvar_estudos(disciplina: str) -> str:
         return res.get("aviso", f"Artigo salvo em {disciplina}.")
     except Exception as e:
         return f"Nao consegui salvar a leitura do NexRead nos estudos: {e}"
+
+
+def _fazer_nexvoice_iniciar(titulo: str, modo: str = "ouvir", consentimento_confirmado: bool = False) -> str:
+    try:
+        from .nexvoice import iniciar_sessao_nexvoice
+        sessao = iniciar_sessao_nexvoice(
+            titulo=titulo,
+            modo=modo,
+            consentimento_confirmado=consentimento_confirmado,
+        )
+        aviso = f" {sessao.aviso_consentimento}" if sessao.aviso_consentimento else ""
+        return f"NexVoice iniciado no modo {sessao.modo}: {sessao.titulo}.{aviso}"
+    except PermissionError as e:
+        return str(e)
+    except Exception as e:
+        return f"Nao consegui iniciar o NexVoice: {e}"
+
+
+def _fazer_nexvoice_traduzir_trecho(texto_fala: str, direcao: str = "entrada") -> str:
+    try:
+        from .nexvoice import ArmazenamentoNexVoice, iniciar_sessao_nexvoice, processar_trecho_ao_vivo
+        banco = ArmazenamentoNexVoice()
+        ativas = banco.listar_sessoes(estado="ativa", limite=1)
+        sessao = ativas[0] if ativas else iniciar_sessao_nexvoice(titulo="Sessao Rapida NexVoice", modo="ouvir", db=banco)
+        trecho = processar_trecho_ao_vivo(
+            sessao_id=sessao.id,
+            texto_fala=texto_fala,
+            direcao=direcao,
+            db=banco,
+        )
+        return f"NexVoice ({trecho.idioma_origem} -> {trecho.idioma_destino}): {trecho.texto_traduzido}"
+    except Exception as e:
+        return f"Nao consegui traduzir o trecho no NexVoice: {e}"
+
+
+def _fazer_nexvoice_salvar_estudos(disciplina: str) -> str:
+    try:
+        from .nexvoice import ArmazenamentoNexVoice, salvar_sessao_nos_estudos
+        banco = ArmazenamentoNexVoice()
+        sessoes = banco.listar_sessoes(limite=1)
+        if not sessoes:
+            return "Nenhuma sessao encontrada no NexVoice para salvar nos estudos."
+        res = salvar_sessao_nos_estudos(sessao_id=sessoes[0].id, disciplina_nome=disciplina, db=banco)
+        return res.get("aviso", f"Sessao NexVoice salva em {disciplina}.")
+    except Exception as e:
+        return f"Nao consegui salvar a sessao do NexVoice nos estudos: {e}"
+
+
+def _fazer_nexvoice_encerrar() -> str:
+    try:
+        from .nexvoice import ArmazenamentoNexVoice, encerrar_sessao_nexvoice
+        banco = ArmazenamentoNexVoice()
+        ativas = banco.listar_sessoes(estado="ativa", limite=1)
+        if not ativas:
+            return "Nenhuma sessao ativa no NexVoice no momento."
+        res = encerrar_sessao_nexvoice(sessao_id=ativas[0].id, db=banco)
+        s = res.get("sessao") or {}
+        return f"Sessao NexVoice '{s.get('titulo', '')}' encerrada com {len(s.get('trechos') or [])} trechos traduzidos."
+    except Exception as e:
+        return f"Nao consegui encerrar o NexVoice: {e}"
 
 
 if __name__ == "__main__":

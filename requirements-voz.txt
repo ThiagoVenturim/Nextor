@@ -2,6 +2,7 @@
 #   .venv/Scripts/python.exe -m pip install -r requirements-voz.txt
 #   .venv/Scripts/python.exe scripts/baixar_vozes.py
 piper-tts
+faster-whisper
 vosk
 sounddevice
 numpy

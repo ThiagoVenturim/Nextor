@@ -27,6 +27,7 @@ nextor/                 pacote principal (o codigo)
   telegram_bot.py       adaptador do Telegram (texto e voz Vosk -> /v1/assistente)
   servico.py            API HTTP local (Flask) + /v1/assistente + painel web + token
   nexread/              tradutor de artigo/pagina ao vivo com marcacao, gravacao e conversa com IA
+  nexvoice/             tradutor de audio ao vivo para videos e reunioes bidirecionais (Whisper + LLM local + Piper)
 scripts/
   setup.py              configuracao de primeira vez (escreve o .env)
   agendar_rotina.ps1    agenda a rotina diaria no Windows
