@@ -277,7 +277,15 @@
             <!-- Canais carregados via API -->
           </div>
 
+          <p class="ajuda-texto">Escolha quais avisos vao para cada canal. Tokens e webhooks ficam so no .env do servidor.</p>
+          <div class="tabela-rolavel">
+            <table id="matriz-eventos-config" class="matriz-eventos" aria-label="Eventos por canal">
+              <!-- Matriz evento x canal carregada via API -->
+            </table>
+          </div>
+
           <div class="linha-controles">
+            <button id="btn-ativar-push" class="btn-secundario">Ativar notificacoes neste aparelho</button>
             <button id="btn-disparar-teste-notificacao" class="btn-secundario">Disparar Notificacao de Teste</button>
           </div>
         </div>

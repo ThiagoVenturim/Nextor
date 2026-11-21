@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nextor-gtd-shell-v3';
+const CACHE_NAME = 'nextor-gtd-shell-v4';
 const ASSETS = [
   '/gtd',
   '/gtd/',
@@ -64,6 +64,42 @@ self.addEventListener('fetch', (event) => {
           return caches.match('/gtd/index.html');
         }
       });
+    })
+  );
+});
+
+// Web Push (#46): o servidor manda {title, body, urgency, url}.
+self.addEventListener('push', (event) => {
+  let dados = {};
+  try {
+    dados = event.data ? event.data.json() : {};
+  } catch (err) {
+    dados = { body: event.data ? event.data.text() : '' };
+  }
+  const titulo = dados.title || 'Nextor';
+  const opcoes = {
+    body: dados.body || '',
+    icon: '/gtd/icone-192.png',
+    badge: '/gtd/icone-192.png',
+    data: { url: dados.url || '/gtd' },
+    requireInteraction: dados.urgency === 'alta' || dados.urgency === 'critica'
+  };
+  event.waitUntil(self.registration.showNotification(titulo, opcoes));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const destino = (event.notification.data && event.notification.data.url) || '/gtd';
+  // So abre caminhos do proprio app.
+  const url = destino.startsWith('/') ? destino : '/gtd';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((janelas) => {
+      for (const janela of janelas) {
+        if (new URL(janela.url).pathname.startsWith('/gtd') && 'focus' in janela) {
+          return janela.focus();
+        }
+      }
+      return self.clients.openWindow(url);
     })
   );
 });
