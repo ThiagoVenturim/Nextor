@@ -345,6 +345,68 @@ def concluir_tarefa_anotacao(linha_num: int, caminho_anotacoes: Optional[Path] =
         return False
 
 
+_PADRAO_ANOTACAO = re.compile(
+    r"^-\s*(?:\[(?P<chk>[ xX])\]\s*)?(?:\[(?P<carimbo>\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2})?)\]\s*)?(?P<titulo>.*)$"
+)
+
+
+def listar_anotacoes(caminho_anotacoes: Optional[Path] = None) -> List[dict]:
+    """Lista todas as anotacoes em lista (pendentes e concluidas) com o estado de cada uma.
+
+    Usado pela sincronizacao com o GTD (Issue #42). Cada entrada traz linha_num, titulo,
+    prazo (YYYY-MM-DD ou None) e feita (True para linhas marcadas com [x]).
+    """
+    arquivo = caminho_anotacoes or config.ANOTACOES
+    if not arquivo.exists():
+        return []
+    try:
+        linhas = arquivo.read_text(encoding="utf-8").splitlines()
+    except Exception as e:
+        log.warning("Falha ao ler anotacoes: %s", type(e).__name__)
+        return []
+
+    resultado: List[dict] = []
+    for idx, bruta in enumerate(linhas, start=1):
+        linha = bruta.strip()
+        if not linha.startswith("-"):
+            continue
+        m = _PADRAO_ANOTACAO.match(linha)
+        if not m:
+            continue
+        titulo = (m.group("titulo") or "").strip()
+        if not titulo:
+            continue
+        carimbo = m.group("carimbo")
+        resultado.append({
+            "linha_num": idx,
+            "titulo": titulo,
+            "prazo": carimbo[:10] if carimbo else None,
+            "feita": (m.group("chk") or " ").lower() == "x",
+        })
+    return resultado
+
+
+def reabrir_tarefa_anotacao(linha_num: int, caminho_anotacoes: Optional[Path] = None) -> bool:
+    """Desfaz a marcacao [x] de uma linha do anotacoes.md (volta a ficar pendente)."""
+    arquivo = caminho_anotacoes or config.ANOTACOES
+    if not arquivo.exists():
+        return False
+    try:
+        linhas = arquivo.read_text(encoding="utf-8").splitlines()
+        idx = linha_num - 1
+        if not (0 <= idx < len(linhas)):
+            return False
+        original = linhas[idx]
+        if not re.match(r"^\s*-\s*\[[xX]\]", original):
+            return False
+        linhas[idx] = re.sub(r"^(\s*)-\s*\[[xX]\]\s*", r"\1- [ ] ", original, count=1)
+        arquivo.write_text("\n".join(linhas) + "\n", encoding="utf-8")
+        return True
+    except Exception as e:
+        log.error("Erro ao reabrir anotacao: %s", type(e).__name__)
+        return False
+
+
 def obter_conclusao_pendente() -> Optional[dict]:
     """Retorna acao de conclusao pendente."""
     return _CONCLUSAO_PENDENTE
