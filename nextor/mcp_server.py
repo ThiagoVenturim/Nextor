@@ -213,13 +213,30 @@ def leitura_progresso(paginas: int, leitura_id: str = "") -> str:
     return f"Registradas {paginas} paginas. Total hoje: {res['paginas_lidas_hoje']}/{res['meta_diaria']}. {status_meta}"
 
 
-@mcp.tool(description="Troca o metodo ativo de produtividade (gtd, para, eisenhower, kanban).")
+@mcp.tool(description="Troca o metodo ativo de produtividade (gtd, para, eisenhower, kanban ou outro registrado).")
 def gtd_trocar_metodo(metodo: str) -> str:
     from .gtd.configuracao import salvar_config
-    from .gtd.metodos import obter_metodo
+    from .gtd.metodos import REGISTRO_METODOS, metodo_existe, obter_metodo
+    if not metodo_existe(metodo):
+        return f"Metodo desconhecido: {metodo}. Disponiveis: {', '.join(REGISTRO_METODOS)}."
     m = obter_metodo(metodo)
     salvar_config({"metodo_ativo": m.slug})
-    return f"Metodo alterado para {m.nome}."
+    return f"Metodo alterado para {m.nome}. Seus itens continuam os mesmos."
+
+
+@mcp.tool(description="Move uma tarefa (id ou inicio do id) para uma coluna do metodo ativo.")
+def gtd_mover_item(item_id: str, coluna: str) -> str:
+    from .gtd import buscar_item_por_prefixo
+    from .gtd.metodos import ErroMovimento
+    from .gtd.metodos.operacoes import mover_item
+    alvo = buscar_item_por_prefixo(item_id, estados=["inbox", "proxima", "aguardando", "algum_dia", "feito"])
+    if alvo is None:
+        return f"Item nao encontrado: {item_id}."
+    try:
+        item, metodo = mover_item(alvo.id, coluna)
+    except ErroMovimento as e:
+        return f"Nao movido: {e}"
+    return f"'{item.titulo}' agora esta em {metodo.classificar(item)} ({metodo.nome})."
 
 
 @mcp.tool(description="Inicia uma sessao Pomodoro de foco.")

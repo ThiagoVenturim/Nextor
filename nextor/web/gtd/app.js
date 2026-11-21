@@ -15,6 +15,8 @@ const estado = {
   paleta: 'azul',
   configCompleta: null,
   pomodoroTimer: null,
+  pomodoro: null,
+  visaoAtual: null,
   passoWizard: 1
 };
 
@@ -150,13 +152,8 @@ function configurarEventosNavegacao() {
     });
   });
 
-  // Seletor de Metodo na aba Visao (#45)
-  document.querySelectorAll('#seletor-metodos .tab-metodo').forEach((tab) => {
-    tab.addEventListener('click', async () => {
-      const slug = tab.getAttribute('data-metodo');
-      await trocarMetodoAtivo(slug);
-    });
-  });
+  // Seletor de Metodo na aba Visao (#45): abas montadas em renderizarSeletoresMetodo()
+  renderizarSeletoresMetodo();
 }
 
 function mudarAba(idAba) {
@@ -250,10 +247,12 @@ async function carregarConfiguracoesServidor() {
     if (cfg.paleta) estado.paleta = cfg.paleta;
     aplicarTemaEPaleta();
 
-    // Atualiza tabs do metodo
-    document.querySelectorAll('#seletor-metodos .tab-metodo').forEach((tab) => {
-      tab.classList.toggle('ativa', tab.getAttribute('data-metodo') === estado.metodoAtivo);
-    });
+    // Abas e selects do metodo vem do registro do servidor
+    renderizarSeletoresMetodo();
+
+    // Pomodoro e opcional e funciona por cima de qualquer metodo
+    const barraPomo = document.getElementById('barra-pomodoro');
+    if (barraPomo) barraPomo.classList.toggle('oculto', cfg.pomodoro_ativo === false);
 
     // Se primeira vez, abre wizard automaticamente
     if (cfg.wizard_concluido === false) {
@@ -268,6 +267,8 @@ function preencherTelaConfig() {
 
   document.getElementById('config-select-metodo').value = cfg.metodo_ativo || 'gtd';
   document.getElementById('config-wip-limite').value = cfg.kanban_wip_limite || 3;
+  document.getElementById('config-pomodoro-ativo').checked = cfg.pomodoro_ativo !== false;
+  document.getElementById('config-pomodoro-minutos').value = cfg.pomodoro_duracao_min || 25;
   const rotina = Array.isArray(cfg.rotina) ? cfg.rotina : [];
   document.getElementById('config-rotina').value = rotina.map((b) => `- `).join('\n');
 
@@ -406,6 +407,8 @@ async function salvarConfiguracoesTela() {
     tema: estado.tema,
     paleta: estado.paleta,
     kanban_wip_limite: wip,
+    pomodoro_ativo: document.getElementById('config-pomodoro-ativo').checked,
+    pomodoro_duracao_min: parseInt(document.getElementById('config-pomodoro-minutos').value, 10) || 25,
     horario_silencio: {
       ativo: silAtivo,
       inicio: silInicio,
@@ -446,6 +449,55 @@ async function dispararTesteNotificacao() {
 // -------------------------------------------------------------
 // Metodos Intercambiaveis (#45)
 // -------------------------------------------------------------
+function catalogoMetodos() {
+  const lista = (estado.configCompleta && estado.configCompleta.metodos) || [];
+  if (lista.length > 0) return lista;
+  return [
+    { slug: 'gtd', nome: 'GTD (Getting Things Done)' },
+    { slug: 'kanban', nome: 'Kanban Pessoal' },
+    { slug: 'eisenhower', nome: 'Matriz de Eisenhower' },
+    { slug: 'para', nome: 'P.A.R.A. (Tiago Forte)' }
+  ];
+}
+
+// Monta abas e selects a partir do registro de metodos do servidor: um metodo novo
+// registrado no backend aparece aqui sem mudar o painel.
+function renderizarSeletoresMetodo() {
+  const metodos = catalogoMetodos();
+  const barra = document.getElementById('seletor-metodos');
+  if (barra) {
+    barra.innerHTML = '';
+    metodos.forEach((m) => {
+      const tab = document.createElement('button');
+      tab.className = 'tab-metodo';
+      tab.setAttribute('data-metodo', m.slug);
+      tab.textContent = rotuloCurtoMetodo(m);
+      tab.classList.toggle('ativa', m.slug === estado.metodoAtivo);
+      tab.addEventListener('click', () => trocarMetodoAtivo(m.slug));
+      barra.appendChild(tab);
+    });
+  }
+  ['config-select-metodo', 'wizard-metodo'].forEach((idSel) => {
+    const sel = document.getElementById(idSel);
+    if (!sel) return;
+    sel.innerHTML = '';
+    metodos.forEach((m) => {
+      const opt = document.createElement('option');
+      opt.value = m.slug;
+      opt.textContent = m.nome || m.slug;
+      sel.appendChild(opt);
+    });
+    sel.value = estado.metodoAtivo;
+  });
+}
+
+function rotuloCurtoMetodo(m) {
+  const curtos = { gtd: 'GTD', kanban: 'Kanban', eisenhower: 'Eisenhower', para: 'P.A.R.A.' };
+  if (curtos[m.slug]) return curtos[m.slug];
+  const nome = m.nome || m.slug;
+  return nome.split('(')[0].trim();
+}
+
 async function trocarMetodoAtivo(slug) {
   estado.metodoAtivo = slug;
   document.querySelectorAll('#seletor-metodos .tab-metodo').forEach((tab) => {
@@ -498,6 +550,13 @@ async function carregarVisaoMetodo() {
 
     // 2. Carrega visao especifica do metodo ativo via /gtd/visao
     const visaoRes = await api(`/gtd/visao?metodo=${encodeURIComponent(estado.metodoAtivo)}`);
+    if (visaoRes.ok === false) {
+      // Metodo salvo nao existe mais no registro: volta ao padrao sem perder itens.
+      estado.metodoAtivo = 'gtd';
+      renderizarSeletoresMetodo();
+      renderizarVisaoMetodo(await api('/gtd/visao?metodo=gtd'));
+      return;
+    }
     renderizarVisaoMetodo(visaoRes);
   } catch (err) {}
 }
@@ -509,31 +568,81 @@ function renderizarVisaoMetodo(dadosVisao) {
   const colunas = dadosVisao.colunas || [];
   const itensPorCol = dadosVisao.itens_por_coluna || {};
   const metodo = dadosVisao.metodo;
+  estado.visaoAtual = dadosVisao;
 
-  // Atualiza texto explicativo do metodo
+  // Texto explicativo vem do proprio metodo
   const descEl = document.getElementById('metodo-descricao-ativa');
   if (descEl) {
-    const mapaNomes = {
-      gtd: 'Fluxo classico: Caixa de Entrada, Proximas Acoes, Aguardando e Algum Dia.',
-      kanban: `Fluxo visual continuo. A Fazer, Fazendo (Limite WIP: ${dadosVisao.limite_wip || 3}) e Feito.`,
-      eisenhower: 'Matriz de Urgente vs Importante em 4 quadrantes para priorizacao rapida.',
-      para: 'Projetos (metas), Areas (responsabilidades), Recursos (estudos) e Arquivos.'
-    };
-    descEl.textContent = mapaNomes[metodo] || dadosVisao.metodo_nome || '';
+    descEl.textContent = dadosVisao.metodo_descricao || dadosVisao.metodo_nome || '';
   }
 
   if (metodo === 'kanban') {
-    renderizarKanban(container, colunas, itensPorCol, dadosVisao.limite_wip || 3);
+    renderizarKanban(container, colunas, itensPorCol, dadosVisao.limite_wip || 3, dadosVisao.coluna_concluida);
   } else if (metodo === 'eisenhower') {
-    renderizarEisenhower(container, colunas, itensPorCol);
-  } else if (metodo === 'para') {
-    renderizarPARA(container, colunas, itensPorCol);
+    renderizarEisenhower(container, colunas, itensPorCol, dadosVisao.coluna_concluida);
+  } else if (metodo === 'gtd') {
+    renderizarGTD(container, colunas, itensPorCol, dadosVisao);
   } else {
-    renderizarGTD(container, colunas, itensPorCol);
+    // PARA e qualquer metodo novo usam a visao generica por colunas
+    renderizarColunasGenerico(container, colunas, itensPorCol, dadosVisao.coluna_concluida);
   }
 }
 
-function renderizarKanban(container, colunas, itensPorCol, limiteWip) {
+// Cartao de item comum a todas as visoes: titulo, contexto, prazo, pomodoros,
+// seletor "Mover para" com as colunas do metodo e botao de concluir.
+function criarCardItem(it, colunas, colunaAtual, colunaConcluida) {
+  const card = document.createElement('div');
+  card.className = 'item-card';
+  const pomos = (it.metadados && it.metadados.pomodoros_concluidos) || 0;
+  const opcoes = colunas.map((c) => (
+    `<option value="${escaparHtml(c.id)}" ${c.id === colunaAtual ? 'selected' : ''}>${escaparHtml(c.titulo)}</option>`
+  )).join('');
+  const podeConcluir = colunaConcluida && colunaAtual !== colunaConcluida;
+  card.innerHTML = `
+    <div class="item-info">
+      <div class="item-titulo">${escaparHtml(it.titulo)}</div>
+      <div class="item-meta">
+        <span class="tag-contexto">${escaparHtml(it.contexto)}</span>
+        ${it.prazo ? `<span class="tag-prazo">Prazo: ${escaparHtml(it.prazo)}</span>` : ''}
+        ${pomos ? `<span class="tag-prazo">${pomos} pomodoro(s)</span>` : ''}
+      </div>
+    </div>
+    <div class="item-botoes">
+      <select class="select-padrao sel-mover" aria-label="Mover para">${opcoes}</select>
+      ${podeConcluir ? '<button class="btn-secundario btn-concluir">Feito</button>' : ''}
+    </div>
+  `;
+  card.querySelector('.sel-mover').addEventListener('change', (ev) => moverItem(it.id, ev.target.value));
+  const btn = card.querySelector('.btn-concluir');
+  if (btn) btn.addEventListener('click', () => moverItem(it.id, colunaConcluida));
+  return card;
+}
+
+function preencherItens(sub, itens, colunas, colunaAtual, colunaConcluida, textoVazio) {
+  if (itens.length === 0) {
+    sub.innerHTML = `<p class="ajuda-texto">${escaparHtml(textoVazio)}</p>`;
+    return;
+  }
+  itens.forEach((it) => sub.appendChild(criarCardItem(it, colunas, colunaAtual, colunaConcluida)));
+}
+
+async function moverItem(id, coluna) {
+  try {
+    const res = await api('/gtd/visao/mover', 'POST', {
+      item_id: id,
+      coluna: coluna,
+      metodo: estado.metodoAtivo
+    });
+    if (res.ok === false) {
+      mostrarToast(res.erro || 'Movimento recusado');
+    } else {
+      mostrarToast('Item movido');
+    }
+  } catch (err) {}
+  carregarVisaoMetodo();
+}
+
+function renderizarKanban(container, colunas, itensPorCol, limiteWip, colunaConcluida) {
   const board = document.createElement('div');
   board.className = 'kanban-board';
 
@@ -543,80 +652,31 @@ function renderizarKanban(container, colunas, itensPorCol, limiteWip) {
     divCol.className = 'kanban-coluna';
 
     const ehFazendo = col.id === 'fazendo';
-    const badgeWip = ehFazendo ? `<span class="badge ${itens.length > limiteWip ? 'alerta' : ''}">${itens.length}/${limiteWip} WIP</span>` : `<span class="badge">${itens.length}</span>`;
+    const badgeWip = ehFazendo
+      ? `<span class="badge ${itens.length >= limiteWip ? 'alerta' : ''}">${itens.length}/${limiteWip} WIP</span>`
+      : `<span class="badge">${itens.length}</span>`;
 
     divCol.innerHTML = `
       <div class="kanban-coluna-header">
         <span>${escaparHtml(col.titulo)}</span>
         ${badgeWip}
       </div>
-      <div class="itens-container itens-kanban" id="col-kanban-${col.id}"></div>
+      <div class="itens-container itens-kanban"></div>
     `;
-
-    const subContainer = divCol.querySelector('.itens-kanban');
-    if (itens.length === 0) {
-      subContainer.innerHTML = '<p class="ajuda-texto">Vazio</p>';
-    } else {
-      itens.forEach((it) => {
-        const card = document.createElement('div');
-        card.className = 'item-card';
-        card.innerHTML = `
-          <div class="item-info">
-            <div class="item-titulo">${escaparHtml(it.titulo)}</div>
-            <div class="item-meta">
-              <span class="tag-contexto">${escaparHtml(it.contexto)}</span>
-              ${it.prazo ? `<span class="tag-prazo">Prazo: ${it.prazo}</span>` : ''}
-            </div>
-          </div>
-          <div class="item-botoes">
-            ${col.id === 'a_fazer' ? `<button class="btn-secundario btn-puxar" data-id="${it.id}">Puxar</button>` : ''}
-            ${col.id === 'fazendo' ? `<button class="btn-secundario btn-concluir" data-id="${it.id}">Feito</button>` : ''}
-          </div>
-        `;
-        const btnPuxar = card.querySelector('.btn-puxar');
-        if (btnPuxar) {
-          btnPuxar.addEventListener('click', () => moverKanban(it.id, 'fazendo'));
-        }
-        const btnConcluir = card.querySelector('.btn-concluir');
-        if (btnConcluir) {
-          btnConcluir.addEventListener('click', () => concluirItem(it.id));
-        }
-        subContainer.appendChild(card);
-      });
-    }
-
+    preencherItens(divCol.querySelector('.itens-kanban'), itens, colunas, col.id, colunaConcluida, 'Vazio');
     board.appendChild(divCol);
   });
 
   container.appendChild(board);
 }
 
-async function moverKanban(id, coluna) {
-  try {
-    await api('/gtd/processar', 'POST', {
-      item_id: id,
-      novo_estado: 'proxima'
-    });
-    // Atualiza metadados
-    const res = await api('/gtd/itens');
-    const alvo = (res.itens || []).find(i => i.id === id);
-    if (alvo) {
-      alvo.metadados = alvo.metadados || {};
-      alvo.metadados.coluna_kanban = coluna;
-      alvo.metadados.em_andamento = (coluna === 'fazendo');
-      await api('/gtd/itens', 'POST', alvo);
-    }
-    carregarVisaoMetodo();
-  } catch (err) {}
-}
-
-function renderizarEisenhower(container, colunas, itensPorCol) {
+function renderizarEisenhower(container, colunas, itensPorCol, colunaConcluida) {
   const grid = document.createElement('div');
   grid.className = 'eisenhower-grid';
 
-  const classesQ = { fazer: 'q1', agendar: 'q2', delegar: 'q3', eliminar: 'q4', feito: '' };
+  const classesQ = { fazer: 'q1', agendar: 'q2', delegar: 'q3', eliminar: 'q4' };
 
-  colunas.filter(c => c.id !== 'feito').forEach((col) => {
+  colunas.filter(c => c.id !== colunaConcluida).forEach((col) => {
     const itens = itensPorCol[col.id] || [];
     const divQ = document.createElement('div');
     divQ.className = 'eisenhower-quadrante';
@@ -625,39 +685,19 @@ function renderizarEisenhower(container, colunas, itensPorCol) {
         <span>${escaparHtml(col.titulo)}</span>
         <span class="badge">${itens.length}</span>
       </div>
-      <div class="itens-container">
-        ${itens.length === 0 ? '<p class="ajuda-texto">Sem acoes neste quadrante</p>' : ''}
-      </div>
+      <div class="itens-container"></div>
     `;
-
-    const sub = divQ.querySelector('.itens-container');
-    itens.forEach((it) => {
-      const card = document.createElement('div');
-      card.className = 'item-card';
-      card.innerHTML = `
-        <div class="item-info">
-          <div class="item-titulo">${escaparHtml(it.titulo)}</div>
-          <div class="item-meta">
-            <span class="tag-contexto">${escaparHtml(it.contexto)}</span>
-          </div>
-        </div>
-        <div class="item-botoes">
-          <button class="btn-secundario btn-concluir" data-id="${it.id}">Feito</button>
-        </div>
-      `;
-      card.querySelector('.btn-concluir').addEventListener('click', () => concluirItem(it.id));
-      sub.appendChild(card);
-    });
-
+    preencherItens(divQ.querySelector('.itens-container'), itens, colunas, col.id, colunaConcluida,
+      'Sem acoes neste quadrante');
     grid.appendChild(divQ);
   });
 
   container.appendChild(grid);
 }
 
-function renderizarPARA(container, colunas, itensPorCol) {
-  const paraDiv = document.createElement('div');
-  paraDiv.className = 'para-container';
+function renderizarColunasGenerico(container, colunas, itensPorCol, colunaConcluida) {
+  const lista = document.createElement('div');
+  lista.className = 'para-container';
 
   colunas.forEach((col) => {
     const itens = itensPorCol[col.id] || [];
@@ -669,36 +709,22 @@ function renderizarPARA(container, colunas, itensPorCol) {
         <span class="badge">${itens.length}</span>
       </div>
       <p class="ajuda-texto">${escaparHtml(col.descricao)}</p>
-      <div class="itens-container" style="margin-top: 6px;">
-        ${itens.length === 0 ? '<p class="ajuda-texto">Nenhum item</p>' : ''}
-      </div>
+      <div class="itens-container" style="margin-top: 6px;"></div>
     `;
-    const sub = sec.querySelector('.itens-container');
-    itens.forEach((it) => {
-      const card = document.createElement('div');
-      card.className = 'item-card';
-      card.innerHTML = `
-        <div class="item-info">
-          <div class="item-titulo">${escaparHtml(it.titulo)}</div>
-          <div class="item-meta">
-            <span class="tag-contexto">${escaparHtml(it.contexto)}</span>
-          </div>
-        </div>
-        <div class="item-botoes">
-          <button class="btn-secundario btn-concluir" data-id="${it.id}">Feito</button>
-        </div>
-      `;
-      card.querySelector('.btn-concluir').addEventListener('click', () => concluirItem(it.id));
-      sub.appendChild(card);
-    });
-    paraDiv.appendChild(sec);
+    preencherItens(sec.querySelector('.itens-container'), itens, colunas, col.id, colunaConcluida, 'Nenhum item');
+    lista.appendChild(sec);
   });
 
-  container.appendChild(paraDiv);
+  container.appendChild(lista);
 }
 
-function renderizarGTD(container, colunas, itensPorCol) {
+function renderizarGTD(container, colunas, itensPorCol, dadosVisao) {
   const proximas = itensPorCol['proxima'] || [];
+  const revisao = dadosVisao.revisao || {};
+  const contextos = dadosVisao.contextos || {};
+  const resumoCtx = Object.keys(contextos).map((c) => `${c} (${contextos[c]})`).join(', ');
+  const semProxima = (revisao.projetos_sem_proxima_acao || []).length;
+
   const div = document.createElement('div');
   div.className = 'bloco-lista';
   div.innerHTML = `
@@ -706,32 +732,32 @@ function renderizarGTD(container, colunas, itensPorCol) {
       <h3>Proximas Acoes</h3>
       <span class="badge">${proximas.length}</span>
     </div>
-    <div class="itens-container">
-      ${proximas.length === 0 ? '<p class="ajuda-texto">Nenhuma proxima acao pendente.</p>' : ''}
-    </div>
+    <p class="ajuda-texto">${resumoCtx ? `Por contexto: ${escaparHtml(resumoCtx)}` : ''}</p>
+    <p class="ajuda-texto">Inbox para processar: ${revisao.inbox_para_processar || 0}.
+      Aguardando: ${revisao.aguardando || 0}. Projetos sem proxima acao: ${semProxima}.</p>
+    <div class="itens-container"></div>
   `;
-
-  const sub = div.querySelector('.itens-container');
-  proximas.forEach((it) => {
-    const card = document.createElement('div');
-    card.className = 'item-card';
-    card.innerHTML = `
-      <div class="item-info">
-        <div class="item-titulo">${escaparHtml(it.titulo)}</div>
-        <div class="item-meta">
-          <span class="tag-contexto">${escaparHtml(it.contexto)}</span>
-          ${it.prazo ? `<span class="tag-prazo">Prazo: ${it.prazo}</span>` : ''}
-        </div>
-      </div>
-      <div class="item-botoes">
-        <button class="btn-secundario btn-concluir" data-id="${it.id}">Feito</button>
-      </div>
-    `;
-    card.querySelector('.btn-concluir').addEventListener('click', () => concluirItem(it.id));
-    sub.appendChild(card);
-  });
-
+  preencherItens(div.querySelector('.itens-container'), proximas, colunas, 'proxima',
+    dadosVisao.coluna_concluida, 'Nenhuma proxima acao pendente.');
   container.appendChild(div);
+
+  // Demais listas do GTD (aguardando, algum dia) para mover entre elas
+  ['aguardando', 'algum_dia'].forEach((idCol) => {
+    const col = colunas.find((c) => c.id === idCol);
+    const itens = itensPorCol[idCol] || [];
+    if (!col || itens.length === 0) return;
+    const sec = document.createElement('div');
+    sec.className = 'bloco-lista';
+    sec.innerHTML = `
+      <div class="lista-cabecalho">
+        <h3>${escaparHtml(col.titulo)}</h3>
+        <span class="badge">${itens.length}</span>
+      </div>
+      <div class="itens-container"></div>
+    `;
+    preencherItens(sec.querySelector('.itens-container'), itens, colunas, idCol, dadosVisao.coluna_concluida, '');
+    container.appendChild(sec);
+  });
 }
 
 // -------------------------------------------------------------
@@ -851,8 +877,15 @@ async function carregarRevisao() {
 function configurarEventosPomodoro() {
   document.getElementById('btn-pomo-start').addEventListener('click', async () => {
     try {
-      await api('/gtd/pomodoro/iniciar', 'POST', { duracao_min: 25 });
-      iniciarContadorLocal(25 * 60);
+      // Pausado: retoma de onde parou. Senao inicia com a duracao dos ajustes.
+      const acao = (estado.pomodoro && estado.pomodoro.ativo && estado.pomodoro.pausado) ? 'retomar' : 'iniciar';
+      const res = await api(`/gtd/pomodoro/${acao}`, 'POST', {});
+      if (res.ok === false) {
+        mostrarToast(res.erro || 'Pomodoro indisponivel');
+        return;
+      }
+      atualizarDisplayPomodoro(res);
+      iniciarContadorLocal(res.segundos_restantes || 0);
     } catch (err) {}
   });
 
@@ -909,6 +942,7 @@ function pararContadorLocal() {
 }
 
 function atualizarDisplayPomodoro(res) {
+  estado.pomodoro = res;
   document.getElementById('pomo-tempo').textContent = res.tempo_formatado || '25:00';
   document.getElementById('pomo-modo-label').textContent = res.modo === 'foco' ? 'Foco' : 'Descanso';
   document.getElementById('pomo-ciclos').textContent = `${res.ciclos_concluidos || 0} ciclos`;

@@ -11,6 +11,7 @@ class MetodoPARA(Metodo):
 
     nome = "P.A.R.A. (Tiago Forte)"
     slug = "para"
+    coluna_concluida = None
     descricao = "Organizacao centrada em acao: Projetos (curto prazo), Areas (padroes continuos), Recursos (interesses) e Arquivos (inativos)."
 
     def colunas(self) -> List[Dict[str, str]]:
@@ -43,6 +44,15 @@ class MetodoPARA(Metodo):
             return "inbox"
 
         return "areas"
+
+    def mover(self, item: Item, coluna: str, itens: Optional[List[Item]] = None) -> Item:
+        # Arquivar nao conclui a tarefa; tirar um item concluido dos Arquivos reabre o item.
+        c = self.validar_coluna(coluna)
+        if c != "arquivos" and item.estado == "feito":
+            item.estado = self.estado_ao_reabrir
+            item.concluido_em = None
+        item.definir_meta("balde_para", c)
+        return item
 
     def campos_extra(self) -> List[Dict[str, Any]]:
         return [

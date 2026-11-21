@@ -75,6 +75,7 @@ na URL e recusado.
 | `GET /gtd/revisao` | revisao semanal |
 | `GET/POST /gtd/projetos` | lista e cria projetos |
 | `GET/PUT /gtd/config` | ajustes do painel, inclusive `rotina` |
+| `GET /gtd/metodos`, `GET /gtd/visao`, `POST /gtd/visao/mover` | metodos intercambiaveis (veja `docs/METODOS_PRODUTIVIDADE.md`) |
 
 ## Acesso de fora de casa
 

@@ -277,6 +277,11 @@ partir da agenda e da rotina, e revisao semanal. Os mesmos passos funcionam pelo
 (`/inbox`, `/ordem`, `/proximas`, `/feito`, `/revisao`). Fora de casa, so pela VPN. Veja
 `docs/PAINEL_GTD.md`.
 
+O mesmo painel troca de metodo a qualquer hora sem perder dados: GTD, PARA, matriz de
+Eisenhower e Kanban pessoal com limite de WIP, com o Pomodoro opcional por cima de qualquer
+um. Cada metodo e um modulo registrado em `nextor/gtd/metodos/`. Veja
+`docs/METODOS_PRODUTIVIDADE.md`.
+
 ## Integracoes do GTD (Notion, GitHub e anotacoes)
 
 O painel GTD (`/gtd`) sincroniza tarefas, projetos e leituras com o Notion, issues e PRs

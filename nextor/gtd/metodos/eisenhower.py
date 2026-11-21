@@ -57,8 +57,25 @@ class MetodoEisenhower(Metodo):
             return "delegar"
         return "eliminar"
 
+    def mover(self, item: Item, coluna: str, itens: Optional[List[Item]] = None) -> Item:
+        c = self.validar_coluna(coluna)
+        self._ajustar_conclusao(item, c)
+        if c != "feito":
+            # O quadrante escolhido a mao vence a inferencia; urgente/importante ficam coerentes.
+            item.definir_meta("quadrante", c)
+            item.definir_meta("urgente", c in ("fazer", "delegar"))
+            item.definir_meta("importante", c in ("fazer", "agendar"))
+        return item
+
     def campos_extra(self) -> List[Dict[str, Any]]:
         return [
+            {
+                "campo": "quadrante",
+                "tipo": "select",
+                "opcoes": ["fazer", "agendar", "delegar", "eliminar"],
+                "padrao": None,
+                "rotulo": "Quadrante",
+            },
             {"campo": "urgente", "tipo": "bool", "padrao": False, "rotulo": "Urgente"},
             {"campo": "importante", "tipo": "bool", "padrao": False, "rotulo": "Importante"},
         ]
