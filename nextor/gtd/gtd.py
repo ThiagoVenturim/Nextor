@@ -175,11 +175,13 @@ def agenda_do_dia(db: Optional[ArmazenamentoGTD] = None) -> Dict[str, Any]:
 
     # 1. Google Agenda
     eventos: List[Dict[str, Any]] = []
+    eventos_brutos: List[Dict[str, Any]] = []
     analise_agenda: Dict[str, Any] = {}
     try:
         from .. import agenda
         if hasattr(agenda, "eventos_hoje"):
             evs = agenda.eventos_hoje() or []
+            eventos_brutos = list(evs)
             if hasattr(agenda, "analisar_dia"):
                 analise_agenda = agenda.analisar_dia(evs)
             for e in evs:
@@ -197,6 +199,7 @@ def agenda_do_dia(db: Optional[ArmazenamentoGTD] = None) -> Dict[str, Any]:
                 })
     except Exception:
         eventos = []
+        eventos_brutos = []
         analise_agenda = {}
 
     # 2. Proximas acoes do GTD
@@ -273,6 +276,19 @@ def agenda_do_dia(db: Optional[ArmazenamentoGTD] = None) -> Dict[str, Any]:
             f"(faltam {leitura_info['faltam_paginas']})."
         )
 
+    ordem_sugerida = None
+    try:
+        from .configuracao import carregar_config
+        cfg = carregar_config()
+        if (cfg.get("agentes") or {}).get("sugerir_ordem_dia", True):
+            from .ordem_dia import sugerir_ordem_do_dia
+            ordem_sugerida = sugerir_ordem_do_dia(db=banco, eventos=eventos_brutos, cfg=cfg)
+            if ordem_sugerida.get("proximo_passo"):
+                passo = ordem_sugerida["proximo_passo"]
+                partes_resumo.append(f"Proximo passo sugerido: {passo['titulo']} as {passo['inicio']}.")
+    except Exception:
+        ordem_sugerida = None
+
     resumo_falado = " ".join(partes_resumo)
 
     return {
@@ -288,6 +304,7 @@ def agenda_do_dia(db: Optional[ArmazenamentoGTD] = None) -> Dict[str, Any]:
         "proximas_acoes": acoes_prioritarias,
         "leitura": leitura_info,
         "resumo_falado": resumo_falado,
+        "ordem_sugerida": ordem_sugerida,
     }
 
 
@@ -442,3 +459,32 @@ def revisao_semanal(db: Optional[ArmazenamentoGTD] = None) -> Dict[str, Any]:
         "itens_algum_dia": algum_dia,
         "resumo": resumo,
     }
+
+
+def contar_por_contexto(db: Optional[ArmazenamentoGTD] = None) -> Dict[str, int]:
+    """Conta as proximas acoes abertas em cada contexto, na ordem de CONTEXTOS_PERMITIDOS."""
+    from .modelos import CONTEXTOS_PERMITIDOS
+    banco = _obter_db(db)
+    contagem = {ctx: 0 for ctx in CONTEXTOS_PERMITIDOS}
+    for item in banco.listar_itens(estado="proxima"):
+        contagem[item.contexto] = contagem.get(item.contexto, 0) + 1
+    return contagem
+
+
+def buscar_item_por_prefixo(
+    prefixo: str,
+    estados: Optional[List[str]] = None,
+    db: Optional[ArmazenamentoGTD] = None,
+) -> Optional[Item]:
+    """Acha um item pelo id completo ou pelo inicio do id (minimo 4 caracteres, sem ambiguidade)."""
+    p = (prefixo or "").strip().lower()
+    if len(p) < 4:
+        return None
+    banco = _obter_db(db)
+    exato = banco.obter_item(p)
+    if exato:
+        return exato
+    candidatos = []
+    for estado in estados or ["inbox", "proxima", "aguardando", "algum_dia"]:
+        candidatos.extend(i for i in banco.listar_itens(estado=estado) if i.id.lower().startswith(p))
+    return candidatos[0] if len(candidatos) == 1 else None

@@ -147,6 +147,9 @@ DB_URL = os.getenv("NEXTOR_DB_URL", os.getenv("DB_URL", "")).strip()
 GTD_DIR = Path(os.getenv("NEXTOR_GTD_DIR", "")).resolve() if os.getenv("NEXTOR_GTD_DIR") else (Path.home() / ".nextor")
 GTD_DB = Path(os.getenv("NEXTOR_GTD_DB", "")).resolve() if os.getenv("NEXTOR_GTD_DB") else (GTD_DIR / "gtd.db")
 LEITURA_META_DIARIA = int(os.getenv("NEXTOR_LEITURA_META_DIARIA", "20"))
+# Rotina do dia para a ordem sugerida (Issue #43): "HH:MM-HH:MM @contexto" separados por ponto e virgula.
+# Vazio usa a rotina generica de nextor/gtd/ordem_dia.py. O painel pode sobrescrever no config.json.
+GTD_ROTINA = os.getenv("NEXTOR_GTD_ROTINA", "").strip()
 NOTION_TOKEN = os.getenv("NOTION_TOKEN", "").strip()
 NOTION_DB_TAREFAS = os.getenv("NOTION_DB_TAREFAS", "").strip()
 NOTION_DB_LEITURAS = os.getenv("NOTION_DB_LEITURAS", "").strip()

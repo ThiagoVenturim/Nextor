@@ -108,6 +108,7 @@ def obter_config_padrao() -> Dict[str, Any]:
             "sugerir_ordem_dia": True,
             "revisao_semanal": True,
         },
+        "rotina": [],
         "kanban_wip_limite": 3,
         "pomodoro_duracao_min": 25,
         "wizard_concluido": False,
@@ -221,6 +222,13 @@ def salvar_config(novos_dados: Dict[str, Any], caminho_customizado: Optional[Pat
             "expediente_fim": str(ag.get("expediente_fim", ag_atual.get("expediente_fim", "18:00"))).strip(),
             "limite_horas_dia_cheio": limite_cheio,
         }
+
+    if "rotina" in novos_dados:
+        # Rotina do dia (Issue #43): texto ou lista; so blocos validos sao guardados.
+        # Vazio volta a usar NEXTOR_GTD_ROTINA ou a rotina generica.
+        from .ordem_dia import parsear_rotina
+        bruto = novos_dados["rotina"]
+        atual["rotina"] = parsear_rotina(bruto) if bruto else []
 
     if "wizard_concluido" in novos_dados:
         atual["wizard_concluido"] = bool(novos_dados["wizard_concluido"])
