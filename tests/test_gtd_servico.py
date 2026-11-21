@@ -1,5 +1,4 @@
 """Testes unitarios offline dos endpoints HTTP do GTD no servico (Issues #42, #43, #44)."""
-import json
 import os
 from pathlib import Path
 import tempfile

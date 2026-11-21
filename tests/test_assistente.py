@@ -13,7 +13,7 @@ from unittest import mock
 
 os.environ["NEXTOR_VOZ_SAIDA"] = "nenhuma"
 
-from nextor import adaptadores, alexa_skill, config, servico, telegram_bot
+from nextor import adaptadores, alexa_skill, config, servico
 
 
 class BaseAdaptadoresTestCase(unittest.TestCase):

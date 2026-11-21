@@ -5,7 +5,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from .. import artigos_cientificos, estudos, qa_estudos
 from .armazenamento import ArmazenamentoNexRead
-from .modelos import ArtigoLido, BlocoPagina, GravacaoLeitura, Marcacao, MensagemChatArtigo
+from .modelos import ArtigoLido, GravacaoLeitura, Marcacao, MensagemChatArtigo
 from .tradutor import reconstruir_html_layout
 
 

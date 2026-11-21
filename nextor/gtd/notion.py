@@ -5,7 +5,6 @@ Opera de forma segura e tolerante a falhas (fail-safe):
 - Tratamento rigoroso de excecoes sem expor tokens ou credenciais em mensagens de erro ou logs.
 - Suporta cliente HTTP injetavel para testes 100% offline.
 """
-from datetime import datetime
 import json
 import logging
 import os

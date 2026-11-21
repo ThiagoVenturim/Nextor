@@ -10,10 +10,9 @@ para mutacoes externas (GitHub).
 """
 from datetime import date, datetime, timedelta, timezone
 import logging
-import os
 from pathlib import Path
 import re
-from typing import Any, Callable, Dict, List, Optional
+from typing import Callable, List, Optional
 from zoneinfo import ZoneInfo
 
 from . import config
@@ -197,9 +196,9 @@ def coletar_pendencias_github(
         repo = iss.get("repo", "Nextor")
         num = iss.get("numero") or iss.get("number")
         titulo = iss.get("titulo") or iss.get("title", "")
-        labels = [str(l).lower() for l in iss.get("labels", [])]
+        labels = [str(rotulo).lower() for rotulo in iss.get("labels", [])]
 
-        para_hoje = any("hoje" in l or "today" in l or "urgente" in l or "doing" in l for l in labels)
+        para_hoje = any("hoje" in rotulo or "today" in rotulo or "urgente" in rotulo or "doing" in rotulo for rotulo in labels)
 
         pendencias.append({
             "id": f"github:{repo}#{num}" if repo else f"github:{num}",

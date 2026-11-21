@@ -233,7 +233,9 @@ class TestAbstractInvertidoOpenAlex(unittest.TestCase):
 
 class TestBuscaOpenAlexEArxiv(unittest.TestCase):
     def test_buscar_openalex_sucesso_com_mock_http(self):
-        cliente_mock = lambda url, headers: MOCK_OPENALEX_JSON
+        def cliente_mock(url, headers):
+            return MOCK_OPENALEX_JSON
+
         res = artigos_cientificos.buscar_openalex("deep learning", limite=2, http_client=cliente_mock)
 
         self.assertEqual(len(res), 2)
@@ -258,12 +260,16 @@ class TestBuscaOpenAlexEArxiv(unittest.TestCase):
         self.assertEqual(res, [])
 
     def test_buscar_openalex_fallback_gracioso_em_erro(self):
-        cliente_com_falha = lambda url, headers: (_ for _ in ()).throw(RuntimeError("HTTP 500 Server Error"))
+        def cliente_com_falha(url, headers):
+            raise RuntimeError("HTTP 500 Server Error")
+
         res = artigos_cientificos.buscar_openalex("deep learning", http_client=cliente_com_falha)
         self.assertEqual(res, [])
 
     def test_buscar_arxiv_sucesso_com_mock_http(self):
-        cliente_mock = lambda url, headers=None: MOCK_ARXIV_XML
+        def cliente_mock(url, headers=None):
+            return MOCK_ARXIV_XML
+
         res = artigos_cientificos.buscar_arxiv("transformer", limite=2, http_client=cliente_mock)
 
         self.assertEqual(len(res), 2)
@@ -286,7 +292,9 @@ class TestBuscaOpenAlexEArxiv(unittest.TestCase):
         self.assertEqual(res, [])
 
     def test_buscar_arxiv_fallback_gracioso_em_erro(self):
-        cliente_com_falha = lambda url, headers=None: (_ for _ in ()).throw(ValueError("XML corrompido"))
+        def cliente_com_falha(url, headers=None):
+            raise ValueError("XML corrompido")
+
         res = artigos_cientificos.buscar_arxiv("algebra", http_client=cliente_com_falha)
         self.assertEqual(res, [])
 

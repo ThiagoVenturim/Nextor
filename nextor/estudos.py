@@ -1,7 +1,6 @@
 """Modulo de estudos: biblioteca de materias por disciplina com indexacao FTS5."""
 import html
 import ipaddress
-import os
 import re
 import shutil
 import socket
@@ -244,7 +243,7 @@ def extrair_texto_html(conteudo_html: str) -> Tuple[str, str]:
     sem_tags = re.sub(r"<[^>]+>", " ", sem_scripts)
     texto = html.unescape(sem_tags)
     linhas = [re.sub(r"\s+", " ", linha).strip() for linha in texto.splitlines()]
-    texto_limpo = "\n".join(l for l in linhas if l)
+    texto_limpo = "\n".join(ln for ln in linhas if ln)
     return titulo, texto_limpo
 
 

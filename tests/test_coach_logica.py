@@ -9,7 +9,7 @@ from unittest import mock
 os.environ["NEXTOR_VOZ_SAIDA"] = "nenhuma"
 
 from nextor.coach.armazenamento import ArmazenamentoCoach
-from nextor.coach.coach import acao_do_dia, concluir, criar_plano, dia_esta_cheio, resumo
+from nextor.coach.coach import acao_do_dia, concluir, criar_plano, resumo
 from nextor.coach.modelos import Recurso, Trilha
 
 

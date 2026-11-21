@@ -7,8 +7,9 @@ Tokens sao armazenados exclusivamente como hash SHA-256 e comparados em tempo co
 from datetime import datetime
 import hashlib
 import hmac
+import ipaddress
 import json
-from pathlib import Path
+import re
 import secrets
 import threading
 import time
@@ -18,6 +19,12 @@ from . import config
 
 ARQUIVO = config.RAIZ / "dispositivos.json"
 TIPOS_PERMITIDOS = ("celular", "tablet", "notebook", "pc", "tv")
+
+# Faixas de VPN privada aceitas alem das redes locais (RFC 1918, loopback, link-local, ULA):
+# 100.64.0.0/10 e o espaco CGNAT usado pelo Tailscale; fd7a:115c:a1e0::/48 e a faixa IPv6 dele.
+REDES_VPN_PADRAO = ("100.64.0.0/10", "fd7a:115c:a1e0::/48")
+
+_PADRAO_SEGREDO = re.compile(r"((?:token|secret|senha|password)=)[^&\s#\"']+", re.IGNORECASE)
 
 PERMISSOES_PADRAO: dict[str, list[str]] = {
     "tv": ["visualizar"],
@@ -331,3 +338,68 @@ def resetar_estado_testes() -> None:
     with _TRAVA:
         _MENSAGENS_PENDENTES.clear()
         _DISPOSITIVO_ATIVO_EXPLICITO = None
+
+
+def _redes_configuradas(redes_extras: str | list[str] | tuple[str, ...] | None) -> list:
+    if redes_extras is None:
+        redes_extras = getattr(config, "REDES_PERMITIDAS", "")
+    if isinstance(redes_extras, str):
+        itens = [r.strip() for r in redes_extras.replace(";", ",").split(",")]
+    else:
+        itens = [str(r).strip() for r in redes_extras]
+    redes = []
+    for bruto in list(REDES_VPN_PADRAO) + [i for i in itens if i]:
+        try:
+            redes.append(ipaddress.ip_network(bruto, strict=False))
+        except ValueError:
+            continue
+    return redes
+
+
+def endereco_permitido(
+    ip: str | None,
+    redes_extras: str | list[str] | tuple[str, ...] | None = None,
+) -> bool:
+    """Diz se o endereco de origem esta na rede local ou numa VPN privada.
+
+    Aceita loopback, redes privadas (RFC 1918 e IPv6 ULA), link-local, a faixa do Tailscale
+    e as redes extras de NEXTOR_REDES_PERMITIDAS (CIDRs separados por virgula). Recusa
+    qualquer endereco publico da internet e valores invalidos.
+    """
+    if not ip:
+        return False
+    try:
+        endereco = ipaddress.ip_address(str(ip).strip().split("%")[0])
+    except ValueError:
+        return False
+    if isinstance(endereco, ipaddress.IPv6Address) and endereco.ipv4_mapped:
+        endereco = endereco.ipv4_mapped
+    if endereco.is_unspecified or endereco.is_multicast:
+        return False
+    if endereco.is_loopback or endereco.is_link_local:
+        return True
+    for rede in _redes_configuradas(redes_extras):
+        if endereco.version == rede.version and endereco in rede:
+            return True
+    return bool(endereco.is_private and not endereco.is_reserved)
+
+
+def mascarar_segredos(texto: str) -> str:
+    """Troca valores de token/senha em query strings por *** (usado nos logs HTTP)."""
+    if not texto:
+        return texto
+    return _PADRAO_SEGREDO.sub(r"\1***", texto)
+
+
+def gerar_qr_svg(conteudo: str) -> str | None:
+    """Gera o QR code de pareamento em SVG, sem rede. Retorna None sem a biblioteca segno."""
+    try:
+        import segno
+    except ImportError:
+        return None
+    import io
+
+    qr = segno.make(conteudo, error="m")
+    saida = io.BytesIO()
+    qr.save(saida, kind="svg", scale=4, border=2, xmldecl=False, svgns=True)
+    return saida.getvalue().decode("utf-8")

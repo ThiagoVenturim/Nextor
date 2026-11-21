@@ -1,7 +1,6 @@
 """Timer Pomodoro integrado para sessões de foco sobre qualquer metodo (Issue #45)."""
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
-import uuid
 
 from ..armazenamento import ArmazenamentoGTD
 

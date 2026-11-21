@@ -164,6 +164,101 @@ async function carregar() {
   }
 }
 
+function escaparHtml(valor) {
+  return String(valor == null ? '' : valor)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+async function carregarDispositivos() {
+  const container = document.getElementById('disp-lista');
+  if (!container) return;
+  if (!tk) {
+    container.innerHTML = '<p class="help-text">Informe o token mestre em Conexao para gerenciar dispositivos.</p>';
+    return;
+  }
+  try {
+    const r = await fetch(urlApi('/v1/dispositivos'), { headers: cabecalhosAuth() });
+    if (!r.ok) {
+      container.innerHTML = '<p class="help-text">Sem acesso a lista de dispositivos com este token.</p>';
+      return;
+    }
+    const d = await r.json();
+    const lista = d.dispositivos || [];
+    if (lista.length === 0) {
+      container.innerHTML = '<p class="help-text">Nenhum dispositivo cadastrado.</p>';
+      return;
+    }
+    container.innerHTML = lista
+      .map((item) => {
+        const id = escaparHtml(item.id);
+        const situacao = item.ativo ? (item.presenca && item.presenca.online ? 'online' : 'ativo') : 'revogado';
+        const acao = item.ativo
+          ? `<button class="btn-secondary" data-disp-acao="revogar" data-disp-id="${id}">Revogar</button>`
+          : `<button class="btn-secondary" data-disp-acao="ativar" data-disp-id="${id}">Reativar</button>`;
+        return `<div class="auto-item"><span><strong>${escaparHtml(item.nome)}</strong> - ${escaparHtml(item.tipo)} (${situacao})</span>${acao}</div>`;
+      })
+      .join('');
+  } catch (err) {
+    container.innerHTML = '<p class="help-text">Sem conexao com o servico no momento.</p>';
+  }
+}
+
+async function cadastrarDispositivo() {
+  const id = (document.getElementById('disp-id')?.value || '').trim();
+  const nome = (document.getElementById('disp-nome')?.value || '').trim();
+  const tipo = document.getElementById('disp-tipo')?.value || 'celular';
+  const caixa = document.getElementById('disp-pareamento');
+  if (!id) {
+    log('Informe o identificador do dispositivo.');
+    return;
+  }
+  try {
+    const r = await fetch(urlApi('/v1/dispositivos'), {
+      method: 'POST',
+      headers: cabecalhosAuth({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ id: id, nome: nome, tipo: tipo })
+    });
+    const d = await r.json();
+    if (!r.ok || !d.ok) {
+      log(d.erro || 'Nao foi possivel cadastrar o dispositivo.');
+      return;
+    }
+    if (caixa) {
+      const link = escaparHtml(d.url_pareamento);
+      const qr = d.qr_svg ? `<div class="qr-pareamento">${d.qr_svg}</div>` : '';
+      caixa.innerHTML = `${qr}<p class="help-text">Leia o QR code no aparelho ou abra o link nele: <a href="${link}">pareamento</a>. O token nao sera mostrado de novo.</p>`;
+      caixa.hidden = false;
+    }
+    log('Dispositivo cadastrado: ' + d.dispositivo.nome);
+    await carregarDispositivos();
+  } catch (err) {
+    log('Sem conexao com o servidor do Nextor.');
+  }
+}
+
+async function alterarDispositivo(acao, id) {
+  try {
+    const r = await fetch(urlApi('/v1/dispositivos/' + encodeURIComponent(id) + '/' + acao), {
+      method: 'POST',
+      headers: cabecalhosAuth()
+    });
+    const d = await r.json();
+    log(d.ok ? 'Dispositivo ' + (acao === 'revogar' ? 'revogado' : 'reativado') + '.' : d.erro || 'Falha.');
+    const caixa = document.getElementById('disp-pareamento');
+    if (caixa) {
+      caixa.hidden = true;
+      caixa.innerHTML = '';
+    }
+    await carregarDispositivos();
+  } catch (err) {
+    log('Sem conexao com o servidor do Nextor.');
+  }
+}
+
 function salvarConexao() {
   const inputToken = document.getElementById('token-input');
   const inputServidor = document.getElementById('servidor-url');
@@ -182,6 +277,7 @@ function salvarConexao() {
   }
   log('Configuracao de conexao salva neste aparelho.');
   carregar();
+  carregarDispositivos();
 }
 
 function registrarServiceWorkerUniversal() {
@@ -232,6 +328,18 @@ document.addEventListener('DOMContentLoaded', () => {
     btnSalvarConexao.addEventListener('click', salvarConexao);
   }
 
+  const btnCadastrarDisp = document.getElementById('btn-cadastrar-dispositivo');
+  if (btnCadastrarDisp) {
+    btnCadastrarDisp.addEventListener('click', cadastrarDispositivo);
+  }
+  const listaDisp = document.getElementById('disp-lista');
+  if (listaDisp) {
+    listaDisp.addEventListener('click', (ev) => {
+      const alvo = ev.target.closest('[data-disp-acao]');
+      if (alvo) alterarDispositivo(alvo.getAttribute('data-disp-acao'), alvo.getAttribute('data-disp-id'));
+    });
+  }
+
   window.addEventListener('online', atualizarStatusRede);
   window.addEventListener('offline', atualizarStatusRede);
 
@@ -239,4 +347,5 @@ document.addEventListener('DOMContentLoaded', () => {
   registrarServiceWorkerUniversal();
   configurarInstalacaoPwa();
   carregar();
+  carregarDispositivos();
 });

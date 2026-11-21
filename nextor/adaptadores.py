@@ -10,7 +10,6 @@ import hmac
 import json
 import logging
 import os
-from pathlib import Path
 import secrets
 import threading
 import time
@@ -381,7 +380,7 @@ def ler_logs(limite: int = 50) -> list[dict[str, Any]]:
         if not ARQUIVO_LOG.exists():
             return []
         try:
-            linhas = [l for l in ARQUIVO_LOG.read_text(encoding="utf-8").splitlines() if l.strip()]
+            linhas = [ln for ln in ARQUIVO_LOG.read_text(encoding="utf-8").splitlines() if ln.strip()]
             resultado = []
             for linha in reversed(linhas[-limite:]):
                 partes = linha.split("\t")

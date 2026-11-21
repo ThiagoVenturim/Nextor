@@ -61,22 +61,22 @@ class TestArmazenamentoGTD(unittest.TestCase):
         self.assertIsNone(self.banco.obter_projeto(p.id))
 
     def test_crud_leitura_e_historico(self):
-        l = Leitura(
+        leitura = Leitura(
             titulo="Clean Architecture",
             autor="Robert C. Martin",
             tipo="livro",
             paginas_total=300,
         )
-        self.banco.salvar_leitura(l)
+        self.banco.salvar_leitura(leitura)
 
-        recuperada = self.banco.obter_leitura(l.id)
+        recuperada = self.banco.obter_leitura(leitura.id)
         self.assertIsNotNone(recuperada)
         self.assertEqual(recuperada.titulo, "Clean Architecture")
 
         # Registra progresso diario
-        total1 = self.banco.registrar_progresso_leitura(l.id, 15, "2026-11-08")
+        total1 = self.banco.registrar_progresso_leitura(leitura.id, 15, "2026-11-08")
         self.assertEqual(total1, 15)
-        total2 = self.banco.registrar_progresso_leitura(l.id, 10, "2026-11-08")
+        total2 = self.banco.registrar_progresso_leitura(leitura.id, 10, "2026-11-08")
         self.assertEqual(total2, 25)
 
         self.assertEqual(self.banco.paginas_lidas_na_data("2026-11-08"), 25)

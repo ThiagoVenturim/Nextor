@@ -4,9 +4,9 @@ import io
 import json
 import re
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional
 
-from . import config, estudos
+from . import estudos
 
 
 def normalizar_slug(texto: str) -> str:
@@ -103,7 +103,7 @@ def localizar_material_para_resumo(
 
 def _extrair_trechos_heuristicos(conteudo: str, titulo: str, max_trechos: int = 5) -> List[Dict[str, str]]:
     """Divide o conteudo em trechos significativos com marcacao de fonte."""
-    linhas = [l.strip() for l in conteudo.splitlines() if l.strip()]
+    linhas = [ln.strip() for ln in conteudo.splitlines() if ln.strip()]
     if not linhas:
         return []
 
@@ -129,10 +129,10 @@ def _extrair_trechos_heuristicos(conteudo: str, titulo: str, max_trechos: int = 
     # Se nao for aula gravada com timestamps, agrupa paragrafos
     paragrafos = []
     bloco_atual = []
-    for l in linhas:
-        if l.startswith("Aviso de consentimento:") or l.startswith("URL:"):
+    for ln in linhas:
+        if ln.startswith("Aviso de consentimento:") or ln.startswith("URL:"):
             continue
-        bloco_atual.append(l)
+        bloco_atual.append(ln)
         if len(" ".join(bloco_atual)) >= 180:
             paragrafos.append(" ".join(bloco_atual))
             bloco_atual = []
@@ -204,7 +204,7 @@ def gerar_resumo_e_flashcards(
     gerar_cards: bool = True,
 ) -> Dict[str, Any]:
     """Gera resumo estruturado em topicos com fontes e flashcards para Anki.
-    
+
     Tenta utilizar o cerebro configurado (Ollama/Claude) e cai de forma graciosa
     para o extrator deterministico se o cerebro estiver indisponivel ou falhar.
     """
@@ -290,7 +290,7 @@ def gerar_resumo_e_flashcards(
 
 def exportar_flashcards_anki(flashcards: List[Dict[str, str]], formato: str = "csv") -> str:
     """Exporta lista de flashcards no formato CSV ou TSV compativel com importacao do Anki.
-    
+
     Campos exportados: Pergunta, Resposta, Fonte, Tag.
     """
     buffer = io.StringIO()

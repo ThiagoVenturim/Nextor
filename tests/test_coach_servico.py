@@ -1,5 +1,4 @@
 """Testes unitarios offline dos endpoints HTTP do Coach de Estudos no servico (Issue #57)."""
-import json
 import os
 from pathlib import Path
 import tempfile

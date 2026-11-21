@@ -8,7 +8,6 @@ from pathlib import Path
 
 from nextor.gtd.armazenamento import ArmazenamentoGTD
 from nextor.gtd.metodos import (
-    REGISTRO_METODOS,
     MetodoEisenhower,
     MetodoGTD,
     MetodoKanban,

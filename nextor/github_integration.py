@@ -10,7 +10,6 @@ from datetime import datetime
 import json
 import logging
 import os
-import re
 from typing import Any, Callable, Dict, List, Optional, Tuple
 import urllib.error
 import urllib.parse
@@ -154,14 +153,13 @@ def listar_itens_kanban(
     }
 
     for iss in issues:
-        labels_lower = [str(l).lower() for l in iss.get("labels", [])]
-        titulo_lower = iss.get("titulo", "").lower()
+        labels_lower = [str(rotulo).lower() for rotulo in iss.get("labels", [])]
 
-        if any("progress" in l or "progresso" in l or "doing" in l for l in labels_lower):
+        if any("progress" in rotulo or "progresso" in rotulo or "doing" in rotulo for rotulo in labels_lower):
             colunas["Em Progresso"].append(iss)
-        elif any("review" in l or "revisao" in l or "pr" in l for l in labels_lower):
+        elif any("review" in rotulo or "revisao" in rotulo or "pr" in rotulo for rotulo in labels_lower):
             colunas["Revisao"].append(iss)
-        elif iss.get("estado") == "closed" or any("done" in l or "concluido" in l for l in labels_lower):
+        elif iss.get("estado") == "closed" or any("done" in rotulo or "concluido" in rotulo for rotulo in labels_lower):
             colunas["Concluido"].append(iss)
         else:
             colunas["A Fazer"].append(iss)

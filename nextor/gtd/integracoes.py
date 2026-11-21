@@ -5,21 +5,17 @@ Centraliza a coleta de tarefas externas e sincronizacao bidirecional:
 - Notion: sincronizacao com resolução por last_edited_time, desligada de forma segura
   se tokens nao estiverem configurados.
 """
-from datetime import datetime
 import logging
 from typing import Any, Callable, Dict, List, Optional
 import uuid
 
-from .. import config
 from .armazenamento import ArmazenamentoGTD
 from .modelos import Item, Leitura
 from .notion import (
     ClienteNotion,
     extrair_texto_propriedade,
     montar_propriedade_titulo,
-    montar_propriedade_texto,
     montar_propriedade_select,
-    montar_propriedade_numero,
 )
 
 log = logging.getLogger("nextor.gtd.integracoes")

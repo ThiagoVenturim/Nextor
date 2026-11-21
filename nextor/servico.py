@@ -1,6 +1,7 @@
 """Servico HTTP local do Nextor: recebe comandos pela rede de casa e responde em voz."""
 import hmac
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
 
@@ -1459,6 +1460,40 @@ def tela_parar_endpoint():
 
 # --- Dispositivos e telas (celular, tablet, notebook, PC, TV) ------------------
 
+class FiltroSegredosLog(logging.Filter):
+    """Tira token/senha das linhas de acesso HTTP antes de irem para o log."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        from . import dispositivos
+        try:
+            mensagem = record.getMessage()
+        except Exception:
+            return True
+        limpa = dispositivos.mascarar_segredos(mensagem)
+        if limpa != mensagem:
+            record.msg = limpa
+            record.args = ()
+        return True
+
+
+_FILTRO_SEGREDOS = FiltroSegredosLog()
+for _nome_logger in ("werkzeug", "flask.app"):
+    logging.getLogger(_nome_logger).addFilter(_FILTRO_SEGREDOS)
+app.logger.addFilter(_FILTRO_SEGREDOS)
+
+
+@app.before_request
+def restringe_rede_dispositivos():
+    """Rotas de dispositivos so respondem para a rede local ou VPN privada."""
+    endpoint = request.endpoint or ""
+    if not endpoint.startswith("dispositivo"):
+        return None
+    from . import dispositivos
+    if dispositivos.endereco_permitido(request.remote_addr, config.REDES_PERMITIDAS):
+        return None
+    return jsonify(ok=False, erro="acesso permitido apenas pela rede local ou VPN"), 403
+
+
 @app.route("/v1/dispositivos", methods=["GET", "POST"])
 def dispositivos_endpoint():
     from . import dispositivos
@@ -1481,7 +1516,11 @@ def dispositivos_endpoint():
             host = request.host.split(":")[0] if request.host else "localhost"
             token_puro = item.get("token", "")
             url_parear = dispositivos.gerar_url_pareamento(item["id"], token_puro=token_puro, host=host, porta=config.PORTA)
-            return jsonify(ok=True, dispositivo=item, url_pareamento=url_parear), 201
+            qr_svg = dispositivos.gerar_qr_svg(url_parear)
+            resposta = jsonify(ok=True, dispositivo=item, url_pareamento=url_parear, qr_svg=qr_svg)
+            resposta.status_code = 201
+            resposta.headers["Cache-Control"] = "no-store"
+            return resposta
         except ValueError as e:
             return jsonify(ok=False, erro=str(e)), 400
 
@@ -1610,9 +1649,12 @@ def dispositivo_conectar_pagina():
         dispositivos.registrar_presenca(id_disp, ip=request.remote_addr, user_agent=request.headers.get("User-Agent"))
         dispositivos.definir_ativo(id_disp)
 
+    from html import escape
+    nome_html = escape(disp['nome'])
+    tipo_html = escape(disp['tipo'])
     html = f"""<!doctype html><html lang=pt-BR><meta charset=utf-8>
 <meta name=viewport content="width=device-width, initial-scale=1">
-<title>Nextor - {disp['nome']}</title>
+<title>Nextor - {nome_html}</title>
 <style>
 :root{{color-scheme:light dark;--a:#4f46e5}}
 body{{font-family:system-ui,sans-serif;max-width:720px;margin:0 auto;padding:24px;background:Canvas;color:CanvasText;text-align:center}}
@@ -1624,7 +1666,7 @@ h1{{margin:0 0 8px 0;font-size:1.8rem}}
 </style>
 <div class=card>
   <h1>Nextor</h1>
-  <div class=tipo>{disp['nome']} ({disp['tipo']})</div>
+  <div class=tipo>{nome_html} ({tipo_html})</div>
   <div id=resposta>Aparelho conectado e pronto.</div>
   <div class=status id=status>Conectando...</div>
 </div>
@@ -1635,9 +1677,7 @@ let tk = hashParams.get('token') || new URLSearchParams(window.location.search).
 if (tk) {{
   try {{
     sessionStorage.setItem('nextor_disp_' + id, tk);
-    if (window.location.hash) {{
-      history.replaceState(null, '', window.location.pathname + window.location.search);
-    }}
+    history.replaceState(null, '', window.location.pathname + '?id=' + encodeURIComponent(id));
   }} catch(e) {{}}
 }} else {{
   try {{
@@ -1651,7 +1691,9 @@ async function checar(){{
     return;
   }}
   try{{
-    const r = await fetch('/v1/dispositivos/' + encodeURIComponent(id) + '/mensagens?limpar=1&token=' + encodeURIComponent(tk));
+    const r = await fetch('/v1/dispositivos/' + encodeURIComponent(id) + '/mensagens?limpar=1', {{
+      headers: {{'X-Nextor-Token': tk}}
+    }});
     if (r.status === 401 || r.status === 403) {{
       document.getElementById('status').textContent = 'Token invalido ou revogado';
       return;
@@ -1667,6 +1709,16 @@ async function checar(){{
   }}catch(e){{}}
 }}
 setInterval(checar, 2500);
+async function presenca(){{
+  if (!tk) return;
+  try{{
+    await fetch('/v1/dispositivos/' + encodeURIComponent(id) + '/presenca', {{
+      method: 'POST', headers: {{'X-Nextor-Token': tk}}
+    }});
+  }}catch(e){{}}
+}}
+setInterval(presenca, 30000);
+presenca();
 checar();
 </script></html>"""
     return html, 200, {"Content-Type": "text/html; charset=utf-8"}
@@ -1823,7 +1875,7 @@ def gtd_listar_leituras_endpoint():
     estado = request.args.get("estado")
     tipo = request.args.get("tipo")
     leituras = listar_leituras(estado=estado, tipo=tipo)
-    return jsonify(ok=True, leituras=[l.to_dict() for l in leituras])
+    return jsonify(ok=True, leituras=[leitura.to_dict() for leitura in leituras])
 
 
 @app.post("/gtd/leituras")

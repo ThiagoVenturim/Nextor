@@ -2,9 +2,9 @@
 import json
 import re
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional
 
-from . import config, estudos
+from . import estudos
 
 STOP_WORDS = {
     "o", "a", "os", "as", "um", "uma", "uns", "umas", "de", "do", "da", "dos", "das",
@@ -24,7 +24,7 @@ def extrair_termos_busca(pergunta: str) -> List[str]:
 
 def _extrair_trecho_com_timestamp_ou_secao(conteudo: str, termos: List[str], titulo: str) -> Optional[Dict[str, str]]:
     """Localiza o segmento timestamped ou paragrafo mais relevante dentro do conteudo."""
-    linhas = [l.strip() for l in conteudo.splitlines() if l.strip()]
+    linhas = [ln.strip() for ln in conteudo.splitlines() if ln.strip()]
     if not linhas:
         return None
 
@@ -55,10 +55,10 @@ def _extrair_trecho_com_timestamp_ou_secao(conteudo: str, termos: List[str], tit
     # 2. Se nao for aula com timestamp, divide em paragrafos e pontua
     paragrafos = []
     bloco = []
-    for l in linhas:
-        if l.startswith("Aviso de consentimento:") or l.startswith("URL:"):
+    for ln in linhas:
+        if ln.startswith("Aviso de consentimento:") or ln.startswith("URL:"):
             continue
-        bloco.append(l)
+        bloco.append(ln)
         if len(" ".join(bloco)) >= 150:
             paragrafos.append(" ".join(bloco))
             bloco = []
@@ -148,7 +148,7 @@ def responder_com_material(
     caminho_db: Optional[Path] = None,
 ) -> Dict[str, Any]:
     """Responde a pergunta do usuario com base exclusiva no material de estudos cadastrado.
-    
+
     Aplica a regra estrita anti-alucinacao: recusa responder e declara explicitamente
     a ausencia de informacao quando o material nao cobrir a pergunta.
     """

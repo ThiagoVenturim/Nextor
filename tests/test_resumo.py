@@ -1,6 +1,5 @@
 """Testes unitarios offline do modulo de resumos e flashcards para Anki. Sem rede nem microfone real."""
 import csv
-import io
 import os
 import tempfile
 import unittest
@@ -278,7 +277,7 @@ class TestExportacaoAnki(unittest.TestCase):
         self.assertIn("#html:false", csv_texto)
         self.assertIn("#tags column:4", csv_texto)
 
-        linhas = [l for l in csv_texto.strip().splitlines() if not l.startswith("#")]
+        linhas = [ln for ln in csv_texto.strip().splitlines() if not ln.startswith("#")]
         self.assertEqual(len(linhas), 2)
         # Parse CSV para checar integridade dos 4 campos
         reader = csv.reader(linhas)
@@ -301,7 +300,7 @@ class TestExportacaoAnki(unittest.TestCase):
         tsv_texto = resumos.exportar_flashcards_anki(cards, formato="tsv")
         self.assertIn("#separator:Tab", tsv_texto)
         self.assertIn("#tags column:4", tsv_texto)
-        linhas = [l for l in tsv_texto.strip().splitlines() if not l.startswith("#")]
+        linhas = [ln for ln in tsv_texto.strip().splitlines() if not ln.startswith("#")]
         self.assertEqual(len(linhas), 1)
         partes = linhas[0].split("\t")
         self.assertEqual(partes, ["Pergunta 1", "Resposta 1", "Fonte 1", "tag1"])

@@ -212,6 +212,26 @@ stream deck do PC e conversa com o Nextor nos dois sentidos:
 Configure `NEXTOR_DECK_URL` e `NEXTOR_DECK_TOKEN` no `.env` (o token esta em
 `data/secret.json` do NexDeck).
 
+## Dispositivos (celular, tablet, notebook, PC e TV)
+
+O Nextor conhece os seus aparelhos e escolhe onde responder.
+
+- Cadastro e pareamento: no bloco **Dispositivos** do `/painel` (token mestre), informe
+  identificador, nome e tipo. O Nextor gera um token so daquele aparelho e mostra uma unica
+  vez o QR code e o link de pareamento (o token vai no fragmento `#token=`, que nao chega aos
+  logs). No disco fica apenas o hash SHA-256; a comparacao e em tempo constante. Para o QR
+  code, instale o extra opcional: `pip install -e ".[qr]"`. Sem ele, o painel mostra so o link.
+- TV (Android TV / Google TV): abra o link de pareamento no navegador da TV, ou transmita a
+  pagina por Cast (ex.: `catt cast_site <link>`).
+- Presenca e hand-off: a pagina de pareamento avisa presenca a cada 30 segundos e o ultimo
+  aparelho visto fica ativo. Diga "mostra na
+  TV" ou "continua no celular" para mandar a resposta para outro aparelho.
+- Permissoes por tipo: a TV so mostra (`visualizar`); celular e tablet tambem conversam
+  (`interagir`); PC e notebook podem executar acoes pelo NexDeck (`executar`).
+- Revogacao: botao **Revogar** no painel ou `POST /v1/dispositivos/<id>/revogar`.
+- Rede: as rotas de dispositivos so respondem para a rede local, loopback e a faixa do
+  Tailscale. Outras VPNs entram em `NEXTOR_REDES_PERMITIDAS` (CIDR). Endereco publico recebe 403.
+
 ## Seguranca
 
 - So responde na rede local, protegido por um token.

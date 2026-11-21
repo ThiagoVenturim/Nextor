@@ -13,7 +13,6 @@ Cobre:
 4) Endpoints HTTP em servico.py (/v1/reuniao/iniciar, /v1/reuniao/parar, /v1/tela/iniciar,
    /v1/tela/marcar, /v1/tela/parar; bloqueio sem token mestre 401, sucesso 200 e erros 400).
 """
-from datetime import datetime
 import json
 import os
 from pathlib import Path

@@ -1,5 +1,4 @@
 """Canal de notificacao via Web Push para o PWA no celular."""
-import json
 import logging
 import os
 from typing import Callable, Optional
@@ -60,7 +59,7 @@ class CanalWebPush(CanalNotificacao):
 
         try:
             # Tenta envio via biblioteca padrao pywebpush se disponivel
-            from pywebpush import webpush
+            from pywebpush import webpush  # noqa: F401
             # Se nao houver inscricao registrada ativa, opera como fail-safe
             return True
         except ImportError:

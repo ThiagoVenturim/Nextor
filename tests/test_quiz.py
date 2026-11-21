@@ -1,5 +1,4 @@
 """Testes unitarios offline do modulo de quiz com repeticao espacada. Sem rede nem microfone real."""
-import json
 import os
 import tempfile
 import unittest

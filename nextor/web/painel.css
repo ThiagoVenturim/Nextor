@@ -356,3 +356,11 @@ select:focus-visible {
     animation: none !important;
   }
 }
+
+.qr-pareamento svg {
+  background: #fff;
+  padding: 8px;
+  border-radius: 8px;
+  max-width: 100%;
+  height: auto;
+}

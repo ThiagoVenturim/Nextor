@@ -45,6 +45,15 @@ dev = [
     "pytest>=7.0.0",
     "ruff>=0.1.0",
 ]
+qr = [
+    "segno>=1.5",
+]
+
+[tool.setuptools.packages.find]
+include = ["nextor*"]
+
+[tool.setuptools.package-data]
+nextor = ["web/*", "web/**/*", "coach/trilhas/*.yaml"]
 
 [tool.ruff]
 line-length = 120

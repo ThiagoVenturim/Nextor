@@ -12,7 +12,7 @@ Cobre:
 7) gatilhos no roteador ('organiza minha pasta X', 'confirma organizacao', 'desfaz organizacao');
 8) endpoints HTTP em servico.py (bloqueio 401, pasta nao permitida 403, sucesso 200).
 """
-from datetime import datetime, timedelta
+from datetime import datetime
 import json
 import os
 from pathlib import Path

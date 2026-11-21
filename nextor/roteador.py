@@ -743,7 +743,7 @@ def _fazer_nest(acao: str, nivel: int = 50) -> str:
         if acao == "volume":
             return nest.volume(nivel)
         return nest.parar()
-    except Exception as e:
+    except Exception:
         return "Nao consegui controlar o Nest agora."
 
 

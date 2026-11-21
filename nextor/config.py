@@ -28,6 +28,9 @@ PERSONA = os.getenv("NEXTOR_PERSONA", "assistente")
 # Servico
 TOKEN = os.getenv("NEXTOR_TOKEN", "troque-este-token")
 PORTA = int(os.getenv("NEXTOR_PORTA", "5005"))
+# Redes extras (CIDR, separadas por virgula) aceitas nas rotas de dispositivos, alem da rede
+# local e da faixa do Tailscale. Ex.: a faixa de uma VPN WireGuard propria.
+REDES_PERMITIDAS = os.getenv("NEXTOR_REDES_PERMITIDAS", "")
 
 # Ponte com o NexDeck (stream deck no celular). Vazio = desligado.
 DECK_URL = os.getenv("NEXTOR_DECK_URL", "").rstrip("/")

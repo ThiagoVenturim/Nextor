@@ -246,7 +246,6 @@ def notificacao_teste(canal: str = "", mensagem: str = "Teste de notificacao Nex
 
 @mcp.tool(description="Consulta a acao de estudo do dia recomendada pelo Coach de Estudos.")
 def coach_acao_do_dia(plano_id: str = "") -> str:
-    import json
     from .coach import ArmazenamentoCoach, acao_do_dia, obter_ou_criar_plano_padrao
     banco = ArmazenamentoCoach()
     plano = banco.obter_plano(plano_id) if plano_id else obter_ou_criar_plano_padrao(banco)

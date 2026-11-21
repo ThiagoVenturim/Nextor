@@ -16,7 +16,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from nextor import config, dispositivos, roteador, servico
+from nextor import config, dispositivos, servico
 
 
 class TestValidacaoTokenMestre(unittest.TestCase):
@@ -160,7 +160,7 @@ class TestForcarIdDispositivoDonoDoToken(unittest.TestCase):
     def test_comando_forca_id_dispositivo_do_token_mesmo_se_divergir_no_payload(self):
         # TV so visualiza (sem permissao 'executar'); PC tem permissao 'executar'
         tv = dispositivos.cadastrar("tv-sala", "TV Sala", tipo="tv")
-        pc = dispositivos.cadastrar("pc-escritorio", "PC Escritorio", tipo="pc")
+        dispositivos.cadastrar("pc-escritorio", "PC Escritorio", tipo="pc")
 
         with mock.patch.object(servico, "_falar_sem_quebrar", return_value=""), \
                 mock.patch("nextor.roteador._registra"):

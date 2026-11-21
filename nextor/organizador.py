@@ -9,10 +9,9 @@ Permite organizar arquivos por tipo, data ou disciplina com:
 from datetime import datetime
 import json
 import logging
-import os
 from pathlib import Path
 import shutil
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set
 import uuid
 
 from . import config
