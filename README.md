@@ -269,6 +269,14 @@ O Nextor suporta persistencia de dados plugavel atraves do SQLAlchemy Core, mant
 - Subir com PostgreSQL via Docker Compose: `docker compose --profile postgres up --build`
 - Manifestos Kubernetes: `k8s/`
 
+## Painel GTD no celular
+
+O painel GTD (`/gtd`) e um PWA instalavel com captura rapida, contextos (`@faculdade`, `@casa`,
+`@trabalho`, `@academia`, `@leitura`), proximas acoes, agenda do dia, ordem sugerida do dia a
+partir da agenda e da rotina, e revisao semanal. Os mesmos passos funcionam pelo Telegram
+(`/inbox`, `/ordem`, `/proximas`, `/feito`, `/revisao`). Fora de casa, so pela VPN. Veja
+`docs/PAINEL_GTD.md`.
+
 ## Integracoes do GTD (Notion, GitHub e anotacoes)
 
 O painel GTD (`/gtd`) sincroniza tarefas, projetos e leituras com o Notion, issues e PRs
