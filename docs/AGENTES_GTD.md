@@ -28,6 +28,14 @@ Para configurar o servidor MCP em clientes stdio:
 }
 ```
 
+#### Escolher o que expor (tela de Ajustes)
+Na aba Ajustes do painel `/gtd` a pessoa escolhe, com a descricao de cada item:
+- **Skills**: grupos de ferramentas (Tarefas, Agenda, Pomodoro, Anotacoes, Notificacoes, Noticias, Voz no Nest, Coach, NexRead, NexVoice). Desligar uma skill tira todas as ferramentas dela do servidor MCP.
+- **Ferramentas MCP**: liga ou desliga cada ferramenta de `nextor/mcp_server.py`. O catalogo sai do proprio servidor, entao ferramentas novas aparecem sozinhas e comecam ligadas.
+- **Agentes**: Organizador de Inbox, Planejador do Dia e Revisao Semanal. Cada agente usa algumas skills; se uma delas estiver desligada, o agente fica pausado.
+
+Tudo fica no arquivo de configuracao local (`~/.nextor/config.json`, ou o caminho de `NEXTOR_GTD_CONFIG_JSON`), nas chaves `skills`, `mcp_ferramentas` e `agentes`. Tokens continuam so no `.env`. O servidor MCP le essa configuracao ao iniciar (`construir_servidor()`), entao reinicie o cliente MCP depois de salvar.
+
 ### 2. API HTTP Local Protegida
 Os agentes tambem podem se comunicar pelas rotas HTTP locais do servico Nextor (`http://localhost:5005` ou via VPN):
 - `GET /gtd/itens`: lista tarefas com filtros de estado e contexto.

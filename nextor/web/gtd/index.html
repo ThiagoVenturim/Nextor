@@ -277,6 +277,11 @@
             <!-- Canais carregados via API -->
           </div>
 
+          <p class="ajuda-texto">Para cada evento, marque os canais que devem avisar.</p>
+          <div id="lista-eventos-config" class="bloco-lista">
+            <!-- Matriz evento x canal carregada via API -->
+          </div>
+
           <div class="linha-controles">
             <button id="btn-disparar-teste-notificacao" class="btn-secundario">Disparar Notificacao de Teste</button>
           </div>
@@ -302,10 +307,26 @@
           </div>
         </div>
 
-        <!-- Agentes e MCP Tools -->
+        <!-- Skills, Ferramentas MCP e Agentes -->
         <div class="secao-config-bloco">
-          <h3 class="config-titulo">Agentes e Servidor MCP</h3>
-          <p class="ajuda-texto">Habilidades autonomas que operam tarefas do painel.</p>
+          <h3 class="config-titulo">Skills</h3>
+          <p class="ajuda-texto">Cada skill agrupa ferramentas. Desligar uma skill tira as ferramentas dela do servidor MCP e pausa os agentes que dependem dela.</p>
+          <div id="lista-skills-config" class="bloco-lista">
+            <!-- Skills carregadas via API -->
+          </div>
+        </div>
+
+        <div class="secao-config-bloco">
+          <h3 class="config-titulo">Ferramentas do Servidor MCP</h3>
+          <p class="ajuda-texto">Escolha o que um assistente conectado por MCP (python -m nextor.mcp_server) pode usar. Reinicie o cliente MCP depois de salvar.</p>
+          <div id="lista-mcp-config" class="bloco-lista">
+            <!-- Ferramentas carregadas via API -->
+          </div>
+        </div>
+
+        <div class="secao-config-bloco">
+          <h3 class="config-titulo">Agentes</h3>
+          <p class="ajuda-texto">Agentes anexados trabalham sozinhos sobre o painel.</p>
           <div id="lista-agentes-config" class="bloco-lista">
             <!-- Agentes carregados via API -->
           </div>
@@ -390,11 +411,12 @@
             <span class="wizard-ponto ativo" id="wponto-1"></span>
             <span class="wizard-ponto" id="wponto-2"></span>
             <span class="wizard-ponto" id="wponto-3"></span>
+            <span class="wizard-ponto" id="wponto-4"></span>
           </div>
 
           <!-- Passo 1: Metodo -->
           <div id="passo-wizard-1" class="wizard-passo ativo">
-            <p><strong>Passo 1 de 3: Escolha seu metodo de produtividade</strong></p>
+            <p><strong>Passo 1 de 4: Escolha seu metodo de produtividade</strong></p>
             <p class="ajuda-texto">Voce podera trocar a qualquer momento sem perder tarefas.</p>
             <select id="wizard-metodo" class="select-padrao">
               <option value="gtd">GTD (Getting Things Done)</option>
@@ -407,7 +429,7 @@
 
           <!-- Passo 2: Canal de Notificacao -->
           <div id="passo-wizard-2" class="wizard-passo">
-            <p><strong>Passo 2 de 3: Escolha seu canal principal de avisos</strong></p>
+            <p><strong>Passo 2 de 4: Escolha seu canal principal de avisos</strong></p>
             <select id="wizard-canal" class="select-padrao">
               <option value="telegram">Telegram (Bot do Nextor)</option>
               <option value="webpush">Web Push no Navegador / PWA</option>
@@ -423,7 +445,7 @@
 
           <!-- Passo 3: Aparencia -->
           <div id="passo-wizard-3" class="wizard-passo">
-            <p><strong>Passo 3 de 3: Escolha o tema visual</strong></p>
+            <p><strong>Passo 3 de 4: Escolha o tema visual</strong></p>
             <select id="wizard-tema" class="select-padrao">
               <option value="escuro">Tema Escuro</option>
               <option value="claro">Tema Claro</option>
@@ -437,6 +459,18 @@
             </select>
             <div class="linha-controles" style="margin-top: 12px;">
               <button id="btn-wizard-voltar-3" class="btn-secundario">Voltar</button>
+              <button id="btn-wizard-avancar-3" class="btn-primario expandido">Continuar</button>
+            </div>
+          </div>
+
+          <!-- Passo 4: Integracoes e Agentes -->
+          <div id="passo-wizard-4" class="wizard-passo">
+            <p><strong>Passo 4 de 4: Integracoes e agentes</strong></p>
+            <p class="ajuda-texto">Ligue o que quiser usar agora. Skills e ferramentas MCP ficam em Ajustes.</p>
+            <div id="wizard-lista-integracoes" class="bloco-lista"></div>
+            <div id="wizard-lista-agentes" class="bloco-lista"></div>
+            <div class="linha-controles" style="margin-top: 12px;">
+              <button id="btn-wizard-voltar-4" class="btn-secundario">Voltar</button>
               <button id="btn-wizard-concluir" class="btn-primario expandido">Concluir Configuracao</button>
             </div>
           </div>

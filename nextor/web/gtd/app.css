@@ -895,3 +895,66 @@ input:checked + .toggle-slider:before {
   display: none;
   opacity: 0;
 }
+
+/* Tela de configuracao: skills, MCP, agentes e eventos (#47) */
+.linha-config {
+  gap: 12px;
+}
+
+.linha-config > div:first-child,
+.linha-config-texto {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.linha-config .toggle-switch {
+  flex: 0 0 auto;
+}
+
+.grupo-config-titulo {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--texto-mutado);
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+
+.linha-evento {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.88rem;
+}
+
+.chips-canais {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip-canal {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 36px;
+  padding: 4px 10px;
+  border: 1px solid var(--borda);
+  border-radius: 18px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.chip-canal input {
+  accent-color: var(--destaque);
+}
+
+@media (max-width: 380px) {
+  .secao-config-bloco {
+    padding: 12px;
+  }
+
+  .linha-controles-dupla {
+    flex-direction: column;
+  }
+}

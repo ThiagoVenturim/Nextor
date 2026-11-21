@@ -12,8 +12,13 @@ Exemplo de configuracao num cliente MCP (stdio):
     command: <caminho>/.venv/Scripts/python.exe
     args: ["-m", "nextor.mcp_server"]
     cwd: <pasta do projeto>
+
+Quais ferramentas sao expostas depende da config do usuario (tela de Ajustes, Issue #47):
+cada ferramenta pertence a uma skill, e so entra no servidor se a skill e a propria
+ferramenta estiverem ligadas. O catalogo completo fica em FERRAMENTAS.
 """
 from datetime import datetime
+from typing import Any, Callable, Dict, List, Optional
 
 try:
     from mcp.server.mcpserver import MCPServer
@@ -33,10 +38,43 @@ except ImportError:
 
 from . import config
 
-mcp = MCPServer("nextor")
+# Catalogo de todas as ferramentas MCP conhecidas: nome -> descricao, skill e funcao.
+FERRAMENTAS: Dict[str, Dict[str, Any]] = {}
 
 
-@mcp.tool(description="Salva uma anotacao do usuario e confirma falando no Nest.")
+def ferramenta(description: str = "", skill: str = "geral") -> Callable[[Callable], Callable]:
+    """Registra a funcao no catalogo sem expor ainda; construir_servidor decide o que expor."""
+    def decorator(fn: Callable) -> Callable:
+        FERRAMENTAS[fn.__name__] = {"descricao": description, "skill": skill, "funcao": fn}
+        return fn
+    return decorator
+
+
+def listar_ferramentas() -> List[Dict[str, str]]:
+    """Catalogo publico (sem as funcoes) para a tela de configuracao."""
+    return [
+        {"nome": nome, "descricao": meta["descricao"], "skill": meta["skill"]}
+        for nome, meta in FERRAMENTAS.items()
+    ]
+
+
+def ferramentas_expostas(cfg: Optional[Dict[str, Any]] = None) -> List[str]:
+    """Nomes das ferramentas que a config do usuario permite expor."""
+    from .gtd.configuracao import carregar_config, ferramenta_mcp_ativa
+    cfg = carregar_config() if cfg is None else cfg
+    return [nome for nome, meta in FERRAMENTAS.items() if ferramenta_mcp_ativa(cfg, nome, meta["skill"])]
+
+
+def construir_servidor(cfg: Optional[Dict[str, Any]] = None) -> MCPServer:
+    """Cria o servidor MCP registrando apenas as ferramentas ligadas na config."""
+    servidor = MCPServer("nextor")
+    for nome in ferramentas_expostas(cfg):
+        meta = FERRAMENTAS[nome]
+        servidor.tool(description=meta["descricao"])(meta["funcao"])
+    return servidor
+
+
+@ferramenta(skill="notas", description="Salva uma anotacao do usuario e confirma falando no Nest.")
 def anotar(texto: str) -> str:
     carimbo = datetime.now().strftime("%Y-%m-%d %H:%M")
     with config.ANOTACOES.open("a", encoding="utf-8") as f:
@@ -49,14 +87,14 @@ def anotar(texto: str) -> str:
     return f"Anotado em {carimbo}: {texto}"
 
 
-@mcp.tool(description="Devolve as ultimas anotacoes do usuario.")
+@ferramenta(skill="notas", description="Devolve as ultimas anotacoes do usuario.")
 def listar_notas() -> str:
     if not config.ANOTACOES.exists():
         return "Nenhuma nota ainda."
     return config.ANOTACOES.read_text(encoding="utf-8")
 
 
-@mcp.tool(description="Compromissos da agenda. quando: 'hoje' ou 'proximos' (7 dias).")
+@ferramenta(skill="agenda", description="Compromissos da agenda. quando: 'hoje' ou 'proximos' (7 dias).")
 def agenda(quando: str = "hoje") -> str:
     from .agenda import eventos_hoje, eventos_proximos, resumo_falado
     if quando.startswith("prox") or quando == "semana":
@@ -64,7 +102,7 @@ def agenda(quando: str = "hoje") -> str:
     return resumo_falado(eventos_hoje())
 
 
-@mcp.tool(description="Agenda do dia detalhada com compromissos, reunioes, blocos livres e alertas de sobrecarga.")
+@ferramenta(skill="agenda", description="Agenda do dia detalhada com compromissos, reunioes, blocos livres e alertas de sobrecarga.")
 def agenda_dia(quando: str = "hoje") -> str:
     from .agenda import eventos_dia, analisar_dia
     evs = eventos_dia()
@@ -99,7 +137,7 @@ def agenda_dia(quando: str = "hoje") -> str:
     return "\n".join(partes)
 
 
-@mcp.tool(description="Informa a proxima reuniao agendada com horario e link de acesso.")
+@ferramenta(skill="agenda", description="Informa a proxima reuniao agendada com horario e link de acesso.")
 def proxima_reuniao() -> str:
     from .agenda import proxima_reuniao as _proxima_reuniao
     prox = _proxima_reuniao()
@@ -113,7 +151,7 @@ def proxima_reuniao() -> str:
     return f"Proxima reuniao: '{prox['titulo']}' em {data_str} as {hora_str}.{link}"
 
 
-@mcp.tool(description="Lista os blocos de tempo livres do dia com sugestoes de foco e descanso.")
+@ferramenta(skill="agenda", description="Lista os blocos de tempo livres do dia com sugestoes de foco e descanso.")
 def blocos_livres(quando: str = "hoje") -> str:
     from .agenda import eventos_dia, calcular_blocos_livres, sugerir_timeboxing
     evs = eventos_dia()
@@ -134,34 +172,34 @@ def blocos_livres(quando: str = "hoje") -> str:
     return "\n".join(linhas)
 
 
-@mcp.tool(description="Resumo das noticias recentes de um assunto (padrao: o do .env).")
+@ferramenta(skill="noticias", description="Resumo das noticias recentes de um assunto (padrao: o do .env).")
 def noticias(assunto: str = "") -> str:
     from .noticias import resumir
     return resumir(assunto)
 
 
-@mcp.tool(description="Fala um texto em voz alta no Google Nest do usuario.")
+@ferramenta(skill="voz", description="Fala um texto em voz alta no Google Nest do usuario.")
 def falar(texto: str) -> str:
     from .voz import falar as _falar
     _falar(texto)
     return "Falado no Nest."
 
 
-@mcp.tool(description="Captura uma nova tarefa ou ideia para a caixa de entrada (Inbox) do GTD.")
+@ferramenta(skill="gtd", description="Captura uma nova tarefa ou ideia para a caixa de entrada (Inbox) do GTD.")
 def gtd_capturar(titulo: str, nota: str = "", contexto: str = "@qualquer") -> str:
     from .gtd import capturar
     item = capturar(titulo=titulo, nota=nota, contexto=contexto)
     return f"Capturado no GTD: {item.titulo} ({item.contexto})"
 
 
-@mcp.tool(description="Consulta a agenda do dia completa do GTD (eventos, tarefas prioritarias e meta de leitura).")
+@ferramenta(skill="gtd", description="Consulta a agenda do dia completa do GTD (eventos, tarefas prioritarias e meta de leitura).")
 def gtd_dia() -> str:
     from .gtd import agenda_do_dia
     res = agenda_do_dia()
     return res.get("resumo_falado", "Agenda do dia indisponivel.")
 
 
-@mcp.tool(description="Sincroniza o GTD com Notion, GitHub (issues e PRs) e anotacoes do Nextor. fontes: lista separada por virgula ou vazio para todas.")
+@ferramenta(skill="gtd", description="Sincroniza o GTD com Notion, GitHub (issues e PRs) e anotacoes do Nextor. fontes: lista separada por virgula ou vazio para todas.")
 def gtd_sincronizar(fontes: str = "") -> str:
     from .gtd.integracoes import sincronizar_tudo
     lista = [f.strip().lower() for f in fontes.split(",") if f.strip()] or None
@@ -182,7 +220,7 @@ def gtd_sincronizar(fontes: str = "") -> str:
     return "Sincronizacao: " + ("; ".join(partes) if partes else "nenhuma fonte")
 
 
-@mcp.tool(description="Processa um item do GTD mudando seu destino (proxima, aguardando, algum_dia, feito, lixo, projeto ou leitura).")
+@ferramenta(skill="gtd", description="Processa um item do GTD mudando seu destino (proxima, aguardando, algum_dia, feito, lixo, projeto ou leitura).")
 def gtd_processar(item_id: str, destino: str, contexto: str = "") -> str:
     from .gtd import processar
     resultado = processar(item_id=item_id, novo_estado=destino, novo_contexto=contexto or None)
@@ -191,7 +229,7 @@ def gtd_processar(item_id: str, destino: str, contexto: str = "") -> str:
     return f"Item {item_id} movido para {resultado.estado}."
 
 
-@mcp.tool(description="Registra paginas lidas e atualiza o progresso da meta diaria de leitura.")
+@ferramenta(skill="gtd", description="Registra paginas lidas e atualiza o progresso da meta diaria de leitura.")
 def leitura_progresso(paginas: int, leitura_id: str = "") -> str:
     from .gtd import atualizar_progresso, listar_leituras
     id_alvo = leitura_id
@@ -213,7 +251,7 @@ def leitura_progresso(paginas: int, leitura_id: str = "") -> str:
     return f"Registradas {paginas} paginas. Total hoje: {res['paginas_lidas_hoje']}/{res['meta_diaria']}. {status_meta}"
 
 
-@mcp.tool(description="Troca o metodo ativo de produtividade (gtd, para, eisenhower, kanban).")
+@ferramenta(skill="gtd", description="Troca o metodo ativo de produtividade (gtd, para, eisenhower, kanban).")
 def gtd_trocar_metodo(metodo: str) -> str:
     from .gtd.configuracao import salvar_config
     from .gtd.metodos import obter_metodo
@@ -222,21 +260,21 @@ def gtd_trocar_metodo(metodo: str) -> str:
     return f"Metodo alterado para {m.nome}."
 
 
-@mcp.tool(description="Inicia uma sessao Pomodoro de foco.")
+@ferramenta(skill="pomodoro", description="Inicia uma sessao Pomodoro de foco.")
 def pomodoro_iniciar(minutos: int = 25, item_id: str = "") -> str:
     from .gtd.metodos import pomodoro
     res = pomodoro.iniciar(item_id=item_id or None, duracao_min=minutos)
     return f"Pomodoro iniciado: {res['tempo_formatado']} minutos de foco."
 
 
-@mcp.tool(description="Interrompe a sessao Pomodoro ativa.")
+@ferramenta(skill="pomodoro", description="Interrompe a sessao Pomodoro ativa.")
 def pomodoro_parar() -> str:
     from .gtd.metodos import pomodoro
     pomodoro.parar()
     return "Pomodoro interrompido."
 
 
-@mcp.tool(description="Consulta o status atual do Pomodoro.")
+@ferramenta(skill="pomodoro", description="Consulta o status atual do Pomodoro.")
 def pomodoro_estado() -> str:
     from .gtd.metodos import pomodoro
     res = pomodoro.obter_estado()
@@ -245,7 +283,7 @@ def pomodoro_estado() -> str:
     return f"Pomodoro em andamento ({res['modo']}): {res['tempo_formatado']} restantes."
 
 
-@mcp.tool(description="Envia notificacao de teste pelos canais de notificacao.")
+@ferramenta(skill="notificacoes", description="Envia notificacao de teste pelos canais de notificacao.")
 def notificacao_teste(canal: str = "", mensagem: str = "Teste de notificacao Nextor") -> str:
     from .notificacoes import notificar
     from .gtd.configuracao import carregar_config
@@ -265,7 +303,7 @@ def notificacao_teste(canal: str = "", mensagem: str = "Teste de notificacao Nex
     return "Nenhum canal ativo ou configurado para envio."
 
 
-@mcp.tool(description="Consulta a acao de estudo do dia recomendada pelo Coach de Estudos.")
+@ferramenta(skill="coach", description="Consulta a acao de estudo do dia recomendada pelo Coach de Estudos.")
 def coach_acao_do_dia(plano_id: str = "") -> str:
     from .coach import ArmazenamentoCoach, acao_do_dia, obter_ou_criar_plano_padrao
     banco = ArmazenamentoCoach()
@@ -287,7 +325,7 @@ def coach_acao_do_dia(plano_id: str = "") -> str:
     return f"Acao de estudo de hoje: {titulo_rec} ({duracao} min, tipo: {tipo}).{link}"
 
 
-@mcp.tool(description="Conclui uma acao de estudo, ganha XP, avanca streak e atualiza o nivel no Coach.")
+@ferramenta(skill="coach", description="Conclui uma acao de estudo, ganha XP, avanca streak e atualiza o nivel no Coach.")
 def coach_concluir(recurso_id: str = "", plano_id: str = "") -> str:
     from .coach import ArmazenamentoCoach, acao_do_dia, concluir, obter_ou_criar_plano_padrao
     banco = ArmazenamentoCoach()
@@ -315,7 +353,7 @@ def coach_concluir(recurso_id: str = "", plano_id: str = "") -> str:
     return msg
 
 
-@mcp.tool(description="Consulta o progresso geral, XP, nivel, streak e proximas licoes do plano de estudos.")
+@ferramenta(skill="coach", description="Consulta o progresso geral, XP, nivel, streak e proximas licoes do plano de estudos.")
 def coach_progresso(plano_id: str = "") -> str:
     from .coach import ArmazenamentoCoach, obter_ou_criar_plano_padrao, resumo
     banco = ArmazenamentoCoach()
@@ -331,7 +369,7 @@ def coach_progresso(plano_id: str = "") -> str:
     )
 
 
-@mcp.tool(description="Cria uma nova trilha de estudos personalizada no Coach.")
+@ferramenta(skill="coach", description="Cria uma nova trilha de estudos personalizada no Coach.")
 def coach_criar_trilha(
     titulo: str,
     habilidade: str,
@@ -358,7 +396,7 @@ def coach_criar_trilha(
     return f"Trilha '{t.titulo}' criada com sucesso (ID: {t.id}) com {len(t.recursos)} recursos."
 
 
-@mcp.tool(description="Traduz ao vivo um artigo ou pagina aberta pelo usuario no NexRead mantendo os blocos de layout.")
+@ferramenta(skill="nexread", description="Traduz ao vivo um artigo ou pagina aberta pelo usuario no NexRead mantendo os blocos de layout.")
 def nexread_traduzir_pagina(
     conteudo_ou_html: str,
     idioma_destino: str = "pt-BR",
@@ -382,7 +420,7 @@ def nexread_traduzir_pagina(
     )
 
 
-@mcp.tool(description="Marca e anota um trecho de um artigo aberto no NexRead.")
+@ferramenta(skill="nexread", description="Marca e anota um trecho de um artigo aberto no NexRead.")
 def nexread_marcar_trecho(
     artigo_id: str,
     trecho: str,
@@ -395,7 +433,7 @@ def nexread_marcar_trecho(
     return f"Trecho marcado em {m.cor} no artigo {artigo_id} (ID: {m.id}){detalhe_nota}: \"{m.trecho_original}\""
 
 
-@mcp.tool(description="Registra uma nota de voz ou gravacao de estudo vinculada a um artigo no NexRead.")
+@ferramenta(skill="nexread", description="Registra uma nota de voz ou gravacao de estudo vinculada a um artigo no NexRead.")
 def nexread_gravar_nota(
     artigo_id: str,
     transcricao: str,
@@ -412,14 +450,14 @@ def nexread_gravar_nota(
     return f"Gravacao '{g.titulo}' salva no artigo {artigo_id} (ID: {g.id}): {g.transcricao}"
 
 
-@mcp.tool(description="Salva o artigo traduzido, marcacoes e gravacoes do NexRead na biblioteca do modo estudante.")
+@ferramenta(skill="nexread", description="Salva o artigo traduzido, marcacoes e gravacoes do NexRead na biblioteca do modo estudante.")
 def nexread_salvar_estudos(artigo_id: str, disciplina: str) -> str:
     from .nexread import salvar_na_biblioteca_estudos
     res = salvar_na_biblioteca_estudos(artigo_id=artigo_id, disciplina_nome=disciplina)
     return res.get("aviso") or f"Artigo salvo na disciplina {disciplina}."
 
 
-@mcp.tool(description="Conversa com a IA sobre o tema do artigo no NexRead (perguntar, resumir, discutir) citando as fontes do texto.")
+@ferramenta(skill="nexread", description="Conversa com a IA sobre o tema do artigo no NexRead (perguntar, resumir, discutir) citando as fontes do texto.")
 def nexread_conversar(
     artigo_id: str,
     pergunta: str = "",
@@ -437,7 +475,7 @@ def nexread_conversar(
     return f"{res.get('resposta', '')} (Fontes: {fontes_str})"
 
 
-@mcp.tool(
+@ferramenta(skill="nexvoice",
     description=(
         "Inicia uma sessao do NexVoice (tradutor de audio ao vivo para videos/aulas no modo 'ouvir' "
         "ou reunioes bidirecionais no modo 'reuniao'). Exige consentimento confirmado para reunioes e aulas."
@@ -471,7 +509,7 @@ def nexvoice_iniciar_sessao(
     )
 
 
-@mcp.tool(
+@ferramenta(skill="nexvoice",
     description=(
         "Processa e traduz ao vivo um trecho de fala no NexVoice (STT local -> traducao -> TTS Piper). "
         "Use direcao='entrada' quando o video/outra pessoa fala e direcao='saida' quando voce fala na reuniao."
@@ -495,20 +533,20 @@ def nexvoice_traduzir_trecho(
     return f"{trecho.legenda_formatada} (Original: {trecho.texto_original} | fala_id={trecho.fala_id})"
 
 
-@mcp.tool(description="Exporta as legendas sincronizadas (.srt) de uma sessao do NexVoice.")
+@ferramenta(skill="nexvoice", description="Exporta as legendas sincronizadas (.srt) de uma sessao do NexVoice.")
 def nexvoice_exportar_legendas(sessao_id: str, bilingue: bool = True) -> str:
     from .nexvoice import exportar_legendas_srt
     return exportar_legendas_srt(sessao_id=sessao_id, bilingue=bilingue)
 
 
-@mcp.tool(description="Salva a transcricao bilingue e as legendas de uma sessao do NexVoice na biblioteca do modo estudante.")
+@ferramenta(skill="nexvoice", description="Salva a transcricao bilingue e as legendas de uma sessao do NexVoice na biblioteca do modo estudante.")
 def nexvoice_salvar_estudos(sessao_id: str, disciplina: str) -> str:
     from .nexvoice import salvar_sessao_nos_estudos
     res = salvar_sessao_nos_estudos(sessao_id=sessao_id, disciplina_nome=disciplina)
     return res.get("aviso") or f"Sessao salva na disciplina {disciplina}."
 
 
-@mcp.tool(description="Encerra uma sessao do NexVoice, gerando ata bilingue de reuniao e opcionalmente salvando nos estudos.")
+@ferramenta(skill="nexvoice", description="Encerra uma sessao do NexVoice, gerando ata bilingue de reuniao e opcionalmente salvando nos estudos.")
 def nexvoice_encerrar_sessao(
     sessao_id: str,
     salvar_estudos: bool = False,
@@ -531,7 +569,7 @@ def nexvoice_encerrar_sessao(
 
 
 def main():
-    mcp.run(transport="stdio")
+    construir_servidor().run(transport="stdio")
 
 
 if __name__ == "__main__":
