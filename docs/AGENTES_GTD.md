@@ -12,6 +12,7 @@ O modulo `nextor.mcp_server` expoe as seguintes ferramentas para agentes compati
 - `gtd_trocar_metodo`: altera dinamicamente o metodo ativo (gtd, para, eisenhower, kanban).
 - `pomodoro_iniciar`, `pomodoro_parar`, `pomodoro_estado`: gerenciam sessoes de foco pomodoro.
 - `leitura_progresso`: registra paginas lidas e atualiza o progresso da meta diaria.
+- `gtd_sincronizar`: sincroniza tarefas com Notion, GitHub (issues e PRs) e anotacoes do Nextor (veja `docs/INTEGRACOES_GTD.md`).
 - `notificacao_teste`: despacha notificacoes de teste pelos canais ativos (Telegram, Discord, WhatsApp, Web Push ou Voz).
 
 Para configurar o servidor MCP em clientes stdio:
@@ -21,7 +22,7 @@ Para configurar o servidor MCP em clientes stdio:
     "nextor": {
       "command": "python",
       "args": ["-m", "nextor.mcp_server"],
-      "cwd": "C:/Users/thiag/projetos-oss/Nextor"
+      "cwd": "/caminho/para/Nextor"
     }
   }
 }

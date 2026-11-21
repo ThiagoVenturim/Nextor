@@ -269,6 +269,13 @@ O Nextor suporta persistencia de dados plugavel atraves do SQLAlchemy Core, mant
 - Subir com PostgreSQL via Docker Compose: `docker compose --profile postgres up --build`
 - Manifestos Kubernetes: `k8s/`
 
+## Integracoes do GTD (Notion, GitHub e anotacoes)
+
+O painel GTD (`/gtd`) sincroniza tarefas, projetos e leituras com o Notion, issues e PRs
+do GitHub e as anotacoes do proprio Nextor. Cada fonte tem direcao configuravel no painel
+(mao dupla, so importar, so exportar ou desligado) e os tokens ficam so no `.env`. Detalhes,
+nomes de propriedades e o webhook do GitHub em `docs/INTEGRACOES_GTD.md`.
+
 ## Estado
 
 Ver o diario de construcao e o plano de estudo em `PLANO.md` e a visao do produto em
