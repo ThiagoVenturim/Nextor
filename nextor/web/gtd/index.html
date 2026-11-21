@@ -262,8 +262,20 @@
         <!-- Integracoes Ativas -->
         <div class="secao-config-bloco">
           <h3 class="config-titulo">Integracoes</h3>
+          <p class="ajuda-texto">Escolha a direcao de cada fonte. Tokens ficam so no .env do servidor.</p>
           <div id="lista-integracoes-config" class="bloco-lista">
             <!-- Integracoes carregadas via API -->
+          </div>
+          <div class="linha-controles">
+            <label for="config-conflito">Em conflito, vence</label>
+            <select id="config-conflito" class="select-padrao">
+              <option value="remoto">A fonte externa</option>
+              <option value="local">O painel</option>
+            </select>
+          </div>
+          <div class="linha-controles">
+            <label for="config-github-repos">Repositorios GitHub extras</label>
+            <input type="text" id="config-github-repos" placeholder="dono/repo, outro-repo" autocomplete="off">
           </div>
         </div>
 

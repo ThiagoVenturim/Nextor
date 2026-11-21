@@ -1806,6 +1806,10 @@ def gtd_criar_item_endpoint():
         prazo=dados.get("prazo"),
         energia=dados.get("energia", "media"),
     )
+    repo_github = str(dados.get("github_repo") or "").strip()
+    if repo_github:
+        # Com sincronizacao GitHub em "exportar"/"bidirecional", a tarefa vira issue nesse repo.
+        item.definir_meta("github_repo", repo_github[:140])
     salvo = banco.salvar_item(item)
     return jsonify(ok=True, item=salvo.to_dict())
 
@@ -1924,9 +1928,54 @@ def gtd_progresso_leitura_endpoint(id_leitura: str):
 def gtd_sincronizar_endpoint():
     if not autorizado_gtd():
         return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    dados = request.get_json(silent=True) or {}
+    fontes = dados.get("fontes")
+    if fontes is not None and (not isinstance(fontes, list) or not all(isinstance(f, str) for f in fontes)):
+        return jsonify(ok=False, erro="fontes deve ser uma lista de nomes"), 400
     from .gtd.integracoes import sincronizar_tudo
-    res = sincronizar_tudo()
+    res = sincronizar_tudo(fontes=fontes)
     return jsonify(ok=True, **res)
+
+
+@app.post("/gtd/webhook/github")
+def gtd_webhook_github_endpoint():
+    """Recebe eventos issues/pull_request do GitHub e atualiza as tarefas (Issue #42).
+
+    A autenticacao e a assinatura X-Hub-Signature-256 (HMAC-SHA256 do corpo com
+    GITHUB_WEBHOOK_SECRET), comparada em tempo constante. Sem segredo, a rota fica desligada.
+    """
+    segredo = getattr(config, "GITHUB_WEBHOOK_SECRET", "") or ""
+    if not segredo:
+        return jsonify(ok=False, erro="webhook desligado"), 404
+    corpo = request.get_data(cache=True) or b""
+    if len(corpo) > 1024 * 1024:
+        return jsonify(ok=False, erro="payload grande demais"), 413
+    import hashlib
+    esperado = "sha256=" + hmac.new(segredo.encode("utf-8"), corpo, hashlib.sha256).hexdigest()
+    enviado = request.headers.get("X-Hub-Signature-256", "")
+    if not enviado or not hmac.compare_digest(enviado.encode("utf-8"), esperado.encode("utf-8")):
+        return jsonify(ok=False, erro="assinatura invalida"), 401
+
+    evento = request.headers.get("X-GitHub-Event", "")
+    if evento == "ping":
+        return jsonify(ok=True, pong=True)
+    try:
+        payload = json.loads(corpo.decode("utf-8"))
+    except Exception:
+        return jsonify(ok=False, erro="json invalido"), 400
+    if not isinstance(payload, dict):
+        return jsonify(ok=False, erro="json invalido"), 400
+
+    from .gtd import ArmazenamentoGTD
+    from .gtd.configuracao import carregar_config, normalizar_sincronizacao
+    from .gtd.integracoes import aplicar_evento_webhook
+    cfg = carregar_config()
+    direcao = normalizar_sincronizacao(None, cfg.get("sincronizacao")).get("github", "importar")
+    if not (cfg.get("integracoes") or {}).get("github", True):
+        direcao = "desligado"
+    res = aplicar_evento_webhook(ArmazenamentoGTD(), evento, payload, direcao=direcao,
+                                 usuario=getattr(config, "GITHUB_USUARIO", "") or "")
+    return jsonify(**res), (200 if res.get("ok") else 400)
 
 
 @app.get("/gtd/projetos")

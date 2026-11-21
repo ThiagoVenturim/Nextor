@@ -161,6 +161,27 @@ def gtd_dia() -> str:
     return res.get("resumo_falado", "Agenda do dia indisponivel.")
 
 
+@mcp.tool(description="Sincroniza o GTD com Notion, GitHub (issues e PRs) e anotacoes do Nextor. fontes: lista separada por virgula ou vazio para todas.")
+def gtd_sincronizar(fontes: str = "") -> str:
+    from .gtd.integracoes import sincronizar_tudo
+    lista = [f.strip().lower() for f in fontes.split(",") if f.strip()] or None
+    res = sincronizar_tudo(fontes=lista)
+    partes = []
+    for fonte in ("notion", "github", "nextor"):
+        r = res.get(fonte)
+        if not isinstance(r, dict):
+            continue
+        if r.get("status") != "ok":
+            partes.append(f"{fonte}: {r.get('status')}")
+        elif fonte == "notion":
+            partes.append(f"notion: {r.get('sincronizados', 0)} alteracoes")
+        else:
+            novas = r.get("novas_tarefas", r.get("novas", 0))
+            mud = r.get("atualizadas_local", 0) + r.get("atualizadas_remoto", 0)
+            partes.append(f"{fonte}: {novas} novas, {mud} atualizadas")
+    return "Sincronizacao: " + ("; ".join(partes) if partes else "nenhuma fonte")
+
+
 @mcp.tool(description="Processa um item do GTD mudando seu destino (proxima, aguardando, algum_dia, feito, lixo, projeto ou leitura).")
 def gtd_processar(item_id: str, destino: str, contexto: str = "") -> str:
     from .gtd import processar
