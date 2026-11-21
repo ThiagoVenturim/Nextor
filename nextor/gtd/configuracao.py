@@ -111,6 +111,7 @@ def obter_config_padrao() -> Dict[str, Any]:
         "rotina": [],
         "kanban_wip_limite": 3,
         "pomodoro_duracao_min": 25,
+        "pomodoro_ativo": True,
         "wizard_concluido": False,
     }
 
@@ -185,15 +186,19 @@ def salvar_config(novos_dados: Dict[str, Any], caminho_customizado: Optional[Pat
 
     if "kanban_wip_limite" in novos_dados:
         try:
-            atual["kanban_wip_limite"] = max(1, int(novos_dados["kanban_wip_limite"]))
+            from .metodos.kanban import normalizar_limite_wip
+            atual["kanban_wip_limite"] = normalizar_limite_wip(int(novos_dados["kanban_wip_limite"]))
         except (ValueError, TypeError):
             pass
 
     if "pomodoro_duracao_min" in novos_dados:
         try:
-            atual["pomodoro_duracao_min"] = max(1, int(novos_dados["pomodoro_duracao_min"]))
+            atual["pomodoro_duracao_min"] = max(1, min(180, int(novos_dados["pomodoro_duracao_min"])))
         except (ValueError, TypeError):
             pass
+
+    if "pomodoro_ativo" in novos_dados:
+        atual["pomodoro_ativo"] = bool(novos_dados["pomodoro_ativo"])
 
     if "agenda" in novos_dados and isinstance(novos_dados["agenda"], dict):
         ag = novos_dados["agenda"]
@@ -285,6 +290,7 @@ def obter_config_completa(caminho_customizado: Optional[Path] = None) -> Dict[st
         {"nome": "gtd_capturar", "descricao": "Captura rapida para a caixa de entrada"},
         {"nome": "gtd_dia", "descricao": "Consulta a agenda e proximas acoes do dia"},
         {"nome": "gtd_trocar_metodo", "descricao": "Troca o metodo de organizacao ativo"},
+        {"nome": "gtd_mover_item", "descricao": "Move uma tarefa entre colunas do metodo ativo"},
         {"nome": "pomodoro_iniciar", "descricao": "Inicia uma sessao de foco pomodoro"},
         {"nome": "pomodoro_parar", "descricao": "Interrompe a sessao pomodoro ativa"},
         {"nome": "leitura_progresso", "descricao": "Registra paginas lidas na meta diaria"},
@@ -320,7 +326,7 @@ def obter_config_completa(caminho_customizado: Optional[Path] = None) -> Dict[st
     return {
         "config": cfg,
         "direcoes_sincronizacao": list(DIRECOES_SINCRONIZACAO),
-        "metodos": listar_metodos(),
+        "metodos": listar_metodos(cfg),
         "canais": roteador_instancia.listar_status_canais(),
         "integracoes": status_integracoes,
         "agentes": agentes_catalogo,

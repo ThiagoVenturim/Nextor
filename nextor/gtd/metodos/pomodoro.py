@@ -1,4 +1,4 @@
-"""Timer Pomodoro integrado para sessões de foco sobre qualquer metodo (Issue #45)."""
+"""Timer Pomodoro integrado para sessoes de foco sobre qualquer metodo (Issue #45)."""
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
@@ -60,6 +60,14 @@ class TimerPomodoro:
         if self.fim_previsto and agora < self.fim_previsto:
             self.segundos_restantes = max(0, int((self.fim_previsto - agora).total_seconds()))
         self.pausado = True
+        return self.obter_estado()
+
+    def retomar(self) -> Dict[str, Any]:
+        """Retoma uma sessao pausada de onde parou."""
+        if not self.ativo or not self.pausado:
+            return self.obter_estado()
+        self.pausado = False
+        self.fim_previsto = datetime.now() + timedelta(seconds=self.segundos_restantes)
         return self.obter_estado()
 
     def parar(self) -> Dict[str, Any]:
@@ -148,6 +156,10 @@ def iniciar(item_id: Optional[str] = None, duracao_min: Optional[int] = None, mo
 
 def pausar() -> Dict[str, Any]:
     return pomodoro_instancia.pausar()
+
+
+def retomar() -> Dict[str, Any]:
+    return pomodoro_instancia.retomar()
 
 
 def parar() -> Dict[str, Any]:
