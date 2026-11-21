@@ -4,7 +4,7 @@ import os
 from typing import Optional
 
 from .. import config
-from .base import CanalNotificacao
+from .base import CanalNotificacao, formatar_titulo
 
 log = logging.getLogger("nextor.notificacoes.telegram")
 
@@ -43,7 +43,7 @@ class CanalTelegram(CanalNotificacao):
         if not self.configurado():
             return False
 
-        texto = f"[{titulo.strip()}]\n{corpo.strip()}"
+        texto = f"[{formatar_titulo(titulo, urgencia)}]\n{str(corpo or '').strip()}"
         token = self._obter_token()
         chat = self._obter_chat_id()
 
