@@ -2041,10 +2041,10 @@ def gtd_ordem_endpoint():
     """Ordem sugerida do dia a partir da agenda, da rotina e dos contextos (Issue #43)."""
     if not autorizado_gtd():
         return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
-    from .gtd.configuracao import carregar_config
+    from .gtd.configuracao import agente_ativo, carregar_config
     from .gtd.ordem_dia import rotina_para_texto, sugerir_ordem_do_dia
     cfg = carregar_config()
-    if not (cfg.get("agentes") or {}).get("sugerir_ordem_dia", True):
+    if not agente_ativo(cfg, "sugerir_ordem_dia"):
         return jsonify(ok=True, desligado=True, linha_do_tempo=[], sem_bloco=[], proximo_passo=None,
                        resumo="Planejador do dia desligado nos ajustes.")
     res = sugerir_ordem_do_dia(cfg=cfg)

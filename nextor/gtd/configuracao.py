@@ -6,12 +6,59 @@ Centraliza metodo ativo, canais de notificacao, temas, paletas e integracoes.
 import json
 import logging
 import os
+import re
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from .. import config
 
 log = logging.getLogger("nextor.gtd.configuracao")
+
+TEMAS = ("escuro", "claro")
+PALETAS = ("azul", "esmeralda", "violeta", "ambar")
+CANAIS_NOTIFICACAO = ("telegram", "discord", "whatsapp", "webpush", "voz")
+INTEGRACOES = ("notion", "github", "agenda", "artigos", "nextor")
+_RE_HORA = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+_RE_NOME_FERRAMENTA = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+
+# Skills agrupam as ferramentas MCP por area. Desligar uma skill tira do servidor MCP
+# todas as ferramentas dela e desativa os agentes que dependem dela.
+SKILLS_CATALOGO: List[Dict[str, str]] = [
+    {"id": "gtd", "nome": "Tarefas (GTD)", "descricao": "Capturar, processar e sincronizar tarefas, trocar metodo e registrar leitura"},
+    {"id": "agenda", "nome": "Agenda", "descricao": "Consultar compromissos, proxima reuniao e blocos livres do dia"},
+    {"id": "pomodoro", "nome": "Pomodoro", "descricao": "Iniciar, parar e consultar sessoes de foco"},
+    {"id": "notas", "nome": "Anotacoes", "descricao": "Salvar e ler anotacoes rapidas"},
+    {"id": "notificacoes", "nome": "Notificacoes", "descricao": "Disparar avisos de teste pelos canais ativos"},
+    {"id": "noticias", "nome": "Noticias", "descricao": "Resumir noticias recentes de um assunto"},
+    {"id": "voz", "nome": "Voz no Nest", "descricao": "Falar um texto em voz alta no alto-falante da casa"},
+    {"id": "coach", "nome": "Coach de estudos", "descricao": "Acao de estudo do dia, progresso, XP e trilhas"},
+    {"id": "nexread", "nome": "NexRead", "descricao": "Traduzir, marcar e estudar artigos abertos pela pessoa"},
+    {"id": "nexvoice", "nome": "NexVoice", "descricao": "Traducao de audio ao vivo com consentimento e legendas"},
+]
+SKILLS_IDS = tuple(s["id"] for s in SKILLS_CATALOGO)
+
+# Agentes que a pessoa pode anexar. Cada um so roda se as skills que ele usa estao ligadas.
+AGENTES_CATALOGO: List[Dict[str, Any]] = [
+    {
+        "id": "organizar_inbox",
+        "nome": "Organizador de Inbox",
+        "descricao": "Sugere contexto, prazo e nivel de energia para itens da caixa de entrada",
+        "skills": ["gtd"],
+    },
+    {
+        "id": "sugerir_ordem_dia",
+        "nome": "Planejador do Dia",
+        "descricao": "Calcula a melhor sequencia de tarefas intercalando estudos, trabalho e pausas",
+        "skills": ["gtd", "agenda"],
+    },
+    {
+        "id": "revisao_semanal",
+        "nome": "Condutor de Revisao Semanal",
+        "descricao": "Identifica gargalos, projetos parados e cobra definicao de proximas acoes",
+        "skills": ["gtd"],
+    },
+]
+AGENTES_IDS = tuple(a["id"] for a in AGENTES_CATALOGO)
 
 # Direcoes de sincronizacao aceitas por fonte externa (Issue #42).
 DIRECOES_SINCRONIZACAO = ("desligado", "importar", "exportar", "bidirecional")
@@ -108,11 +155,64 @@ def obter_config_padrao() -> Dict[str, Any]:
             "sugerir_ordem_dia": True,
             "revisao_semanal": True,
         },
+        # Skills e ferramentas MCP: ausente conta como ligado, para ferramentas novas
+        # aparecerem sem migracao. So o que a pessoa desliga fica gravado como False.
+        "skills": {s: True for s in SKILLS_IDS},
+        "mcp_ferramentas": {},
         "rotina": [],
         "kanban_wip_limite": 3,
         "pomodoro_duracao_min": 25,
         "wizard_concluido": False,
     }
+
+
+def _hora_valida(valor: Any, padrao: str) -> str:
+    texto = str(valor if valor is not None else "").strip()
+    return texto if _RE_HORA.match(texto) else padrao
+
+
+def _filtrar_canais(canais: List[Any]) -> List[str]:
+    """Mantem so canais conhecidos, sem repetir e na ordem recebida."""
+    resultado: List[str] = []
+    for c in canais:
+        slug = str(c).strip().lower()
+        if slug in CANAIS_NOTIFICACAO and slug not in resultado:
+            resultado.append(slug)
+    return resultado
+
+
+def _eventos_conhecidos() -> List[str]:
+    from ..notificacoes.roteador_notificacoes import EVENTOS_PERMITIDOS
+    eventos = list(obter_config_padrao()["eventos_notificacao"].keys())
+    return eventos + [e for e in EVENTOS_PERMITIDOS if e not in eventos]
+
+
+def _nomes_ferramentas_mcp() -> set:
+    try:
+        from ..mcp_server import FERRAMENTAS
+    except Exception as e:  # pragma: no cover - mcp_server sempre importa com o fallback
+        log.warning("Catalogo MCP indisponivel: %s", type(e).__name__)
+        return set()
+    return set(FERRAMENTAS)
+
+
+def skill_ativa(cfg: Dict[str, Any], skill_id: str) -> bool:
+    return bool((cfg.get("skills") or {}).get(skill_id, True))
+
+
+def ferramenta_mcp_ativa(cfg: Dict[str, Any], nome: str, skill_id: str) -> bool:
+    """Uma ferramenta MCP so e exposta se ela e a skill dela estiverem ligadas."""
+    return skill_ativa(cfg, skill_id) and bool((cfg.get("mcp_ferramentas") or {}).get(nome, True))
+
+
+def agente_ativo(cfg: Dict[str, Any], agente_id: str) -> bool:
+    """O agente roda se foi anexado e todas as skills que ele usa estao ligadas."""
+    if not (cfg.get("agentes") or {}).get(agente_id, True):
+        return False
+    for agente in AGENTES_CATALOGO:
+        if agente["id"] == agente_id:
+            return all(skill_ativa(cfg, s) for s in agente["skills"])
+    return False
 
 
 def carregar_config(caminho_customizado: Optional[Path] = None) -> Dict[str, Any]:
@@ -130,9 +230,13 @@ def carregar_config(caminho_customizado: Optional[Path] = None) -> Dict[str, Any
         for k, v in padrao.items():
             if k not in dados:
                 dados[k] = v
-        if isinstance(dados.get("integracoes"), dict):
-            for k, v in padrao["integracoes"].items():
-                dados["integracoes"].setdefault(k, v)
+        for secao in ("integracoes", "agentes", "skills", "eventos_notificacao"):
+            if not isinstance(dados.get(secao), dict):
+                dados[secao] = padrao[secao]
+            for k, v in padrao[secao].items():
+                dados[secao].setdefault(k, v)
+        if not isinstance(dados.get("mcp_ferramentas"), dict):
+            dados["mcp_ferramentas"] = {}
         dados["sincronizacao"] = normalizar_sincronizacao(None, dados.get("sincronizacao"))
         return dados
     except Exception as e:
@@ -152,36 +256,51 @@ def salvar_config(novos_dados: Dict[str, Any], caminho_customizado: Optional[Pat
 
     if "tema" in novos_dados:
         t = str(novos_dados["tema"]).strip().lower()
-        if t in ("escuro", "claro"):
+        if t in TEMAS:
             atual["tema"] = t
 
     if "paleta" in novos_dados:
         p = str(novos_dados["paleta"]).strip().lower()
-        if p in ("azul", "esmeralda", "violeta", "ambar"):
+        if p in PALETAS:
             atual["paleta"] = p
 
     if "horario_silencio" in novos_dados and isinstance(novos_dados["horario_silencio"], dict):
         hs = novos_dados["horario_silencio"]
+        sil_atual = atual.get("horario_silencio") or {}
         atual["horario_silencio"] = {
-            "ativo": bool(hs.get("ativo", True)),
-            "inicio": str(hs.get("inicio", "22:00")).strip(),
-            "fim": str(hs.get("fim", "07:00")).strip(),
+            "ativo": bool(hs.get("ativo", sil_atual.get("ativo", True))),
+            "inicio": _hora_valida(hs.get("inicio"), sil_atual.get("inicio", "22:00")),
+            "fim": _hora_valida(hs.get("fim"), sil_atual.get("fim", "07:00")),
         }
 
     if "canais_ativos" in novos_dados and isinstance(novos_dados["canais_ativos"], list):
-        atual["canais_ativos"] = [str(c).strip().lower() for c in novos_dados["canais_ativos"]]
+        atual["canais_ativos"] = _filtrar_canais(novos_dados["canais_ativos"])
 
     if "eventos_notificacao" in novos_dados and isinstance(novos_dados["eventos_notificacao"], dict):
-        atual["eventos_notificacao"].update(novos_dados["eventos_notificacao"])
+        eventos_validos = _eventos_conhecidos()
+        for evento, canais in novos_dados["eventos_notificacao"].items():
+            evento = str(evento).strip().lower()
+            if evento in eventos_validos and isinstance(canais, list):
+                atual["eventos_notificacao"][evento] = _filtrar_canais(canais)
 
     if "integracoes" in novos_dados and isinstance(novos_dados["integracoes"], dict):
-        atual["integracoes"].update({k: bool(v) for k, v in novos_dados["integracoes"].items()})
+        atual["integracoes"].update({k: bool(v) for k, v in novos_dados["integracoes"].items() if k in INTEGRACOES})
 
     if "sincronizacao" in novos_dados:
         atual["sincronizacao"] = normalizar_sincronizacao(novos_dados["sincronizacao"], atual.get("sincronizacao"))
 
     if "agentes" in novos_dados and isinstance(novos_dados["agentes"], dict):
-        atual["agentes"].update({k: bool(v) for k, v in novos_dados["agentes"].items()})
+        atual["agentes"].update({k: bool(v) for k, v in novos_dados["agentes"].items() if k in AGENTES_IDS})
+
+    if "skills" in novos_dados and isinstance(novos_dados["skills"], dict):
+        atual["skills"].update({k: bool(v) for k, v in novos_dados["skills"].items() if k in SKILLS_IDS})
+
+    if "mcp_ferramentas" in novos_dados and isinstance(novos_dados["mcp_ferramentas"], dict):
+        conhecidas = _nomes_ferramentas_mcp()
+        for nome, ligado in novos_dados["mcp_ferramentas"].items():
+            nome = str(nome).strip()
+            if _RE_NOME_FERRAMENTA.match(nome) and nome in conhecidas:
+                atual["mcp_ferramentas"][nome] = bool(ligado)
 
     if "kanban_wip_limite" in novos_dados:
         try:
@@ -210,7 +329,7 @@ def salvar_config(novos_dados: Dict[str, Any], caminho_customizado: Optional[Pat
 
         canais_aviso = ag.get("canais_aviso", ag_atual.get("canais_aviso", ["telegram"]))
         if isinstance(canais_aviso, list):
-            canais_aviso = [str(c).strip().lower() for c in canais_aviso]
+            canais_aviso = _filtrar_canais(canais_aviso)
         else:
             canais_aviso = ["telegram"]
 
@@ -280,41 +399,35 @@ def obter_config_completa(caminho_customizado: Optional[Path] = None) -> Dict[st
         },
     }
 
-    # Ferramentas MCP disponiveis
+    # Ferramentas MCP: o catalogo vem do proprio nextor/mcp_server.py, entao nao fica defasado.
+    from ..mcp_server import listar_ferramentas
+    flags_mcp = cfg.get("mcp_ferramentas") or {}
     mcp_ferramentas = [
-        {"nome": "gtd_capturar", "descricao": "Captura rapida para a caixa de entrada"},
-        {"nome": "gtd_dia", "descricao": "Consulta a agenda e proximas acoes do dia"},
-        {"nome": "gtd_trocar_metodo", "descricao": "Troca o metodo de organizacao ativo"},
-        {"nome": "pomodoro_iniciar", "descricao": "Inicia uma sessao de foco pomodoro"},
-        {"nome": "pomodoro_parar", "descricao": "Interrompe a sessao pomodoro ativa"},
-        {"nome": "leitura_progresso", "descricao": "Registra paginas lidas na meta diaria"},
-        {"nome": "notificacao_teste", "descricao": "Dispara notificacao de teste pelos canais ativos"},
-        {"nome": "agenda_dia", "descricao": "Consulta a agenda do dia com reunioes e blocos livres"},
-        {"nome": "proxima_reuniao", "descricao": "Consulta a proxima reuniao agendada e link de video"},
-        {"nome": "blocos_livres", "descricao": "Calcula os blocos de horario livre e sugere timeboxing"},
-        {"nome": "gtd_sincronizar", "descricao": "Sincroniza tarefas com Notion, GitHub e anotacoes do Nextor"},
+        {
+            **f,
+            "ativo": bool(flags_mcp.get(f["nome"], True)),
+            "exposta": ferramenta_mcp_ativa(cfg, f["nome"], f["skill"]),
+        }
+        for f in listar_ferramentas()
     ]
 
-    # Agentes especializados disponiveis
+    skills_catalogo = [
+        {
+            **s,
+            "ativo": skill_ativa(cfg, s["id"]),
+            "ferramentas": [f["nome"] for f in mcp_ferramentas if f["skill"] == s["id"]],
+        }
+        for s in SKILLS_CATALOGO
+    ]
+
     agentes_catalogo = [
         {
-            "id": "organizar_inbox",
-            "nome": "Organizador de Inbox",
-            "descricao": "Sugere contexto, prazo e nivel de energia para itens da caixa de entrada",
-            "ativo": cfg.get("agentes", {}).get("organizar_inbox", True),
-        },
-        {
-            "id": "sugerir_ordem_dia",
-            "nome": "Planejador do Dia",
-            "descricao": "Calcula a melhor sequencia de tarefas intercalando estudos, trabalho e pausas",
-            "ativo": cfg.get("agentes", {}).get("sugerir_ordem_dia", True),
-        },
-        {
-            "id": "revisao_semanal",
-            "nome": "Condutor de Revisao Semanal",
-            "descricao": "Identifica gargalos, projetos parados e cobra definicao de proximas acoes",
-            "ativo": cfg.get("agentes", {}).get("revisao_semanal", True),
-        },
+            **a,
+            "skills": list(a["skills"]),
+            "ativo": bool((cfg.get("agentes") or {}).get(a["id"], True)),
+            "efetivo": agente_ativo(cfg, a["id"]),
+        }
+        for a in AGENTES_CATALOGO
     ]
 
     return {
@@ -322,7 +435,11 @@ def obter_config_completa(caminho_customizado: Optional[Path] = None) -> Dict[st
         "direcoes_sincronizacao": list(DIRECOES_SINCRONIZACAO),
         "metodos": listar_metodos(),
         "canais": roteador_instancia.listar_status_canais(),
+        "eventos": _eventos_conhecidos(),
+        "temas": list(TEMAS),
+        "paletas": list(PALETAS),
         "integracoes": status_integracoes,
         "agentes": agentes_catalogo,
+        "skills": skills_catalogo,
         "mcp_ferramentas": mcp_ferramentas,
     }

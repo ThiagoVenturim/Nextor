@@ -278,9 +278,9 @@ def agenda_do_dia(db: Optional[ArmazenamentoGTD] = None) -> Dict[str, Any]:
 
     ordem_sugerida = None
     try:
-        from .configuracao import carregar_config
+        from .configuracao import agente_ativo, carregar_config
         cfg = carregar_config()
-        if (cfg.get("agentes") or {}).get("sugerir_ordem_dia", True):
+        if agente_ativo(cfg, "sugerir_ordem_dia"):
             from .ordem_dia import sugerir_ordem_do_dia
             ordem_sugerida = sugerir_ordem_do_dia(db=banco, eventos=eventos_brutos, cfg=cfg)
             if ordem_sugerida.get("proximo_passo"):
