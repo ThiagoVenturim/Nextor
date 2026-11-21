@@ -2192,6 +2192,68 @@ def gtd_notificacao_teste_endpoint():
     return jsonify(ok=True, **res)
 
 
+def _canal_webpush():
+    from .notificacoes import roteador_instancia
+    return roteador_instancia.canais.get("webpush")
+
+
+@app.get("/gtd/notificacoes/push/chave")
+def gtd_push_chave_endpoint():
+    """Chave publica VAPID para o PWA se inscrever (a chave publica nao e segredo)."""
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    canal = _canal_webpush()
+    if canal is None or not canal.configurado():
+        return jsonify(ok=False, configurado=False, erro="web push nao configurado no .env (VAPID_*)"), 200
+    return jsonify(ok=True, configurado=True, chave_publica=canal.chave_publica())
+
+
+@app.post("/gtd/notificacoes/push/inscrever")
+def gtd_push_inscrever_endpoint():
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    canal = _canal_webpush()
+    if canal is None:
+        return jsonify(ok=False, erro="canal web push indisponivel"), 503
+    dados = request.get_json(silent=True)
+    if not canal.inscricoes.adicionar(dados):
+        return jsonify(ok=False, erro="inscricao de push invalida"), 400
+    return jsonify(ok=True, aparelhos=canal.inscricoes.quantidade())
+
+
+@app.post("/gtd/notificacoes/push/cancelar")
+def gtd_push_cancelar_endpoint():
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    canal = _canal_webpush()
+    if canal is None:
+        return jsonify(ok=False, erro="canal web push indisponivel"), 503
+    dados = request.get_json(silent=True) or {}
+    removido = canal.inscricoes.remover(str(dados.get("endpoint") or ""))
+    return jsonify(ok=True, removido=removido, aparelhos=canal.inscricoes.quantidade())
+
+
+@app.post("/gtd/notificacoes/disparar")
+def gtd_notificacao_disparar_endpoint():
+    """Dispara um aviso pronto (agenda_do_dia, tarefa_atrasada, pr_para_revisar).
+
+    Feito para tarefas agendadas e automacoes; os canais saem da config do painel.
+    """
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    dados = request.get_json(silent=True) or {}
+    evento = str(dados.get("evento") or "").strip().lower()
+    from .notificacoes.avisos import AVISOS, disparar_aviso
+    if evento not in AVISOS:
+        return jsonify(ok=False, erro="evento desconhecido", eventos=sorted(AVISOS)), 400
+    try:
+        res = disparar_aviso(evento)
+    except Exception as e:
+        logging.getLogger("nextor.servico").warning("Falha ao disparar aviso %s: %s", evento, type(e).__name__)
+        return jsonify(ok=False, erro="falha ao montar o aviso"), 500
+    return jsonify(ok=True, **res)
+
+
 # -------------------------------------------------------------
 # Coach de Estudos (Issue #57)
 # -------------------------------------------------------------

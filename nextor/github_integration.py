@@ -137,6 +137,34 @@ def listar_issues_atribuidas(
     return issues
 
 
+def listar_prs_para_revisar(
+    usuario: Optional[str] = None,
+    token: Optional[str] = None,
+    handler: Optional[Callable] = None,
+) -> List[dict]:
+    """Lista PRs abertos que pediram revisao do usuario (review-requested)."""
+    user_alvo = (usuario or os.getenv("GITHUB_USUARIO", "") or config.GITHUB_USUARIO or "").strip()
+    # Nome de usuario do GitHub: letras, digitos e hifen.
+    if not user_alvo or not all(ch.isalnum() or ch == "-" for ch in user_alvo):
+        return []
+    path = f"/search/issues?q=is:pr+is:open+review-requested:{user_alvo}&per_page=30"
+    status, dados = fazer_requisicao_api(path, metodo="GET", token=token, handler_requisicao=handler)
+    if status != 200 or not isinstance(dados, dict):
+        return []
+    prs: List[dict] = []
+    for it in dados.get("items", []):
+        if not isinstance(it, dict):
+            continue
+        repo_url = str(it.get("repository_url", ""))
+        prs.append({
+            "numero": it.get("number"),
+            "titulo": it.get("title", ""),
+            "repo": "/".join(repo_url.split("/")[-2:]) if repo_url else "",
+            "url": it.get("html_url", ""),
+        })
+    return prs
+
+
 def listar_itens_kanban(
     usuario: Optional[str] = None,
     token: Optional[str] = None,

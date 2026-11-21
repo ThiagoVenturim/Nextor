@@ -158,6 +158,18 @@ NOTION_DB_PROJETOS = os.getenv("NOTION_DB_PROJETOS", "").strip()
 GITHUB_WEBHOOK_SECRET = os.getenv("GITHUB_WEBHOOK_SECRET", "").strip()
 TELEGRAM_DONO_CHAT_ID = os.getenv("TELEGRAM_DONO_CHAT_ID", "").strip()
 
+# Notificacoes multicanal (Issue #46): segredos so no .env, nunca no repositorio nem em log.
+DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "").strip()
+DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN", "").strip()
+DISCORD_CANAL_ID = os.getenv("DISCORD_CANAL_ID", "").strip()
+WHATSAPP_API_TOKEN = os.getenv("WHATSAPP_API_TOKEN", "").strip()
+WHATSAPP_PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID", "").strip()
+WHATSAPP_DESTINATARIO = os.getenv("WHATSAPP_DESTINATARIO", "").strip()
+WHATSAPP_TEMPLATE = os.getenv("WHATSAPP_TEMPLATE", "").strip()
+VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "").strip()
+VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "").strip()
+VAPID_SUBSCRIBER_EMAIL = os.getenv("VAPID_SUBSCRIBER_EMAIL", "").strip()
+
 # Coach de estudos (Issue #57)
 COACH_DIR = Path(os.getenv("NEXTOR_COACH_DIR", "")).resolve() if os.getenv("NEXTOR_COACH_DIR") else (Path.home() / ".nextor")
 COACH_DB = Path(os.getenv("NEXTOR_COACH_DB", "")).resolve() if os.getenv("NEXTOR_COACH_DB") else (COACH_DIR / "coach.db")
