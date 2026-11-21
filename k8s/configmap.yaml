@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nextor-config
+  labels:
+    app.kubernetes.io/name: nextor
+data:
+  NEXTOR_PORTA: "5005"
+  NEXTOR_VOZ_SAIDA: "nenhuma"
+  NEXTOR_IDIOMA: "pt-BR"
+  NEXTOR_PERSONA: "assistente"

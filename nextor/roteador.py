@@ -11,6 +11,8 @@ PALAVRAS_NOTICIA = ("noticia", "noticias", "novidade", "novidades", "manchete", 
 PALAVRAS_ANOTAR = ("anota", "anotar", "anote", "lembra", "lembrar", "lembrete")
 # "no computador, bloquear" / "no pc play" / "deck volume mais" -> aperta um botao do NexDeck.
 GATILHO_DECK = r"^(no computador|no pc|no notebook|deck)[,: ]+(.+)$"
+# "mostra na tv", "continua no celular", "passa pro pc" -> hand-off entre aparelhos.
+GATILHO_DISPOSITIVO = r"^(mostra|mostrar|continua|continuar|passa|passar|manda|mandar)\s+(na|no|pra|pro)\s+([a-z0-9_-]+)(?:[:,\s]+(.*))?$"
 
 
 def _sem_acento(s: str) -> str:
@@ -29,7 +31,7 @@ def _registra(frase: str, intencao: str) -> None:
         pass
 
 
-def rotear(frase: str) -> dict:
+def rotear(frase: str, canal: str = "local", id_dispositivo: str | None = None) -> dict:
     from .chamado import entender
     from .companheiro import companheiro, identidade_pedida
     # "ei Nextor", "meu amigo Nextor", "ola Claude"...: quem foi chamado responde e o rosto acorda.
@@ -45,10 +47,113 @@ def rotear(frase: str) -> dict:
     limpa = _limpa(frase)
     base = _sem_acento(limpa)
 
+    # Resposta a quiz interativo pendente (Issue #6)
+    try:
+        from .quiz import sessao_quiz
+        if sessao_quiz.obter_ativa():
+            m_resp = re.search(r"^(?:letra\s+|opcao\s+)?([a-d]|verdadeiro|falso|v|f)$", base.strip(), flags=re.IGNORECASE)
+            if m_resp:
+                letra_ou_vf = m_resp.group(1).upper()
+                resultado = sessao_quiz.responder(letra_ou_vf)
+                if resultado and resultado.get("ok"):
+                    _registra(frase, "estudos_quiz_resposta")
+                    return {"intencao": "estudos_quiz_resposta", "resposta": resultado["mensagem"]}
+    except Exception:
+        pass
+
     identidade = identidade_pedida(limpa)
     if identidade:
         _registra(frase, "identidade")
         return {"intencao": "identidade", "resposta": companheiro.definir_identidade(identidade)["frase"]}
+
+    # NexRead: tradutor de artigo/pagina ao vivo com estudo (Issue #55)
+    m_nr_salvar = re.search(
+        r"^(?:salva|salvar)\s+(?:a\s+|o\s+)?(?:leitura|artigo|pagina)\s+(?:do\s+nexread\s+)?(?:em|na\s+disciplina|para)\s+(.+?)[ ?.]*$",
+        limpa,
+        flags=re.IGNORECASE,
+    )
+    if m_nr_salvar and ("nexread" in base or "leitura" in base or "pagina" in base):
+        disc_nr = m_nr_salvar.group(1).strip(" ?.")
+        _registra(frase, "nexread_salvar_estudos")
+        return {"intencao": "nexread_salvar_estudos", "resposta": _fazer_nexread_salvar_estudos(disc_nr)}
+
+    m_nr_chat = re.search(
+        r"^(?:no\s+nexread[, ]+|nexread[, ]+)?(?:conversa|conversar|pergunta|perguntar|discutir|explica|explicar)\s+(?:sobre\s+o\s+artigo|no\s+nexread)\s*[:,-]?\s*(.*)$",
+        limpa,
+        flags=re.IGNORECASE,
+    )
+    if m_nr_chat:
+        pergunta_nr = m_nr_chat.group(1).strip(" ?.")
+        _registra(frase, "nexread_conversar")
+        return {"intencao": "nexread_conversar", "resposta": _fazer_nexread_conversar(pergunta_nr, acao="perguntar")}
+
+    if any(k in base for k in ("resumir no nexread", "nexread resumir", "resuma o artigo do nexread", "resumir artigo aberto")):
+        _registra(frase, "nexread_conversar")
+        return {"intencao": "nexread_conversar", "resposta": _fazer_nexread_conversar("", acao="resumir")}
+
+    m_nr_trad = re.search(
+        r"^(?:nexread\s+traduz\w*|traduz\w*\s+(?:a\s+|esta\s+)?pagina(?:\s+ao\s+vivo)?|traduz\w*\s+no\s+nexread)\s*[:,-]?\s*(.+)$",
+        limpa,
+        flags=re.IGNORECASE,
+    )
+    if m_nr_trad:
+        conteudo_nr = m_nr_trad.group(1).strip()
+        _registra(frase, "nexread_traduzir")
+        return {"intencao": "nexread_traduzir", "resposta": _fazer_nexread_traduzir(conteudo_nr)}
+
+    # NexVoice: tradutor de audio ao vivo para videos e reunioes bidirecionais (Issue #56)
+    if any(k in base for k in ("encerrar nexvoice", "parar nexvoice", "fechar nexvoice", "terminar nexvoice")):
+        _registra(frase, "nexvoice_encerrar")
+        return {"intencao": "nexvoice_encerrar", "resposta": _fazer_nexvoice_encerrar()}
+
+    m_nv_salvar = re.search(
+        r"^(?:salva|salvar)\s+(?:a\s+|o\s+)?(?:sessao|aula|traducao)\s+(?:do\s+nexvoice\s+)?(?:em|na\s+disciplina|para)\s+(.+?)[ ?.]*$",
+        limpa,
+        flags=re.IGNORECASE,
+    )
+    if m_nv_salvar and "nexvoice" in base:
+        disc_nv = m_nv_salvar.group(1).strip(" ?.")
+        _registra(frase, "nexvoice_salvar_estudos")
+        return {"intencao": "nexvoice_salvar_estudos", "resposta": _fazer_nexvoice_salvar_estudos(disc_nv)}
+
+    m_nv_falar_saida = re.search(
+        r"^(?:nexvoice\s+(?:falar|dizer|responder)|falar\s+na\s+reuniao\s+nexvoice)\s*[:,-]?\s*(.+)$",
+        limpa,
+        flags=re.IGNORECASE,
+    )
+    if m_nv_falar_saida:
+        fala_saida = m_nv_falar_saida.group(1).strip()
+        _registra(frase, "nexvoice_traduzir_trecho")
+        return {"intencao": "nexvoice_traduzir_trecho", "resposta": _fazer_nexvoice_traduzir_trecho(fala_saida, direcao="saida")}
+
+    m_nv_ouvir_entrada = re.search(
+        r"^(?:nexvoice\s+(?:ouvir|traduz\w*)|traduz\w*\s+(?:audio|fala|video)\s+no\s+nexvoice)\s*[:,-]?\s*(.+)$",
+        limpa,
+        flags=re.IGNORECASE,
+    )
+    if m_nv_ouvir_entrada:
+        fala_ent = m_nv_ouvir_entrada.group(1).strip()
+        _registra(frase, "nexvoice_traduzir_trecho")
+        return {"intencao": "nexvoice_traduzir_trecho", "resposta": _fazer_nexvoice_traduzir_trecho(fala_ent, direcao="entrada")}
+
+    m_nv_iniciar = re.search(
+        r"^(?:iniciar\s+nexvoice|abrir\s+nexvoice|nexvoice\s+iniciar|traduzir\s+reuniao\s+no\s+nexvoice|traduzir\s+video\s+no\s+nexvoice)(.*)$",
+        limpa,
+        flags=re.IGNORECASE,
+    )
+    if m_nv_iniciar:
+        complemento_nv = (m_nv_iniciar.group(1) or "").strip(" :,-?.")
+        modo_nv = "reuniao" if "reuniao" in base else "ouvir"
+        tem_consentimento = "consentimento" in base or "autorizado" in base or "acordo" in base
+        _registra(frase, "nexvoice_iniciar")
+        return {
+            "intencao": "nexvoice_iniciar",
+            "resposta": _fazer_nexvoice_iniciar(
+                titulo=complemento_nv or "Sessao NexVoice",
+                modo=modo_nv,
+                consentimento_confirmado=tem_consentimento,
+            ),
+        }
 
     # Skill de texto (traduzir / resumir / escrever) - antes das outras intencoes.
     if "traduz" in base:
@@ -60,6 +165,144 @@ def rotear(frase: str) -> dict:
             idioma = "ingles"
         _registra(frase, "traduzir")
         return {"intencao": "traduzir", "resposta": _fazer_texto("traduzir", conteudo, idioma)}
+
+    # Perguntas sobre a materia com fontes (Issue #5)
+    m_qa_diz = re.search(r"o que (?:o )?meu material diz sobre\s+(.+)$", limpa, flags=re.IGNORECASE)
+    if m_qa_diz:
+        termo_qa = m_qa_diz.group(1).strip(" ?.")
+        _registra(frase, "estudos_perguntar")
+        return {"intencao": "estudos_perguntar", "resposta": _fazer_estudos_perguntar(termo_qa)}
+
+    if any(k in base for k in ("segundo o meu material", "pelo meu material", "no meu material", "segundo meu material")):
+        texto_limpo_qa = re.sub(
+            r"\b(segundo\s+o\s+meu\s+material|pelo\s+meu\s+material|no\s+meu\s+material|segundo\s+meu\s+material)\b",
+            "",
+            limpa,
+            flags=re.IGNORECASE,
+        ).strip(" ?.,:")
+        _registra(frase, "estudos_perguntar")
+        return {"intencao": "estudos_perguntar", "resposta": _fazer_estudos_perguntar(texto_limpo_qa)}
+
+    # Integracao Canvas LMS (Issue #17)
+    base_canvas = base.strip(" ?.")
+    m_canvas_tarefas_disc = re.search(r"^(?:quais\s+sao\s+(?:as|minhas)\s+|ver\s+|listar\s+)?tarefas\s+(?:de\s+|da\s+|do\s+|em\s+)?(.+?)\s+no\s+canvas[ ?.]*$", limpa, flags=re.IGNORECASE)
+    if m_canvas_tarefas_disc:
+        disc_c = m_canvas_tarefas_disc.group(1).strip(" ?.")
+        _registra(frase, "canvas_tarefas")
+        return {"intencao": "canvas_tarefas", "resposta": _fazer_canvas_tarefas(disciplina=disc_c)}
+
+    m_canvas_tarefas_disc_alt = re.search(r"^tarefas\s+do\s+canvas\s+(?:de\s+|da\s+|do\s+|em\s+)?(.+?)[ ?.]*$", limpa, flags=re.IGNORECASE)
+    if m_canvas_tarefas_disc_alt:
+        disc_c = m_canvas_tarefas_disc_alt.group(1).strip(" ?.")
+        _registra(frase, "canvas_tarefas")
+        return {"intencao": "canvas_tarefas", "resposta": _fazer_canvas_tarefas(disciplina=disc_c)}
+
+    if base_canvas in ("quais sao minhas tarefas do canvas", "quais sao as tarefas do canvas", "tarefas do canvas", "tarefas no canvas", "o que tenho no canvas", "canvas tarefas") or any(k in base_canvas for k in ("tarefas do canvas", "tarefas no canvas", "minhas tarefas do canvas")):
+        _registra(frase, "canvas_tarefas")
+        return {"intencao": "canvas_tarefas", "resposta": _fazer_canvas_tarefas()}
+
+    m_canvas_avisos_disc = re.search(r"^(?:avisos|anuncios)\s+(?:de\s+|da\s+|do\s+|em\s+)?(.+?)\s+no\s+canvas[ ?.]*$", limpa, flags=re.IGNORECASE)
+    if m_canvas_avisos_disc:
+        disc_a = m_canvas_avisos_disc.group(1).strip(" ?.")
+        _registra(frase, "canvas_avisos")
+        return {"intencao": "canvas_avisos", "resposta": _fazer_canvas_avisos(disciplina=disc_a)}
+
+    if base_canvas in ("avisos do canvas", "avisos no canvas", "anuncios do canvas", "ultimos avisos do canvas", "canvas avisos") or any(k in base_canvas for k in ("avisos do canvas", "avisos no canvas", "anuncios do canvas")):
+        _registra(frase, "canvas_avisos")
+        return {"intencao": "canvas_avisos", "resposta": _fazer_canvas_avisos()}
+
+    # Integracao Google Sala de Aula / Classroom (Issue #18)
+    base_cr = base.strip(" ?.")
+    m_cr_disc = re.search(r"^(?:quais\s+sao\s+(?:as|minhas)\s+|ver\s+|listar\s+)?(?:atividades|tarefas)\s+(?:de\s+|da\s+|do\s+|em\s+)?(.+?)\s+(?:no\s+classroom|no\s+google\s+sala\s+de\s+aula|no\s+sala\s+de\s+aula)[ ?.]*$", limpa, flags=re.IGNORECASE)
+    if m_cr_disc:
+        disc_cr = m_cr_disc.group(1).strip(" ?.")
+        _registra(frase, "classroom_atividades")
+        return {"intencao": "classroom_atividades", "resposta": _fazer_classroom_atividades(disciplina=disc_cr)}
+
+    m_cr_disc_alt = re.search(r"^(?:atividades|tarefas)\s+(?:do\s+classroom|do\s+google\s+sala\s+de\s+aula|do\s+sala\s+de\s+aula)\s+(?:de\s+|da\s+|do\s+|em\s+)?(.+?)[ ?.]*$", limpa, flags=re.IGNORECASE)
+    if m_cr_disc_alt:
+        disc_cr = m_cr_disc_alt.group(1).strip(" ?.")
+        _registra(frase, "classroom_atividades")
+        return {"intencao": "classroom_atividades", "resposta": _fazer_classroom_atividades(disciplina=disc_cr)}
+
+    if any(k in base_cr for k in ("atividades do google sala de aula", "atividades do sala de aula", "atividades do classroom", "tarefas do google sala de aula", "tarefas do sala de aula", "tarefas do classroom", "minhas atividades do google sala de aula", "minhas atividades do classroom", "classroom atividades")):
+        _registra(frase, "classroom_atividades")
+        return {"intencao": "classroom_atividades", "resposta": _fazer_classroom_atividades()}
+
+    m_cr_avisos_disc = re.search(r"^(?:avisos|comunicados)\s+(?:de\s+|da\s+|do\s+|em\s+)?(.+?)\s+(?:no\s+classroom|no\s+google\s+sala\s+de\s+aula|no\s+sala\s+de\s+aula)[ ?.]*$", limpa, flags=re.IGNORECASE)
+    if m_cr_avisos_disc:
+        disc_cra = m_cr_avisos_disc.group(1).strip(" ?.")
+        _registra(frase, "classroom_avisos")
+        return {"intencao": "classroom_avisos", "resposta": _fazer_classroom_avisos(disciplina=disc_cra)}
+
+    m_cr_avisos_disc_alt = re.search(r"^(?:avisos|comunicados)\s+(?:do\s+classroom|do\s+google\s+sala\s+de\s+aula|do\s+sala\s+de\s+aula)\s+(?:de\s+|da\s+|do\s+|em\s+)?(.+?)[ ?.]*$", limpa, flags=re.IGNORECASE)
+    if m_cr_avisos_disc_alt:
+        disc_cra = m_cr_avisos_disc_alt.group(1).strip(" ?.")
+        _registra(frase, "classroom_avisos")
+        return {"intencao": "classroom_avisos", "resposta": _fazer_classroom_avisos(disciplina=disc_cra)}
+
+    if any(k in base_cr for k in ("avisos do classroom", "avisos do google sala de aula", "avisos do sala de aula", "comunicados do classroom", "classroom avisos")):
+        _registra(frase, "classroom_avisos")
+        return {"intencao": "classroom_avisos", "resposta": _fazer_classroom_avisos()}
+
+    # Busca de artigos cientificos em fontes abertas (Issue #7)
+    m_salvar_art = re.search(r"^salvar\s+artigo\s+(.+?)\s+(?:na\s+disciplina|em|para)\s+(.+)$", limpa, flags=re.IGNORECASE)
+    if m_salvar_art:
+        art_id = m_salvar_art.group(1).strip(" ?.")
+        disc_art = m_salvar_art.group(2).strip(" ?.")
+        _registra(frase, "estudos_salvar_artigo")
+        return {"intencao": "estudos_salvar_artigo", "resposta": _fazer_estudos_salvar_artigo(art_id, disc_art)}
+
+    m_art_disc = re.search(r"^(?:busca|buscar|pesquisa|pesquisar|procura|procurar)\s+artigos?\s+(?:sobre|de)\s+(.+?)\s+(?:para|em|na disciplina)\s+(.+)$", limpa, flags=re.IGNORECASE)
+    if m_art_disc:
+        termo_art = m_art_disc.group(1).strip()
+        disc_art = m_art_disc.group(2).strip(" ?.")
+        _registra(frase, "estudos_buscar_artigos")
+        return {"intencao": "estudos_buscar_artigos", "resposta": _fazer_estudos_buscar_artigos(termo_art, disciplina=disc_art)}
+
+    m_art = re.search(r"^(?:busca|buscar|pesquisa|pesquisar|procura|procurar)\s+artigos?\s+(?:sobre|de)\s+(.+)$", limpa, flags=re.IGNORECASE)
+    if m_art:
+        termo_art = m_art.group(1).strip(" ?.")
+        _registra(frase, "estudos_buscar_artigos")
+        return {"intencao": "estudos_buscar_artigos", "resposta": _fazer_estudos_buscar_artigos(termo_art)}
+
+    # Quizzes de estudos com repeticao espacada (Issue #6)
+    if base in ("quiz do dia", "quiz de hoje", "fazer o quiz do dia", "iniciar quiz do dia", "quiz diario", "quiz diário"):
+        _registra(frase, "estudos_quiz_do_dia")
+        return {"intencao": "estudos_quiz_do_dia", "resposta": _fazer_estudos_quiz_do_dia()}
+
+    m_quiz = re.search(r"^(?:me\s+faz\s+(?:um\s+)?|fazer\s+(?:um\s+)?|iniciar\s+(?:o\s+)?|comecar\s+(?:o\s+)?|quero\s+(?:um\s+)?)?quiz\s+(?:de\s+|da\s+|do\s+|em\s+)?(.+)$", limpa, flags=re.IGNORECASE)
+    if m_quiz and not any(k in base for k in ("dia", "hoje")):
+        disc_quiz = m_quiz.group(1).strip(" ?.")
+        _registra(frase, "estudos_quiz")
+        return {"intencao": "estudos_quiz", "resposta": _fazer_estudos_iniciar_quiz(disc_quiz)}
+
+    # Resumos de estudos (Issue #4) e flashcards Anki
+    m_flash = re.search(r"^(?:gerar\s+|criar\s+|fazer\s+)?flashcards\s+(?:de\s+|da\s+|do\s+|em\s+)?(.+)$", limpa, flags=re.IGNORECASE)
+    if m_flash:
+        disc_flash = m_flash.group(1).strip(" ?.")
+        _registra(frase, "estudos_flashcards")
+        return {"intencao": "estudos_flashcards", "resposta": _fazer_estudos_resumo(disc_flash, alvo="", gerar_cards=True)}
+
+    m_resumo_aula = re.search(r"^resum\w*\s+(?:a\s+)?(?:ultima\s+aula|aula)\s+(?:de\s+|da\s+|do\s+|em\s+)?(.+)$", limpa, flags=re.IGNORECASE)
+    if m_resumo_aula:
+        disc_res = m_resumo_aula.group(1).strip(" ?.")
+        _registra(frase, "estudos_resumo")
+        return {"intencao": "estudos_resumo", "resposta": _fazer_estudos_resumo(disc_res, alvo="ultima aula", gerar_cards=True)}
+
+    m_resumo_cap = re.search(r"^resum\w*\s+(?:o\s+)?(capitulo\s+[\w\d]+|modulo\s+[\w\d]+|material\s+[\w\d]+)\s+(?:de\s+|da\s+|do\s+|em\s+)?(.+)$", limpa, flags=re.IGNORECASE)
+    if m_resumo_cap:
+        alvo_cap = m_resumo_cap.group(1).strip()
+        disc_res = m_resumo_cap.group(2).strip(" ?.")
+        _registra(frase, "estudos_resumo")
+        return {"intencao": "estudos_resumo", "resposta": _fazer_estudos_resumo(disc_res, alvo=alvo_cap, gerar_cards=True)}
+
+    m_resumo_disc = re.search(r"^resum\w*\s+(?:a\s+disciplina\s+|a\s+materia\s+)(?:de\s+|da\s+|do\s+|em\s+)?(.+)$", limpa, flags=re.IGNORECASE)
+    if m_resumo_disc:
+        disc_res = m_resumo_disc.group(1).strip(" ?.")
+        _registra(frase, "estudos_resumo")
+        return {"intencao": "estudos_resumo", "resposta": _fazer_estudos_resumo(disc_res, alvo="", gerar_cards=True)}
+
     if "resum" in base:
         conteudo = re.sub(r".*?resum\w*\s+", "", limpa, count=1, flags=re.IGNORECASE).strip()
         _registra(frase, "resumir")
@@ -75,10 +318,54 @@ def rotear(frase: str) -> dict:
         _registra(frase, "modo")
         return {"intencao": "modo", "resposta": _fazer_modo(modo)}
 
+    m_disp = re.match(GATILHO_DISPOSITIVO, base)
+    if m_disp:
+        alvo = m_disp.group(3)
+        resto = (m_disp.group(4) or "").strip()
+        _registra(frase, "dispositivo")
+        return {"intencao": "dispositivo", "resposta": _fazer_dispositivo(alvo, resto)}
+
     m = re.match(GATILHO_DECK, base)
     if m:
+        if id_dispositivo:
+            from . import dispositivos
+            if not dispositivos.tem_permissao(id_dispositivo, "executar"):
+                _registra(frase, "deck_negado")
+                return {"intencao": "deck", "resposta": "Este aparelho nao tem permissao para executar acoes no computador."}
         _registra(frase, "deck")
         return {"intencao": "deck", "resposta": _fazer_deck(m.group(2).strip(" ?."))}
+
+    # GTD e Produtividade Pessoal (Issues #42, #43, #44)
+    m_gtd_captura = re.search(r"^(?:anota|anotar|anote|nova)\s+tarefa\s+(.+)$", limpa, flags=re.IGNORECASE)
+    if m_gtd_captura:
+        tarefa_txt = m_gtd_captura.group(1).strip(" ?.")
+        _registra(frase, "gtd_capturar")
+        return {"intencao": "gtd_capturar", "resposta": _fazer_gtd_capturar(tarefa_txt)}
+
+    if base.strip(" ?.") in ("o que tenho pra hoje", "o que tenho para hoje", "o que eu tenho pra hoje", "o que eu tenho para hoje", "meu dia no gtd", "gtd hoje"):
+        _registra(frase, "gtd_dia")
+        return {"intencao": "gtd_dia", "resposta": _fazer_gtd_dia()}
+
+    m_leitura = re.search(r"^li\s+(\d+)\s+pagina", base.strip(" ?."), flags=re.IGNORECASE)
+    if m_leitura:
+        qtd_p = int(m_leitura.group(1))
+        _registra(frase, "leitura_progresso")
+        return {"intencao": "leitura_progresso", "resposta": _fazer_leitura_progresso(qtd_p)}
+
+    # Coach de Estudos (Issue #57)
+    m_coach_concluir = re.search(r"^(?:conclui|concluir|terminei|marca\s+como\s+feita?)\s+(?:a\s+|o\s+)?(?:licao|estudo|aula)(?:\s+de\s+(.+))?[ ?.]*$", base.strip(), flags=re.IGNORECASE)
+    if m_coach_concluir or any(k in base for k in ("conclui a licao", "conclui o estudo", "terminei a licao", "conclui licao")):
+        materia_alvo = m_coach_concluir.group(1).strip() if (m_coach_concluir and m_coach_concluir.group(1)) else ""
+        _registra(frase, "coach_concluir")
+        return {"intencao": "coach_concluir", "resposta": _fazer_coach_concluir_estudo(materia_alvo)}
+
+    if any(k in base for k in ("meu estudo de hoje", "qual meu estudo de hoje", "o que tenho para estudar hoje", "o que estudar hoje", "estudo de hoje", "minha licao de hoje", "qual a licao de hoje", "estudo hoje")):
+        _registra(frase, "coach_estudo_hoje")
+        return {"intencao": "coach_estudo_hoje", "resposta": _fazer_coach_estudo_hoje()}
+
+    if any(k in base for k in ("meu progresso no estudo", "meu progresso nos estudos", "meu streak de estudo", "pontos no estudo")):
+        _registra(frase, "coach_progresso")
+        return {"intencao": "coach_progresso", "resposta": _fazer_coach_progresso()}
 
     for p in PALAVRAS_ANOTAR:
         if base.startswith(p) or f" {p} " in f" {base} ":
@@ -106,6 +393,145 @@ def rotear(frase: str) -> dict:
         _registra(frase, "nest_parar")
         return {"intencao": "nest", "resposta": _fazer_nest("parar")}
 
+    # Skill de Estudos (biblioteca de materias e busca FTS5)
+    # Gravacao de aulas (Issue #3)
+    # Gravacoes de reunioes e tela (Issue #14) e aulas (Issue #3)
+    m_marca = re.match(r"^(?:marca|marcar|marca aqui|marcador)\s*:\s*(.+)$", limpa, flags=re.IGNORECASE)
+    if m_marca:
+        nota_marca = m_marca.group(1).strip(" ?.")
+        _registra(frase, "tela_marcar")
+        return {"intencao": "tela_marcar", "resposta": _fazer_tela_marcar(nota_marca)}
+
+    if "para a gravacao" in base or "parar a gravacao" in base or "para gravacao" in base or "parar gravacao" in base or "encerrar gravacao" in base or "terminar gravacao" in base:
+        _registra(frase, "estudos_parar_gravacao")
+        return {"intencao": "estudos_parar_gravacao", "resposta": _fazer_estudos_parar_gravacao()}
+
+    m_reuniao = re.search(r"(?:grava|gravar|iniciar gravacao)(?:\s+de|\s+da)?\s+reuniao(?:\s+sobre|\s+com)?\s*(.*)$", limpa, flags=re.IGNORECASE)
+    if m_reuniao:
+        tema_reuniao = m_reuniao.group(1).strip(" ?.") or "Reuniao"
+        _registra(frase, "reuniao_iniciar")
+        return {"intencao": "reuniao_iniciar", "resposta": _fazer_reuniao_iniciar(tema_reuniao)}
+
+    m_tela = re.search(r"(?:grava|gravar|iniciar gravacao)(?:\s+de|\s+da)?\s+tela(?:\s+da\s+tarefa|\s+para\s+a\s+tarefa|\s+da|\s+de)?\s*(.*)$", limpa, flags=re.IGNORECASE)
+    if m_tela:
+        tarefa_tela = m_tela.group(1).strip(" ?.") or "Tarefa"
+        _registra(frase, "tela_iniciar")
+        return {"intencao": "tela_iniciar", "resposta": _fazer_tela_iniciar(tarefa_tela)}
+
+    m_grav = re.search(r"(?:grava|gravar|iniciar gravacao)(?:\s+a|\s+da|\s+de)?\s+aula\s+(?:de\s+|da\s+)?(.+)$", limpa, flags=re.IGNORECASE)
+    if m_grav:
+        disc_aula = m_grav.group(1).strip(" ?.")
+        _registra(frase, "estudos_gravar_aula")
+        return {"intencao": "estudos_gravar_aula", "resposta": _fazer_estudos_gravar_aula(disc_aula)}
+
+    if base.startswith("nova disciplina") or base.startswith("criar disciplina") or base.startswith("crie a disciplina"):
+        nome_disc = re.sub(r"^(nova disciplina|criar disciplina|crie a disciplina)\s+", "", limpa, flags=re.IGNORECASE).strip(" .:")
+        _registra(frase, "estudos_criar_disciplina")
+        return {"intencao": "estudos_criar_disciplina", "resposta": _fazer_estudos_criar_disciplina(nome_disc)}
+
+    if base.startswith("adiciona") or base.startswith("adicionar"):
+        m = re.search(r"adiciona\w*\s+(?:este\s+|o\s+)?(?:pdf|docx|arquivo|documento|texto|link)?\s*(.*?)\s+em\s+(.+)$", limpa, flags=re.IGNORECASE)
+        if m:
+            origem_mat, disc_mat = m.group(1).strip(), m.group(2).strip(" ?.")
+            _registra(frase, "estudos_adicionar")
+            if canal != "local":
+                return {"intencao": "estudos_adicionar", "resposta": _fazer_estudos_adicionar(disc_mat, origem_mat, canal=canal)}
+            return {"intencao": "estudos_adicionar", "resposta": _fazer_estudos_adicionar(disc_mat, origem_mat)}
+
+    m_mat = re.search(r"(?:o que (?:eu )?tenho de material (?:de|em)\s+|listar materiais? (?:de|em)\s+|materiais? (?:de|em)\s+)(.+)$", limpa, flags=re.IGNORECASE)
+    if m_mat:
+        disc_mat = m_mat.group(1).strip(" ?.")
+        _registra(frase, "estudos_listar_materiais")
+        return {"intencao": "estudos_listar_materiais", "resposta": _fazer_estudos_listar_materiais(disc_mat)}
+
+    if base in ("disciplinas", "minhas disciplinas", "listar disciplinas", "quais disciplinas eu tenho", "o que tenho de disciplinas"):
+        _registra(frase, "estudos_listar_disciplinas")
+        return {"intencao": "estudos_listar_disciplinas", "resposta": _fazer_estudos_listar_disciplinas()}
+
+    m_busca = re.search(r"(?:busca|buscar|pesquisa|pesquisar)\s+(?:material\s+)?(?:sobre\s+)?(.*?)\s+em\s+(.+)$", limpa, flags=re.IGNORECASE)
+    if m_busca:
+        termo_busca, disc_busca = m_busca.group(1).strip(), m_busca.group(2).strip(" ?.")
+        _registra(frase, "estudos_buscar")
+        return {"intencao": "estudos_buscar", "resposta": _fazer_estudos_buscar(termo_busca, disc_busca)}
+
+    # Skill Organizador de Pastas (Issue #15)
+    if "desfaz organizacao" in base or "desfazer organizacao" in base or "desfaz a organizacao" in base or "desfazer a organizacao" in base:
+        _registra(frase, "organizador_desfazer")
+        return {"intencao": "organizador_desfazer", "resposta": _fazer_organizador_desfazer()}
+
+    if "confirma organizacao" in base or "confirmar organizacao" in base or "confirme a organizacao" in base or "confirmar a organizacao" in base:
+        _registra(frase, "organizador_confirmar")
+        return {"intencao": "organizador_confirmar", "resposta": _fazer_organizador_confirmar()}
+
+    m_org = re.search(r"(?:organiza|organizar)\s+(?:minha\s+|a\s+)?pasta\s+(.+?)(?:\s+por\s+(tipo|data|disciplina))?$", limpa, flags=re.IGNORECASE)
+    if m_org:
+        alvo_pasta = m_org.group(1).strip(" ?.")
+        criterio_pasta = (m_org.group(2) or "tipo").strip().lower()
+        _registra(frase, "organizador_previa")
+        return {"intencao": "organizador_previa", "resposta": _fazer_organizador_previa(alvo_pasta, criterio_pasta)}
+
+    # Skill Integracao GitHub (Issue #16)
+    if any(k in base for k in ("meu kanban", "no kanban", "ver kanban", "listar kanban")):
+        _registra(frase, "github_kanban")
+        return {"intencao": "github_kanban", "resposta": _fazer_github_kanban()}
+
+    if any(k in base for k in ("minhas issues", "listar issues", "quais issues", "ver issues")):
+        _registra(frase, "github_issues")
+        return {"intencao": "github_issues", "resposta": _fazer_github_issues()}
+
+    if "confirma criacao" in base or "confirmar criacao" in base or "confirma movimentacao" in base or "confirmar movimentacao" in base or (base in ("confirma", "confirmar") and _tem_acao_pendente_github()):
+        _registra(frase, "github_confirmar")
+        return {"intencao": "github_confirmar", "resposta": _fazer_github_confirmar()}
+
+    if "cancela criacao" in base or "cancelar criacao" in base or "cancela movimentacao" in base or "cancelar movimentacao" in base:
+        _registra(frase, "github_cancelar")
+        return {"intencao": "github_cancelar", "resposta": _fazer_github_cancelar()}
+
+    m_issue = re.search(r"(?:cria|criar|crie)\s+(?:uma\s+)?issue(?:\s+no\s+|\s+em\s+|\s+para\s+o\s+)?([^\s:]+)?[:,\s]+(.+)$", limpa, flags=re.IGNORECASE)
+    if m_issue:
+        repo_alvo = (m_issue.group(1) or "").strip()
+        titulo_issue = (m_issue.group(2) or "").strip(" ?.")
+        _registra(frase, "github_propor_issue")
+        return {"intencao": "github_propor_issue", "resposta": _fazer_github_propor_issue(repo_alvo, titulo_issue)}
+
+    m_mover = re.search(r"(?:move|mover|mova)\s+(?:o\s+)?cartao\s+(?:da\s+issue\s+|de\s+|do\s+)?([^\s]+)\s+para\s+(.+)$", limpa, flags=re.IGNORECASE)
+    if m_mover:
+        issue_ref = m_mover.group(1).strip(" ?.")
+        coluna_alvo = m_mover.group(2).strip(" ?.")
+        _registra(frase, "github_propor_mover")
+        return {"intencao": "github_propor_mover", "resposta": _fazer_github_propor_mover(issue_ref, coluna_alvo)}
+
+    # Skill Painel de Tarefas e Pendencias (Issue #13)
+    if "confirma conclusao" in base or "confirmar conclusao" in base or "confirme a conclusao" in base or (base in ("confirma", "confirmar") and _tem_conclusao_pendente()):
+        _registra(frase, "pendencias_confirmar_conclusao")
+        return {"intencao": "pendencias_confirmar_conclusao", "resposta": _fazer_confirmar_conclusao_tarefa()}
+
+    if "cancela conclusao" in base or "cancelar conclusao" in base:
+        _registra(frase, "pendencias_cancelar_conclusao")
+        return {"intencao": "pendencias_cancelar_conclusao", "resposta": _fazer_cancelar_conclusao_tarefa()}
+
+    m_concluir = re.search(r"(?:marca|marcar|conclui|concluir)\s+(?:a\s+)?tarefa\s+(.+?)(?:\s+como\s+(?:feita|feito|concluida|concluido))?$", limpa, flags=re.IGNORECASE)
+    if m_concluir:
+        alvo_tarefa = m_concluir.group(1).strip(" ?.")
+        _registra(frase, "pendencias_concluir")
+        return {"intencao": "pendencias_concluir", "resposta": _fazer_concluir_tarefa(alvo_tarefa)}
+
+    if any(k in base for k in ("minhas pendencias", "quais sao minhas pendencias", "listar pendencias", "ver pendencias")):
+        _registra(frase, "pendencias")
+        return {"intencao": "pendencias", "resposta": _fazer_pendencias(apenas_hoje=False)}
+
+    if any(k in base for k in ("para fazer hoje", "pra fazer hoje", "que fazer hoje", "tarefas de hoje", "o que fazer hoje", "minhas tarefas hoje")):
+        _registra(frase, "pendencias_hoje")
+        return {"intencao": "pendencias_hoje", "resposta": _fazer_pendencias(apenas_hoje=True)}
+
+    if any(k in base for k in ("como esta meu dia", "como esta o meu dia", "como ta meu dia", "como ta o meu dia", "resumo do meu dia", "resumo do dia", "visao do dia")):
+        _registra(frase, "agenda_dia")
+        return {"intencao": "agenda_dia", "resposta": _fazer_gtd_dia()}
+
+    if any(k in base for k in ("proxima reuniao", "qual minha proxima reuniao", "quando e minha proxima reuniao", "minha proxima reuniao", "proximo compromisso")):
+        _registra(frase, "proxima_reuniao")
+        return {"intencao": "proxima_reuniao", "resposta": _fazer_proxima_reuniao()}
+
     if any(w in base for w in PALAVRAS_AGENDA) or "o que tenho" in base or "o que eu tenho" in base:
         quando = "proximos" if any(k in base for k in ("amanha", "semana", "proxim")) else "hoje"
         _registra(frase, "agenda")
@@ -113,6 +539,121 @@ def rotear(frase: str) -> dict:
 
     _registra(frase, "conversar")
     return {"intencao": "conversar", "resposta": _fazer_conversar(limpa or frase)}
+
+
+def _fazer_gtd_capturar(texto: str) -> str:
+    try:
+        from .gtd import capturar
+        item = capturar(texto)
+        return f"Anotado na sua caixa de entrada: {item.titulo}."
+    except Exception as e:
+        return f"Nao consegui anotar no GTD: {e}"
+
+
+def _fazer_gtd_dia() -> str:
+    try:
+        from .gtd import agenda_do_dia
+        res = agenda_do_dia()
+        fala = res.get("resumo_falado", "Nao foi possivel obter o resumo do dia agora.")
+        try:
+            from .companheiro import companheiro
+            acoes = list(res.get("atrasadas") or []) + list(res.get("hoje") or []) + list(res.get("proximas_sugeridas") or [])
+            itens = [
+                {
+                    "id": a.get("id", ""),
+                    "titulo": a.get("titulo", ""),
+                    "fonte": "gtd",
+                    "prazo": a.get("prazo") or "",
+                    "atrasada": a in (res.get("atrasadas") or []),
+                    "para_hoje": a in (res.get("hoje") or []),
+                }
+                for a in acoes[:10]
+            ]
+            companheiro.atualizar(
+                ultima_resposta=fala,
+                legenda=fala,
+                resultado={
+                    "tipo": "tarefas",
+                    "titulo": "Agenda e tarefas de hoje",
+                    "resumo": fala,
+                    "itens": itens,
+                },
+            )
+        except Exception:
+            pass
+        return fala
+    except Exception as e:
+        return f"Nao consegui consultar a agenda do dia: {e}"
+
+
+def _fazer_leitura_progresso(paginas: int) -> str:
+    try:
+        from .gtd import atualizar_progresso, listar_leituras
+        leituras = listar_leituras(estado="lendo") or listar_leituras(estado="quero_ler")
+        if not leituras:
+            from .gtd.armazenamento import ArmazenamentoGTD
+            banco = ArmazenamentoGTD()
+            total = banco.registrar_progresso_leitura("geral", paginas)
+            meta = getattr(config, "LEITURA_META_DIARIA", 20)
+            status = "Meta batida!" if total >= meta else f"Faltam {max(0, meta - total)} paginas."
+            return f"Registradas {paginas} paginas lidas. Total hoje: {total} de {meta}. {status}"
+        res = atualizar_progresso(leituras[0].id, paginas)
+        status = "Meta batida!" if res["meta_atingida"] else f"Faltam {res['faltam_paginas']} paginas para a meta."
+        return f"Registradas {paginas} paginas em '{res['leitura']['titulo']}'. Total hoje: {res['paginas_lidas_hoje']}/{res['meta_diaria']}. {status}"
+    except Exception as e:
+        return f"Nao consegui atualizar o progresso de leitura: {e}"
+
+
+def _fazer_coach_estudo_hoje() -> str:
+    try:
+        from .coach import ArmazenamentoCoach, acao_do_dia, obter_ou_criar_plano_padrao
+        banco = ArmazenamentoCoach()
+        plano = obter_ou_criar_plano_padrao(banco)
+        acao = acao_do_dia(plano, db=banco)
+        if not acao:
+            res = banco.listar_acoes(plano.id, estado="pendente")
+            if not res:
+                return "Parabens! Voce concluiu todas as licoes da sua trilha de estudos."
+            return "Hoje sua agenda esta cheia ou com entregas prioritarias. Recomendado focar nas entregas ou descansar."
+        rec = banco.obter_recurso(acao.recurso_id)
+        titulo = rec.titulo if rec else "Licao de estudo"
+        duracao = rec.duracao_min if rec else 15
+        tipo = rec.tipo if rec else "aula"
+        link_str = f" Link: {rec.url}" if (rec and rec.url) else ""
+        return f"Seu estudo de hoje e: {titulo} ({duracao} minutos, tipo: {tipo}).{link_str}"
+    except Exception as e:
+        return f"Nao consegui consultar seu estudo de hoje: {e}"
+
+
+def _fazer_coach_concluir_estudo(detalhes: str = "") -> str:
+    try:
+        from .coach import ArmazenamentoCoach, acao_do_dia, concluir, obter_ou_criar_plano_padrao
+        banco = ArmazenamentoCoach()
+        plano = obter_ou_criar_plano_padrao(banco)
+        acao = acao_do_dia(plano, db=banco, verificar_dia_saturado=False)
+        if not acao:
+            return "Nao ha licao pendente para concluir agora."
+        res = concluir(plano=plano.id, recurso=acao.recurso_id, db=banco)
+        rec = banco.obter_recurso(acao.recurso_id)
+        titulo = rec.titulo if rec else "Licao"
+        msg = f"Concluido: {titulo}! Voce ganhou {res['xp_ganho']} XP. Total: {res['xp_total']} XP, nivel {res['nivel']}, sequencia de {res['streak']} dias."
+        if res.get("subiu_de_nivel"):
+            msg += f" Parabens, voce alcancou o nivel {res['nivel']}!"
+        return msg
+    except Exception as e:
+        return f"Nao consegui registrar a conclusao do estudo: {e}"
+
+
+def _fazer_coach_progresso() -> str:
+    try:
+        from .coach import ArmazenamentoCoach, obter_ou_criar_plano_padrao, resumo
+        banco = ArmazenamentoCoach()
+        plano = obter_ou_criar_plano_padrao(banco)
+        r = resumo(plano, db=banco)
+        trilha_nome = r.get("trilha", {}).get("titulo", "Estudos") if r.get("trilha") else "Estudos"
+        return f"No seu plano de {trilha_nome}: {r['concluidas']} de {r['total_acoes']} licoes feitas ({r['percentual']}%). Nivel {r['nivel']}, {r['xp_total']} XP, sequencia de {r['streak']} dias."
+    except Exception as e:
+        return f"Nao consegui consultar seu progresso: {e}"
 
 
 def _fazer_anotar(texto: str) -> str:
@@ -132,6 +673,21 @@ def _fazer_agenda(quando: str) -> str:
         return "Nao consegui ler a agenda agora."
 
 
+def _fazer_proxima_reuniao() -> str:
+    try:
+        from .agenda import proxima_reuniao
+        prox = proxima_reuniao()
+        if not prox:
+            return "Voce nao tem nenhuma reuniao agendada para os proximos dias."
+        ini = prox["inicio"]
+        hora_str = ini.strftime("%H:%M") if hasattr(ini, "strftime") else str(ini)
+        data_str = ini.strftime("%d/%m") if hasattr(ini, "strftime") else ""
+        link_info = f" Link disponivel: {prox['link_video']}." if prox.get("link_video") else " Nao ha link de videoconferencia registrado."
+        return f"Sua proxima reuniao e '{prox['titulo']}' no dia {data_str} as {hora_str}.{link_info}"
+    except Exception as e:
+        return f"Nao consegui consultar a proxima reuniao: {e}"
+
+
 def _fazer_noticias(assunto: str) -> str:
     try:
         from .noticias import resumir
@@ -149,6 +705,30 @@ def _fazer_modo(modo: str) -> str:
         return "Nao consegui mudar de modo agora."
 
 
+def _fazer_dispositivo(alvo: str, resto: str = "") -> str:
+    try:
+        from . import dispositivos
+        from .companheiro import companheiro
+        disp = dispositivos.buscar_por_tipo_ou_nome(alvo)
+        if not disp:
+            return f"Nao encontrei o aparelho {alvo}."
+        if not disp.get("ativo", True):
+            return f"O aparelho {disp['nome']} esta desativado ou revogado."
+
+        if resto:
+            r = rotear(resto)
+            conteudo = r.get("resposta", resto)
+        else:
+            estado = companheiro.ver()
+            conteudo = estado.get("ultima_resposta") or "Pronto para continuar aqui."
+
+        dispositivos.enviar_resposta_dispositivo(disp["id"], conteudo)
+        artigo = "na" if disp["tipo"] == "tv" else "no"
+        return f"Mostrando {artigo} {disp['nome']}."
+    except Exception:
+        return f"Nao consegui enviar para {alvo} agora."
+
+
 def _fazer_deck(nome: str) -> str:
     try:
         from . import deck
@@ -163,7 +743,7 @@ def _fazer_nest(acao: str, nivel: int = 50) -> str:
         if acao == "volume":
             return nest.volume(nivel)
         return nest.parar()
-    except Exception as e:
+    except Exception:
         return "Nao consegui controlar o Nest agora."
 
 
@@ -173,7 +753,24 @@ def _fazer_texto(acao: str, conteudo: str, idioma: str = "ingles") -> str:
         if acao == "traduzir":
             return traduzir(conteudo, idioma)["aviso"]
         if acao == "resumir":
-            return resumir_texto(conteudo)["aviso"]
+            res = resumir_texto(conteudo)
+            try:
+                from .companheiro import companheiro
+                texto_res = res.get("texto", "")
+                linhas = [ln.lstrip("-* ").strip() for ln in texto_res.splitlines() if ln.strip()]
+                companheiro.atualizar(
+                    ultima_resposta=res["aviso"],
+                    legenda=res["aviso"],
+                    resultado={
+                        "tipo": "resumo",
+                        "titulo": "Resumo",
+                        "resumo": texto_res,
+                        "itens": [{"ponto": p, "fonte": res.get("arquivo", "")} for p in linhas[:6]],
+                    },
+                )
+            except Exception:
+                pass
+            return res["aviso"]
         return escrever(conteudo)["aviso"]
     except Exception:
         return "Nao consegui gerar o texto agora."
@@ -182,9 +779,487 @@ def _fazer_texto(acao: str, conteudo: str, idioma: str = "ingles") -> str:
 def _fazer_conversar(frase: str) -> str:
     try:
         from .cerebro import conversar
-        return conversar(frase)
+        from .companheiro import companheiro
+        companheiro.atualizar(atividade="pensando", ultima_mensagem=frase, erro="")
+        resp = conversar(frase)
+        companheiro.atualizar(atividade="ocioso", ultima_resposta=resp, legenda=resp)
+        return resp
     except Exception:
-        return "Estou aqui, mas meu cerebro esta fora do ar agora."
+        msg = "Estou aqui, mas meu cerebro esta fora do ar agora."
+        try:
+            from .companheiro import companheiro
+            companheiro.registrar_erro(msg)
+        except Exception:
+            pass
+        return msg
+
+
+def _fazer_estudos_criar_disciplina(nome: str) -> str:
+    try:
+        from . import estudos
+        res = estudos.criar_disciplina(nome)
+        return res.get("aviso") or res.get("erro", "Erro ao criar disciplina.")
+    except Exception:
+        return "Nao consegui criar a disciplina agora."
+
+
+def _fazer_estudos_adicionar(disciplina: str, origem: str, canal: str = "local") -> str:
+    if not origem:
+        return f"Informe o arquivo ou link para adicionar em {disciplina}."
+    try:
+        from . import estudos
+        res = estudos.importar_material(disciplina, origem, canal=canal)
+        return res.get("aviso") or res.get("erro", "Erro ao adicionar material.")
+    except Exception:
+        return f"Nao consegui adicionar o material em {disciplina} agora."
+
+
+def _fazer_estudos_listar_materiais(disciplina: str) -> str:
+    try:
+        from . import estudos
+        return estudos.resumo_materiais(disciplina)
+    except Exception:
+        return f"Nao consegui listar os materiais de {disciplina} agora."
+
+
+def _fazer_estudos_listar_disciplinas() -> str:
+    try:
+        from . import estudos
+        return estudos.resumo_disciplinas()
+    except Exception:
+        return "Nao consegui listar as disciplinas agora."
+
+
+def _fazer_estudos_buscar(termo: str, disciplina: str = "") -> str:
+    try:
+        from . import estudos
+        return estudos.resumo_busca(termo, disciplina_nome=disciplina)
+    except Exception:
+        return "Nao consegui buscar os materiais agora."
+
+
+def _fazer_estudos_gravar_aula(disciplina: str) -> str:
+    try:
+        from . import aulas
+        res = aulas.iniciar_gravacao(disciplina)
+        return res.get("aviso") or res.get("erro", "Erro ao iniciar gravacao.")
+    except Exception:
+        return "Nao consegui iniciar a gravacao da aula agora."
+
+
+def _fazer_estudos_parar_gravacao() -> str:
+    try:
+        from . import reuniao_tela
+        if reuniao_tela.gravador_reuniao.gravando:
+            res = reuniao_tela.gravador_reuniao.parar()
+            if res.get("ok"):
+                total_acoes = len(res.get("itens_acao", []))
+                return f"Reuniao encerrada. Duracao: {res.get('duracao')}. Gerados {total_acoes} itens de acao."
+            return res.get("mensagem", "Erro ao encerrar reuniao.")
+
+        if reuniao_tela.gravador_tela.gravando:
+            res = reuniao_tela.gravador_tela.parar()
+            if res.get("ok"):
+                total_m = res.get("total_marcadores", 0)
+                return f"Gravacao de tela encerrada. Duracao: {res.get('duracao')}. {total_m} marcadores salvos."
+            return res.get("mensagem", "Erro ao encerrar gravacao de tela.")
+
+        from . import aulas
+        res = aulas.parar_gravacao()
+        return res.get("aviso") or res.get("erro", "Erro ao encerrar gravacao.")
+    except Exception:
+        return "Nao consegui encerrar a gravacao agora."
+
+
+def _fazer_organizador_previa(alvo: str, criterio: str = "tipo") -> str:
+    try:
+        from . import organizador
+        return organizador.gerar_previa_por_frase(alvo, criterio=criterio)
+    except Exception as e:
+        return f"Nao consegui gerar a previa da organizacao: {e}"
+
+
+def _fazer_organizador_confirmar() -> str:
+    try:
+        from . import organizador
+        return organizador.confirmar_organizacao_pendente()
+    except Exception as e:
+        return f"Nao consegui executar a organizacao: {e}"
+
+
+def _fazer_organizador_desfazer(alvo: str | None = None) -> str:
+    try:
+        from . import organizador
+        return organizador.desfazer_organizacao_por_frase(alvo)
+    except Exception as e:
+        return f"Nao consegui desfazer a organizacao: {e}"
+
+
+def _fazer_estudos_resumo(disciplina: str, alvo: str = "", gerar_cards: bool = True) -> str:
+    try:
+        from . import resumos
+        res = resumos.resumir_estudos(disciplina_nome=disciplina, alvo=alvo, gerar_cards=gerar_cards)
+        return res.get("aviso") or res.get("erro", "Nao consegui gerar o resumo agora.")
+    except Exception:
+        return "Nao consegui gerar o resumo dos estudos agora."
+
+
+def _tem_acao_pendente_github() -> bool:
+    try:
+        from . import github_integration
+        return github_integration.obter_acao_pendente() is not None
+    except Exception:
+        return False
+
+
+def _fazer_github_kanban() -> str:
+    try:
+        from . import github_integration
+        return github_integration.resumo_kanban_por_voz()
+    except Exception as e:
+        return f"Nao consegui acessar o kanban: {e}"
+
+
+def _fazer_github_issues() -> str:
+    try:
+        from . import github_integration
+        return github_integration.resumo_issues_por_voz()
+    except Exception as e:
+        return f"Nao consegui acessar as issues: {e}"
+
+
+def _fazer_github_propor_issue(repo: str, titulo: str) -> str:
+    try:
+        from . import github_integration
+        res = github_integration.propor_criacao_issue(repo=repo, titulo=titulo)
+        return res.get("mensagem") or res.get("erro", "Erro ao propor criacao de issue.")
+    except Exception as e:
+        return f"Nao consegui preparar a criacao da issue: {e}"
+
+
+def _fazer_github_propor_mover(issue_ref: str, coluna: str) -> str:
+    try:
+        from . import github_integration
+        res = github_integration.propor_movimentacao_cartao(issue_ref=issue_ref, coluna=coluna)
+        return res.get("mensagem") or res.get("erro", "Erro ao propor movimentacao de cartao.")
+    except Exception as e:
+        return f"Nao consegui preparar a movimentacao do cartao: {e}"
+
+
+def _fazer_github_confirmar() -> str:
+    try:
+        from . import github_integration
+        res = github_integration.confirmar_acao_pendente()
+        return res.get("mensagem") or res.get("erro", "Nenhuma acao pendente para confirmar.")
+    except Exception as e:
+        return f"Nao consegui confirmar a acao no GitHub: {e}"
+
+
+def _fazer_github_cancelar() -> str:
+    try:
+        from . import github_integration
+        res = github_integration.cancelar_acao_pendente()
+        return res.get("mensagem") or "Acao cancelada com sucesso."
+    except Exception as e:
+        return f"Nao consegui cancelar a acao: {e}"
+
+
+def _fazer_estudos_quiz_do_dia() -> str:
+    try:
+        from . import quiz
+        res = quiz.quiz_do_dia()
+        return res.get("aviso") or res.get("erro", "Nao consegui iniciar o quiz do dia agora.")
+    except Exception:
+        return "Nao consegui preparar o quiz do dia agora."
+
+
+def _fazer_estudos_iniciar_quiz(disciplina: str) -> str:
+    try:
+        from . import quiz
+        return quiz.iniciar_quiz_por_voz(disciplina)
+    except Exception:
+        return f"Nao consegui iniciar o quiz de {disciplina} agora."
+
+
+def _tem_conclusao_pendente() -> bool:
+    try:
+        from . import pendencias
+        return pendencias.obter_conclusao_pendente() is not None
+    except Exception:
+        return False
+
+
+def _fazer_pendencias(apenas_hoje: bool = False) -> str:
+    try:
+        from . import pendencias, dispositivos
+        lista = pendencias.coletar_todas_pendencias()
+        if apenas_hoje:
+            lista = [p for p in lista if p.get("para_hoje") or p.get("atrasada")]
+        fala = pendencias.gerar_resumo_falado(lista, apenas_hoje=apenas_hoje)
+
+        try:
+            from .companheiro import companheiro
+            companheiro.atualizar(
+                ultima_resposta=fala,
+                legenda=fala,
+                resultado={
+                    "tipo": "tarefas",
+                    "titulo": "Tarefas para hoje" if apenas_hoje else "Lista de tarefas",
+                    "resumo": fala,
+                    "itens": [
+                        {
+                            "id": p.get("id", ""),
+                            "titulo": p.get("titulo", ""),
+                            "fonte": p.get("fonte", ""),
+                            "prazo": p.get("prazo") or "",
+                            "atrasada": bool(p.get("atrasada", False)),
+                            "para_hoje": bool(p.get("para_hoje", False)),
+                        }
+                        for p in lista[:12]
+                    ],
+                },
+            )
+        except Exception:
+            pass
+
+        disp_ativo = dispositivos.dispositivo_ativo()
+        if disp_ativo and disp_ativo.get("id"):
+            linhas = [f"- {p['titulo']} ({p['fonte']})" for p in lista[:10]]
+            detalhe_tela = f"{fala}\n\nTarefas:\n" + "\n".join(linhas)
+            dispositivos.enviar_resposta_dispositivo(
+                disp_ativo["id"],
+                texto=detalhe_tela,
+                titulo="Painel de Tarefas",
+                intencao="pendencias",
+            )
+        return fala
+    except Exception as e:
+        return f"Nao consegui listar as pendencias agora: {e}"
+
+
+def _fazer_concluir_tarefa(alvo: str) -> str:
+    try:
+        from . import pendencias
+        return pendencias.concluir_tarefa_por_voz(alvo)
+    except Exception as e:
+        return f"Nao consegui concluir a tarefa: {e}"
+
+
+def _fazer_confirmar_conclusao_tarefa() -> str:
+    try:
+        from . import pendencias
+        return pendencias.confirmar_conclusao_pendente()
+    except Exception as e:
+        return f"Nao consegui confirmar a conclusao da tarefa: {e}"
+
+
+def _fazer_cancelar_conclusao_tarefa() -> str:
+    try:
+        from . import pendencias
+        return pendencias.cancelar_conclusao_pendente()
+    except Exception as e:
+        return f"Nao consegui cancelar a conclusao: {e}"
+
+
+def _fazer_estudos_perguntar(pergunta_ou_topico: str, disciplina: str = "") -> str:
+    try:
+        from . import qa_estudos
+        res = qa_estudos.responder_com_material(pergunta=pergunta_ou_topico, disciplina_nome=disciplina)
+        return res.get("resposta_fala") or res.get("resposta_detalhada") or "Nao consegui responder com base no seu material agora."
+    except Exception:
+        return "Nao consegui consultar o seu material agora."
+
+
+def _fazer_estudos_buscar_artigos(termo: str, disciplina: str = "") -> str:
+    try:
+        from . import artigos_cientificos
+        artigos = artigos_cientificos.buscar_artigos(termo, limite=3)
+        return artigos_cientificos.resumo_artigos_falado(artigos, termo)
+    except Exception:
+        return f"Nao consegui buscar artigos sobre {termo} agora."
+
+
+def _fazer_estudos_salvar_artigo(artigo_id_ou_termo: str, disciplina: str) -> str:
+    try:
+        from . import artigos_cientificos
+        artigos = artigos_cientificos.buscar_artigos(artigo_id_ou_termo, limite=1)
+        if not artigos:
+            return f"Nao encontrei o artigo '{artigo_id_ou_termo}' para salvar."
+        res = artigos_cientificos.salvar_artigo_na_disciplina(artigos[0], disciplina_nome=disciplina)
+        return res.get("aviso") or f"Artigo salvo em {disciplina}."
+    except Exception:
+        return f"Nao consegui salvar o artigo em {disciplina} agora."
+
+
+def _fazer_reuniao_iniciar(tema: str) -> str:
+    try:
+        from . import reuniao_tela
+        res = reuniao_tela.gravador_reuniao.iniciar(tema=tema)
+        if res.get("ok"):
+            return f"{res.get('aviso')} Gravando reuniao sobre '{tema}'."
+        return res.get("erro", "Nao foi possivel iniciar a gravacao da reuniao.")
+    except Exception as e:
+        return f"Erro ao iniciar gravacao de reuniao: {e}"
+
+
+def _fazer_tela_iniciar(tarefa: str) -> str:
+    try:
+        from . import reuniao_tela
+        res = reuniao_tela.gravador_tela.iniciar(tarefa=tarefa)
+        if res.get("ok"):
+            return f"{res.get('aviso')} Gravando tela para a tarefa '{tarefa}'."
+        return res.get("erro", "Nao foi possivel iniciar a gravacao de tela.")
+    except Exception as e:
+        return f"Erro ao iniciar gravacao de tela: {e}"
+
+
+def _fazer_tela_marcar(nota: str) -> str:
+    try:
+        from . import reuniao_tela
+        res = reuniao_tela.gravador_tela.adicionar_marcador(nota=nota)
+        if res.get("ok"):
+            return res.get("mensagem", f"Marcado: {nota}")
+        return res.get("erro", "Nenhuma gravacao de tela ativa para marcar.")
+    except Exception as e:
+        return f"Erro ao adicionar marcador na tela: {e}"
+def _fazer_canvas_tarefas(disciplina: str = "") -> str:
+    try:
+        from . import canvas_lms
+        if not canvas_lms.esta_configurado():
+            return "O Canvas LMS nao esta configurado. Configure CANVAS_BASE_URL e CANVAS_TOKEN."
+        tarefas = canvas_lms.listar_tarefas(disciplina_nome=disciplina)
+        return canvas_lms.resumo_tarefas_falado(tarefas, disciplina=disciplina)
+    except Exception as e:
+        return f"Nao consegui consultar as tarefas do Canvas agora: {e}"
+
+
+def _fazer_canvas_avisos(disciplina: str = "") -> str:
+    try:
+        from . import canvas_lms
+        if not canvas_lms.esta_configurado():
+            return "O Canvas LMS nao esta configurado. Configure CANVAS_BASE_URL e CANVAS_TOKEN."
+        avisos = canvas_lms.listar_avisos(disciplina_nome=disciplina)
+        return canvas_lms.resumo_avisos_falado(avisos, disciplina=disciplina)
+    except Exception as e:
+        return f"Nao consegui consultar os avisos do Canvas agora: {e}"
+
+
+def _fazer_classroom_atividades(disciplina: str = "") -> str:
+    try:
+        from . import google_classroom
+        if not google_classroom.esta_configurado():
+            return "O Google Sala de Aula nao esta configurado. Configure GOOGLE_CLASSROOM_TOKEN no .env."
+        atividades = google_classroom.listar_atividades(disciplina_nome=disciplina, apenas_pendentes=True)
+        return google_classroom.resumo_atividades_falado(atividades, disciplina=disciplina)
+    except Exception as e:
+        return f"Nao consegui consultar as atividades do Google Sala de Aula agora: {e}"
+
+
+def _fazer_classroom_avisos(disciplina: str = "") -> str:
+    try:
+        from . import google_classroom
+        if not google_classroom.esta_configurado():
+            return "O Google Sala de Aula nao esta configurado. Configure GOOGLE_CLASSROOM_TOKEN no .env."
+        avisos = google_classroom.listar_avisos(disciplina_nome=disciplina)
+        return google_classroom.resumo_avisos_falado(avisos, disciplina=disciplina)
+    except Exception as e:
+        return f"Nao consegui consultar os avisos do Google Sala de Aula agora: {e}"
+
+
+def _fazer_nexread_traduzir(conteudo: str) -> str:
+    try:
+        from .nexread import traduzir_pagina_ao_vivo
+        artigo = traduzir_pagina_ao_vivo(texto=conteudo, aberta_pelo_usuario=True)
+        trecho = artigo.blocos[0].texto_traduzido if artigo.blocos else artigo.titulo_traduzido
+        return f"Pagina traduzida no NexRead: {trecho}"
+    except Exception as e:
+        return f"Nao consegui traduzir a pagina no NexRead: {e}"
+
+
+def _fazer_nexread_conversar(pergunta: str, acao: str = "perguntar") -> str:
+    try:
+        from .nexread import ArmazenamentoNexRead, conversar_sobre_artigo
+        banco = ArmazenamentoNexRead()
+        artigos = banco.listar_artigos(limite=1)
+        if not artigos:
+            return "Nenhum artigo aberto no NexRead no momento."
+        res = conversar_sobre_artigo(artigo_id=artigos[0].id, pergunta=pergunta, acao=acao, db=banco)
+        return res.get("resposta", "Sem resposta disponivel.")
+    except Exception as e:
+        return f"Nao consegui conversar sobre o artigo no NexRead: {e}"
+
+
+def _fazer_nexread_salvar_estudos(disciplina: str) -> str:
+    try:
+        from .nexread import ArmazenamentoNexRead, salvar_na_biblioteca_estudos
+        banco = ArmazenamentoNexRead()
+        artigos = banco.listar_artigos(limite=1)
+        if not artigos:
+            return "Nenhum artigo aberto no NexRead para salvar nos estudos."
+        res = salvar_na_biblioteca_estudos(artigo_id=artigos[0].id, disciplina_nome=disciplina, db=banco)
+        return res.get("aviso", f"Artigo salvo em {disciplina}.")
+    except Exception as e:
+        return f"Nao consegui salvar a leitura do NexRead nos estudos: {e}"
+
+
+def _fazer_nexvoice_iniciar(titulo: str, modo: str = "ouvir", consentimento_confirmado: bool = False) -> str:
+    try:
+        from .nexvoice import iniciar_sessao_nexvoice
+        sessao = iniciar_sessao_nexvoice(
+            titulo=titulo,
+            modo=modo,
+            consentimento_confirmado=consentimento_confirmado,
+        )
+        aviso = f" {sessao.aviso_consentimento}" if sessao.aviso_consentimento else ""
+        return f"NexVoice iniciado no modo {sessao.modo}: {sessao.titulo}.{aviso}"
+    except PermissionError as e:
+        return str(e)
+    except Exception as e:
+        return f"Nao consegui iniciar o NexVoice: {e}"
+
+
+def _fazer_nexvoice_traduzir_trecho(texto_fala: str, direcao: str = "entrada") -> str:
+    try:
+        from .nexvoice import ArmazenamentoNexVoice, iniciar_sessao_nexvoice, processar_trecho_ao_vivo
+        banco = ArmazenamentoNexVoice()
+        ativas = banco.listar_sessoes(estado="ativa", limite=1)
+        sessao = ativas[0] if ativas else iniciar_sessao_nexvoice(titulo="Sessao Rapida NexVoice", modo="ouvir", db=banco)
+        trecho = processar_trecho_ao_vivo(
+            sessao_id=sessao.id,
+            texto_fala=texto_fala,
+            direcao=direcao,
+            db=banco,
+        )
+        return f"NexVoice ({trecho.idioma_origem} -> {trecho.idioma_destino}): {trecho.texto_traduzido}"
+    except Exception as e:
+        return f"Nao consegui traduzir o trecho no NexVoice: {e}"
+
+
+def _fazer_nexvoice_salvar_estudos(disciplina: str) -> str:
+    try:
+        from .nexvoice import ArmazenamentoNexVoice, salvar_sessao_nos_estudos
+        banco = ArmazenamentoNexVoice()
+        sessoes = banco.listar_sessoes(limite=1)
+        if not sessoes:
+            return "Nenhuma sessao encontrada no NexVoice para salvar nos estudos."
+        res = salvar_sessao_nos_estudos(sessao_id=sessoes[0].id, disciplina_nome=disciplina, db=banco)
+        return res.get("aviso", f"Sessao NexVoice salva em {disciplina}.")
+    except Exception as e:
+        return f"Nao consegui salvar a sessao do NexVoice nos estudos: {e}"
+
+
+def _fazer_nexvoice_encerrar() -> str:
+    try:
+        from .nexvoice import ArmazenamentoNexVoice, encerrar_sessao_nexvoice
+        banco = ArmazenamentoNexVoice()
+        ativas = banco.listar_sessoes(estado="ativa", limite=1)
+        if not ativas:
+            return "Nenhuma sessao ativa no NexVoice no momento."
+        res = encerrar_sessao_nexvoice(sessao_id=ativas[0].id, db=banco)
+        s = res.get("sessao") or {}
+        return f"Sessao NexVoice '{s.get('titulo', '')}' encerrada com {len(s.get('trechos') or [])} trechos traduzidos."
+    except Exception as e:
+        return f"Nao consegui encerrar o NexVoice: {e}"
 
 
 if __name__ == "__main__":

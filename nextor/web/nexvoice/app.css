@@ -1,0 +1,259 @@
+:root {
+  --bg-principal: #0b1120;
+  --bg-painel: #111827;
+  --bg-card: #1e293b;
+  --borda: #334155;
+  --texto: #f8fafc;
+  --texto-suave: #94a3b8;
+  --primaria: #0284c7;
+  --primaria-hover: #0369a1;
+  --perigo: #dc2626;
+  --entrada-cor: #38bdf8;
+  --saida-cor: #34d399;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background-color: var(--bg-principal);
+  color: var(--texto);
+  line-height: 1.5;
+}
+
+.nexvoice-app {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.nexvoice-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  background: var(--bg-painel);
+  border: 1px solid var(--borda);
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+
+.marca {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.marca-badge {
+  background: var(--primaria);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.06em;
+}
+
+.marca-titulo {
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.marca-sub {
+  color: var(--texto-suave);
+  font-size: 0.88rem;
+}
+
+.header-controles {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.input-token,
+.input-padrao,
+.select-controle,
+.textarea-fala {
+  background: var(--bg-card);
+  border: 1px solid var(--borda);
+  color: var(--texto);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.nexvoice-workspace {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 900px) {
+  .nexvoice-workspace {
+    grid-template-columns: 1fr;
+  }
+}
+
+.painel-sessao,
+.legenda-container,
+.card-controle {
+  background: var(--bg-painel);
+  border: 1px solid var(--borda);
+  border-radius: 12px;
+  padding: 18px;
+  margin-bottom: 16px;
+}
+
+.linha-config {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.bloco-etica {
+  background: rgba(2, 132, 199, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.checkbox-consentimento {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.86rem;
+  color: var(--texto);
+}
+
+.barra-acoes-sessao {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.btn-primario,
+.btn-secundario,
+.btn-perigo {
+  border: none;
+  border-radius: 8px;
+  padding: 9px 14px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-primario {
+  background: var(--primaria);
+  color: #fff;
+}
+
+.btn-primario:hover {
+  background: var(--primaria-hover);
+}
+
+.btn-secundario {
+  background: var(--bg-card);
+  color: var(--texto);
+  border: 1px solid var(--borda);
+}
+
+.btn-perigo {
+  background: var(--perigo);
+  color: #fff;
+}
+
+.btn-perigo:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.status-sessao {
+  font-size: 0.85rem;
+  color: var(--texto-suave);
+}
+
+.legenda-topo {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.badge-info {
+  background: var(--bg-card);
+  border: 1px solid var(--borda);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 0.78rem;
+  color: var(--texto-suave);
+}
+
+.painel-legendas {
+  min-height: 280px;
+  max-height: 440px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.item-legenda {
+  background: var(--bg-card);
+  border-left: 4px solid var(--entrada-cor);
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+
+.item-legenda.direcao-saida {
+  border-left-color: var(--saida-cor);
+}
+
+.legenda-meta {
+  font-size: 0.78rem;
+  color: var(--texto-suave);
+  margin-bottom: 4px;
+}
+
+.legenda-traduzida {
+  font-size: 1.04rem;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.legenda-original {
+  font-size: 0.86rem;
+  color: var(--texto-suave);
+}
+
+.textarea-fala {
+  width: 100%;
+  margin: 10px 0;
+}
+
+.botoes-direcao,
+.botoes-estudo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.resumo-ata {
+  margin-top: 12px;
+  font-size: 0.86rem;
+  color: var(--texto-suave);
+  white-space: pre-wrap;
+}

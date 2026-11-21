@@ -1,0 +1,93 @@
+.nexread-popup {
+  width: 310px;
+  padding: 12px;
+  font-family: system-ui, -apple-system, sans-serif;
+  background: #0f172a;
+  color: #f8fafc;
+}
+
+.popup-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  border-bottom: 1px solid #334155;
+  padding-bottom: 6px;
+}
+
+.popup-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.82rem;
+}
+
+.popup-form input,
+.popup-form select,
+.popup-form button {
+  padding: 6px 8px;
+  border-radius: 5px;
+  border: 1px solid #334155;
+  background: #1e293b;
+  color: #f8fafc;
+}
+
+.popup-botoes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.popup-botoes button {
+  background: #0284c7;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.popup-status {
+  margin-top: 6px;
+  font-size: 0.76rem;
+  color: #94a3b8;
+}
+
+.nexread-inline-traducao {
+  margin-top: 4px;
+  padding: 6px 10px;
+  border-left: 3px solid #0284c7;
+  background: rgba(2, 132, 199, 0.08);
+  font-size: 0.96em;
+}
+
+.nexread-sidebar-ia {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  width: 340px;
+  max-height: 85vh;
+  background: #0f172a;
+  color: #f8fafc;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 12px;
+  z-index: 2147483647;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.45);
+}
+
+.nexread-sb-respostas {
+  max-height: 240px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+}
+
+.nexread-sb-msg {
+  background: #1e293b;
+  padding: 8px;
+  border-radius: 6px;
+}

@@ -28,6 +28,9 @@ PERSONA = os.getenv("NEXTOR_PERSONA", "assistente")
 # Servico
 TOKEN = os.getenv("NEXTOR_TOKEN", "troque-este-token")
 PORTA = int(os.getenv("NEXTOR_PORTA", "5005"))
+# Redes extras (CIDR, separadas por virgula) aceitas nas rotas de dispositivos, alem da rede
+# local e da faixa do Tailscale. Ex.: a faixa de uma VPN WireGuard propria.
+REDES_PERMITIDAS = os.getenv("NEXTOR_REDES_PERMITIDAS", "")
 
 # Ponte com o NexDeck (stream deck no celular). Vazio = desligado.
 DECK_URL = os.getenv("NEXTOR_DECK_URL", "").rstrip("/")
@@ -68,8 +71,131 @@ NOTICIAS_ASSUNTO = os.getenv("NEXTOR_NOTICIAS_ASSUNTO", "inteligencia artificial
 ROTINA_HORA = os.getenv("NEXTOR_ROTINA_HORA", "07:00")
 ROTINA_ASSUNTO = os.getenv("NEXTOR_ROTINA_ASSUNTO", "")
 
+# Modo Estudos: biblioteca de disciplinas e materiais locais
+ESTUDOS_DIR = Path(os.getenv("NEXTOR_ESTUDOS_DIR", "")) if os.getenv("NEXTOR_ESTUDOS_DIR") else (RAIZ / "dados_estudos")
+ESTUDOS_DB = Path(os.getenv("NEXTOR_ESTUDOS_DB", "")) if os.getenv("NEXTOR_ESTUDOS_DB") else (ESTUDOS_DIR / "indice_estudos.db")
+
+
+def obter_pastas_importacao_estudos():
+    env_pastas = os.getenv("NEXTOR_ESTUDOS_IMPORTAR_DE", "")
+    if env_pastas:
+        return [Path(p.strip()).resolve() for p in env_pastas.split(";") if p.strip()]
+    home = Path.home()
+    padroes = [home / "Downloads", home / "Documents", home / "Documentos"]
+    return [p.resolve() for p in padroes if p.exists()] or [home.resolve()]
+
+
+ESTUDOS_IMPORTAR_DE = obter_pastas_importacao_estudos()
+
+# Artigos cientificos (OpenAlex e arXiv - Issue #7)
+OPENALEX_API_URL = os.getenv("NEXTOR_OPENALEX_API_URL", "https://api.openalex.org/works")
+ARXIV_API_URL = os.getenv("NEXTOR_ARXIV_API_URL", "http://export.arxiv.org/api/query")
+
+# Integracao Canvas LMS (Issue #17)
+CANVAS_BASE_URL = os.getenv("CANVAS_BASE_URL", "").rstrip("/")
+CANVAS_TOKEN = os.getenv("CANVAS_TOKEN", "").strip()
+
+# Integracao Google Sala de Aula / Classroom (Issue #18)
+GOOGLE_CLASSROOM_TOKEN = os.getenv("GOOGLE_CLASSROOM_TOKEN", "").strip()
+GOOGLE_CLASSROOM_CREDENTIALS = os.getenv("GOOGLE_CLASSROOM_CREDENTIALS", "").strip()
+
+# Adaptadores de assistentes (Issue #8)
+SIRI_ADAPTADOR_TOKEN = os.getenv("SIRI_ADAPTADOR_TOKEN", "").strip()
+GOOGLE_ADAPTADOR_TOKEN = os.getenv("GOOGLE_ADAPTADOR_TOKEN", "").strip()
+MCP_ADAPTADOR_TOKEN = os.getenv("MCP_ADAPTADOR_TOKEN", "").strip()
+
+# Telegram
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+TELEGRAM_USUARIOS_AUTORIZADOS = os.getenv("TELEGRAM_USUARIOS_AUTORIZADOS", "").strip()
+TELEGRAM_ADAPTADOR_TOKEN = os.getenv("TELEGRAM_ADAPTADOR_TOKEN", "").strip()
+
+# Alexa
+ALEXA_SKILL_ID = os.getenv("ALEXA_SKILL_ID", "").strip()
+ALEXA_ADAPTADOR_TOKEN = os.getenv("ALEXA_ADAPTADOR_TOKEN", "").strip()
+ALEXA_VERIFICAR_ASSINATURA = os.getenv("ALEXA_VERIFICAR_ASSINATURA", "1").strip().lower() not in ("0", "false", "nao")
+
+# Organizador de pastas
+def obter_pastas_organizacao_permitidas():
+    env_pastas = os.getenv("NEXTOR_ORGANIZAR_PASTAS_PERMITIDAS", "")
+    if env_pastas:
+        separadores = [";", ","]
+        texto = env_pastas
+        for s in separadores:
+            texto = texto.replace(s, ";")
+        return [Path(p.strip()).resolve() for p in texto.split(";") if p.strip()]
+    home = Path.home()
+    padroes = [home / "Downloads", home / "Documents", home / "Documentos"]
+    return [p.resolve() for p in padroes if p.exists()] or [home.resolve()]
+
+
+ORGANIZAR_PASTAS_PERMITIDAS = obter_pastas_organizacao_permitidas()
+
+# Integracao GitHub (Issue #16)
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "").strip()
+GITHUB_USUARIO = os.getenv("GITHUB_USUARIO", "ThiagoVenturim").strip()
+GITHUB_REPOSITORIO_PADRAO = os.getenv("GITHUB_REPOSITORIO_PADRAO", "Nextor").strip()
+GITHUB_PROJECT_NUMERO = os.getenv("GITHUB_PROJECT_NUMERO", "").strip()
+
+# Gravacoes de reunioes e tela (Issue #14)
+REUNIOES_DIR = Path(os.getenv("NEXTOR_REUNIOES_DIR", "")) if os.getenv("NEXTOR_REUNIOES_DIR") else (RAIZ / "reunioes")
+GRAVACOES_TELA_DIR = Path(os.getenv("NEXTOR_GRAVACOES_TELA_DIR", "")) if os.getenv("NEXTOR_GRAVACOES_TELA_DIR") else (RAIZ / "gravacoes_tela")
+
+# Banco de dados plugavel (Issue #66 - SQLAlchemy / ODBC / PostgreSQL / MySQL / MSSQL / SQLite)
+DB_URL = os.getenv("NEXTOR_DB_URL", os.getenv("DB_URL", "")).strip()
+
+# GTD e Produtividade Pessoal (Issues #42, #43, #44)
+GTD_DIR = Path(os.getenv("NEXTOR_GTD_DIR", "")).resolve() if os.getenv("NEXTOR_GTD_DIR") else (Path.home() / ".nextor")
+GTD_DB = Path(os.getenv("NEXTOR_GTD_DB", "")).resolve() if os.getenv("NEXTOR_GTD_DB") else (GTD_DIR / "gtd.db")
+LEITURA_META_DIARIA = int(os.getenv("NEXTOR_LEITURA_META_DIARIA", "20"))
+# Rotina do dia para a ordem sugerida (Issue #43): "HH:MM-HH:MM @contexto" separados por ponto e virgula.
+# Vazio usa a rotina generica de nextor/gtd/ordem_dia.py. O painel pode sobrescrever no config.json.
+GTD_ROTINA = os.getenv("NEXTOR_GTD_ROTINA", "").strip()
+NOTION_TOKEN = os.getenv("NOTION_TOKEN", "").strip()
+NOTION_DB_TAREFAS = os.getenv("NOTION_DB_TAREFAS", "").strip()
+NOTION_DB_LEITURAS = os.getenv("NOTION_DB_LEITURAS", "").strip()
+NOTION_DB_PROJETOS = os.getenv("NOTION_DB_PROJETOS", "").strip()
+# Segredo do webhook do GitHub (Issue #42): valida X-Hub-Signature-256 em tempo constante.
+GITHUB_WEBHOOK_SECRET = os.getenv("GITHUB_WEBHOOK_SECRET", "").strip()
+TELEGRAM_DONO_CHAT_ID = os.getenv("TELEGRAM_DONO_CHAT_ID", "").strip()
+
+# Notificacoes multicanal (Issue #46): segredos so no .env, nunca no repositorio nem em log.
+DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "").strip()
+DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN", "").strip()
+DISCORD_CANAL_ID = os.getenv("DISCORD_CANAL_ID", "").strip()
+WHATSAPP_API_TOKEN = os.getenv("WHATSAPP_API_TOKEN", "").strip()
+WHATSAPP_PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID", "").strip()
+WHATSAPP_DESTINATARIO = os.getenv("WHATSAPP_DESTINATARIO", "").strip()
+WHATSAPP_TEMPLATE = os.getenv("WHATSAPP_TEMPLATE", "").strip()
+VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "").strip()
+VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "").strip()
+VAPID_SUBSCRIBER_EMAIL = os.getenv("VAPID_SUBSCRIBER_EMAIL", "").strip()
+
+# Coach de estudos (Issue #57)
+COACH_DIR = Path(os.getenv("NEXTOR_COACH_DIR", "")).resolve() if os.getenv("NEXTOR_COACH_DIR") else (Path.home() / ".nextor")
+COACH_DB = Path(os.getenv("NEXTOR_COACH_DB", "")).resolve() if os.getenv("NEXTOR_COACH_DB") else (COACH_DIR / "coach.db")
+COACH_TRILHAS_DIR = Path(os.getenv("NEXTOR_COACH_TRILHAS_DIR", "")).resolve() if os.getenv("NEXTOR_COACH_TRILHAS_DIR") else (COACH_DIR / "trilhas")
+
+# NexRead: tradutor de artigo/pagina ao vivo com marcacao, gravacao e conversa com IA (Issue #55)
+NEXREAD_DIR = Path(os.getenv("NEXTOR_NEXREAD_DIR", "")).resolve() if os.getenv("NEXTOR_NEXREAD_DIR") else (Path.home() / ".nextor")
+NEXREAD_DB = Path(os.getenv("NEXTOR_NEXREAD_DB", "")).resolve() if os.getenv("NEXTOR_NEXREAD_DB") else (NEXREAD_DIR / "nexread.db")
+NEXREAD_TRADUTOR = os.getenv("NEXTOR_NEXREAD_TRADUTOR", "local").strip().lower()
+NEXREAD_IDIOMA_PADRAO = os.getenv("NEXTOR_NEXREAD_IDIOMA", "pt-BR").strip()
+LIBRETRANSLATE_URL = os.getenv("NEXTOR_LIBRETRANSLATE_URL", "http://localhost:5000/translate").strip()
+
+# NexVoice: tradutor de audio ao vivo para videos e reunioes bidirecional (Issue #56)
+NEXVOICE_DIR = Path(os.getenv("NEXTOR_NEXVOICE_DIR", "")).resolve() if os.getenv("NEXTOR_NEXVOICE_DIR") else (Path.home() / ".nextor")
+NEXVOICE_DB = Path(os.getenv("NEXTOR_NEXVOICE_DB", "")).resolve() if os.getenv("NEXTOR_NEXVOICE_DB") else (NEXVOICE_DIR / "nexvoice.db")
+NEXVOICE_STT_MOTOR = os.getenv("NEXTOR_NEXVOICE_STT", "faster_whisper").strip().lower()
+NEXVOICE_STT_MODELO = os.getenv("NEXTOR_NEXVOICE_STT_MODELO", "base").strip()
+NEXVOICE_TRADUTOR = os.getenv("NEXTOR_NEXVOICE_TRADUTOR", "local").strip().lower()
+NEXVOICE_TTS_MOTOR = os.getenv("NEXTOR_NEXVOICE_TTS", "piper").strip().lower()
+NEXVOICE_IDIOMA_MEU = os.getenv("NEXTOR_NEXVOICE_IDIOMA_MEU", "pt-BR").strip()
+NEXVOICE_IDIOMA_OUTRO = os.getenv("NEXTOR_NEXVOICE_IDIOMA_OUTRO", "en-US").strip()
+NEXVOICE_LOCAL_ESTRITO = os.getenv("NEXTOR_NEXVOICE_LOCAL_ESTRITO", "true").strip().lower() not in ("0", "false", "nao")
+
 # Caminhos de dados (ficam na raiz, fora do git)
 ANOTACOES = RAIZ / "anotacoes.md"
 MP3 = RAIZ / "nextor_fala.mp3"
 LOG_COMANDOS = RAIZ / "comandos.log"
+HISTORICO_ORGANIZACOES = RAIZ / "historico_organizacoes.json"
 CATT = RAIZ / ".venv" / "Scripts" / "catt.exe"

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NexVoice - Tradutor de Audio ao Vivo e Reunioes</title>
+  <link rel="manifest" href="/nexvoice/manifest.webmanifest">
+  <meta name="theme-color" content="#0f172a">
+  <link rel="stylesheet" href="/nexvoice/app.css">
+</head>
+<body>
+  <div class="nexvoice-app">
+    <header class="nexvoice-header">
+      <div class="marca">
+        <span class="marca-badge">NEXTOR</span>
+        <h1 class="marca-titulo">NexVoice</h1>
+        <span class="marca-sub">Tradutor de audio ao vivo para videos, aulas e reunioes bidirecionais</span>
+      </div>
+      <div class="header-controles">
+        <input type="password" id="input-token" class="input-token" placeholder="Token Nextor (X-Nextor-Token)">
+        <select id="select-modo" class="select-controle" title="Modo de operacao">
+          <option value="ouvir">Modo Ouvir (Video / Aula)</option>
+          <option value="reuniao">Modo Reuniao (Bidirecional)</option>
+        </select>
+        <select id="select-fonte" class="select-controle" title="Fonte de audio">
+          <option value="video">Fonte: Video</option>
+          <option value="aula">Fonte: Aula ao Vivo</option>
+          <option value="reuniao">Fonte: Reuniao</option>
+          <option value="microfone">Fonte: Microfone</option>
+        </select>
+      </div>
+    </header>
+
+    <main class="nexvoice-workspace">
+      <section class="coluna-principal">
+        <div class="painel-sessao">
+          <div class="linha-config">
+            <input type="text" id="input-titulo" class="input-padrao" placeholder="Titulo da sessao, aula ou reuniao">
+            <select id="select-idioma-meu" class="select-controle" title="Meu idioma">
+              <option value="pt-BR">Meu Idioma: Portugues (pt-BR)</option>
+              <option value="en-US">Meu Idioma: Ingles (en-US)</option>
+              <option value="es-ES">Meu Idioma: Espanhol (es-ES)</option>
+              <option value="fr-FR">Meu Idioma: Frances (fr-FR)</option>
+            </select>
+            <select id="select-idioma-outro" class="select-controle" title="Idioma do video ou interlocutor">
+              <option value="en-US">Outro Idioma: Ingles (en-US)</option>
+              <option value="pt-BR">Outro Idioma: Portugues (pt-BR)</option>
+              <option value="es-ES">Outro Idioma: Espanhol (es-ES)</option>
+              <option value="fr-FR">Outro Idioma: Frances (fr-FR)</option>
+            </select>
+          </div>
+
+          <div class="bloco-etica">
+            <label class="checkbox-consentimento">
+              <input type="checkbox" id="check-consentimento">
+              <span>Confirmo que todos os participantes ou o professor foram avisados e consentiram com a traducao/transcricao local ao vivo (obrigatorio para reunioes e aulas).</span>
+            </label>
+            <input type="text" id="input-participantes" class="input-padrao" placeholder="Participantes cientes (ex: Equipe de Produto, Prof. Silva)">
+          </div>
+
+          <div class="barra-acoes-sessao">
+            <button id="btn-iniciar" class="btn-primario">Iniciar Sessao Local</button>
+            <button id="btn-encerrar" class="btn-perigo" disabled>Encerrar Sessao</button>
+            <span id="status-sessao" class="status-sessao">Processamento 100% local (Whisper + Modelo Local + Piper).</span>
+          </div>
+        </div>
+
+        <div class="legenda-container">
+          <div class="legenda-topo">
+            <h2 id="sessao-titulo-ativa">Legendas e Traducao ao Vivo</h2>
+            <span id="badge-latencia" class="badge-info">Offline / Local</span>
+          </div>
+          <div id="painel-legendas" class="painel-legendas">
+            <p class="placeholder-legenda">Inicie uma sessao para acompanhar as legendas bilingues e ouvir a sintese neural Piper.</p>
+          </div>
+        </div>
+      </section>
+
+      <aside class="coluna-controles">
+        <div class="card-controle">
+          <h3>Streaming Bidirecional</h3>
+          <p class="texto-ajuda">Capture do microfone ou envie um trecho falado na direcao desejada:</p>
+          <textarea id="input-fala" class="textarea-fala" rows="3" placeholder="Digite ou dite o trecho falado..."></textarea>
+          <div class="botoes-direcao">
+            <button id="btn-ouvir-outro" class="btn-primario">Ouvir Interlocutor / Video (Entrada)</button>
+            <button id="btn-falar-meu" class="btn-secundario">Eu Falo na Reuniao (Saida)</button>
+          </div>
+        </div>
+
+        <div class="card-controle">
+          <h3>Modo Estudante e Exportacao</h3>
+          <input type="text" id="input-disciplina" class="input-padrao" placeholder="Disciplina (ex: Redes de Computadores)">
+          <div class="botoes-estudo">
+            <button id="btn-salvar-estudos" class="btn-primario">Salvar na Biblioteca de Estudos</button>
+            <button id="btn-baixar-srt" class="btn-secundario">Exportar Legendas (.srt)</button>
+          </div>
+          <div id="resumo-ata" class="resumo-ata"></div>
+        </div>
+      </aside>
+    </main>
+  </div>
+  <script src="/nexvoice/app.js"></script>
+</body>
+</html>

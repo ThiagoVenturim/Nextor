@@ -1,0 +1,10 @@
+{
+  "appId": "io.github.thiagoventurim.nextor",
+  "appName": "Nextor",
+  "webDir": "../../nextor/web",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "http",
+    "cleartext": true
+  }
+}

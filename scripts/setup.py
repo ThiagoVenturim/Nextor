@@ -8,6 +8,7 @@ Rodar uma vez (a partir da raiz do projeto):
     .venv/Scripts/python.exe scripts/setup.py
 """
 from pathlib import Path
+import secrets
 
 RAIZ = Path(__file__).resolve().parent.parent
 ENV = RAIZ / ".env"
@@ -16,7 +17,7 @@ CAMPOS = [
     ("NEXTOR_NOME", "Seu nome", ""),
     ("NEXTOR_PERSONA", "Persona (assistente, companheiro, profissional, amigo, coach)", "assistente"),
     ("NEXTOR_DISPOSITIVO", "Nome do dispositivo no Google Home", "Nome do dispositivo no Google Home"),
-    ("NEXTOR_TOKEN", "Token (uma senha so sua para o servico)", "troque-este-token"),
+    ("NEXTOR_TOKEN", "Token (minimo 24 chars, vazio para gerar aleatorio seguro)", ""),
     ("NEXTOR_CEREBRO", "Cerebro: local (Ollama, gratis) ou claude (API, pago)", "local"),
     ("NEXTOR_MODELO", "Modelo do Ollama (cerebro local)", "qwen2.5:3b"),
     ("NEXTOR_CLAUDE_MODELO", "Modelo do Claude (se cerebro=claude)", "claude-haiku-5-5"),
@@ -47,7 +48,14 @@ def main():
     for chave, rotulo, padrao in CAMPOS:
         valor_atual = atual.get(chave, padrao)
         resp = input(f"{rotulo} [{valor_atual}]: ").strip()
-        novo[chave] = resp or valor_atual
+        if chave == "NEXTOR_TOKEN" and (not resp or resp == "troque-este-token"):
+            if valor_atual and valor_atual != "troque-este-token" and len(valor_atual) >= 24:
+                novo[chave] = valor_atual
+            else:
+                novo[chave] = secrets.token_urlsafe(24)
+                print(f"  Gerado token seguro automaticamente: {novo[chave]}")
+        else:
+            novo[chave] = resp or valor_atual
     linhas = [f"{k}={v}" for k, v in novo.items()]
     ENV.write_text("\n".join(linhas) + "\n", encoding="utf-8")
     print(f"\nPronto. Salvo em {ENV}.")

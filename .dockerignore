@@ -1,0 +1,13 @@
+.git
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+.env
+.env.*
+*.mp3
+comandos.log
+historico_organizacoes.json
+anotacoes.md
+*.db

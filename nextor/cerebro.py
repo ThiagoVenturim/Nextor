@@ -51,7 +51,7 @@ def responder(mensagem: str, sistema: str = "", tokens: int = 120) -> str:
 def ultimas_notas(n: int = 20) -> str:
     if not config.ANOTACOES.exists():
         return "(ainda nao ha anotacoes)"
-    linhas = [l.strip() for l in config.ANOTACOES.read_text(encoding="utf-8").splitlines() if l.strip()]
+    linhas = [ln.strip() for ln in config.ANOTACOES.read_text(encoding="utf-8").splitlines() if ln.strip()]
     return "\n".join(linhas[-n:]) if linhas else "(ainda nao ha anotacoes)"
 
 

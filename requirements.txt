@@ -7,3 +7,5 @@ recurring_ical_events
 feedparser
 anthropic
 mcp[cli]
+pypdf
+sqlalchemy>=2.0.0

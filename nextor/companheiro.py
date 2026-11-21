@@ -64,6 +64,29 @@ REACAO = {
     "neutro": "neutro",
 }
 
+ATIVIDADES = (
+    "ocioso",
+    "ouvindo",
+    "pensando",
+    "falando",
+    "gravando",
+    "erro",
+    "gravando_aula",
+    "gravando_reuniao",
+    "gravando_tela",
+    "traduzindo_voz",
+    "normal",
+)
+
+EXPRESSOES = (
+    "neutro",
+    "feliz",
+    "carinho",
+    "calmo",
+    "sonolento",
+    "erro",
+)
+
 DICA_PARA_O_CEREBRO = {
     "triste": "A pessoa parece triste. Responda com acolhimento e sem pressa.",
     "ansioso": "A pessoa parece ansiosa. Responda com calma e passos pequenos.",
@@ -132,19 +155,73 @@ class Companheiro:
             "modo": "normal",
             "acessorio": None,
             "expressao": "neutro",
-            "atividade": "ocioso",  # ocioso, ouvindo, pensando, falando, gravando
+            "atividade": "ocioso",  # ocioso, ouvindo, pensando, falando, gravando, erro
+            "gravando": False,
+            "detalhe": "",
+            "erro": "",
             "emocao_usuario": "neutro",
             "ultima_mensagem": "",
             "ultima_resposta": "",
+            "legenda": "",
+            "intencao": "",
+            "resultado": None,
             "atualizado_em": time.time(),
         }
 
+    def _gravacao_externa_ativa(self) -> tuple[bool, str]:
+        try:
+            from . import aulas
+            if hasattr(aulas, "gravador") and aulas.gravador.gravando:
+                disc = aulas.gravador.disciplina
+                return True, f"Gravando aula de {disc}" if disc else "Gravando aula"
+        except Exception:
+            pass
+        try:
+            from . import reuniao_tela
+            if reuniao_tela.gravador_reuniao.gravando:
+                tema = reuniao_tela.gravador_reuniao.tema
+                return True, f"Gravando reuniao: {tema}" if tema else "Gravando reuniao"
+            if reuniao_tela.gravador_tela.gravando:
+                tarefa = reuniao_tela.gravador_tela.tarefa
+                return True, f"Gravando tela: {tarefa}" if tarefa else "Gravando tela"
+        except Exception:
+            pass
+        return False, ""
+
     def ver(self) -> dict:
+        ext_grav, ext_detalhe = self._gravacao_externa_ativa()
         with self._trava:
-            return dict(self.estado)
+            copia = dict(self.estado)
+        ativ = str(copia.get("atividade") or "ocioso")
+        if ext_grav or ativ.startswith("gravando"):
+            copia["gravando"] = True
+            if not copia.get("detalhe") and ext_detalhe:
+                copia["detalhe"] = ext_detalhe
+        return copia
 
     def atualizar(self, **campos) -> dict:
+        ext_grav, ext_detalhe = self._gravacao_externa_ativa()
         with self._trava:
+            if "ultima_resposta" in campos and "legenda" not in campos and campos["ultima_resposta"] is not None:
+                campos["legenda"] = campos["ultima_resposta"]
+            if "atividade" in campos:
+                ativ_nova = str(campos["atividade"] or "ocioso")
+                if ativ_nova == "erro":
+                    if "expressao" not in campos:
+                        campos["expressao"] = "erro"
+                elif self.estado.get("atividade") == "erro":
+                    if "erro" not in campos:
+                        campos["erro"] = ""
+                    if self.estado.get("expressao") == "erro" and "expressao" not in campos:
+                        campos["expressao"] = REACAO.get(self.estado.get("emocao_usuario", "neutro"), "neutro")
+            ativ_efetiva = str(campos.get("atividade", self.estado.get("atividade", "ocioso")))
+            if "gravando" in campos:
+                grav_flag = bool(campos["gravando"]) or ext_grav or ativ_efetiva.startswith("gravando")
+            else:
+                grav_flag = ext_grav or ativ_efetiva.startswith("gravando")
+            campos["gravando"] = grav_flag
+            if grav_flag and not campos.get("detalhe", self.estado.get("detalhe")) and ext_detalhe:
+                campos["detalhe"] = ext_detalhe
             self.estado.update(campos, atualizado_em=time.time())
             copia = dict(self.estado)
             ouvintes = list(self._ouvintes)
@@ -156,7 +233,7 @@ class Companheiro:
         return copia
 
     def assinar(self) -> queue.Queue:
-        q = queue.Queue(maxsize=20)
+        q = queue.Queue(maxsize=50)
         with self._trava:
             self._ouvintes.append(q)
         return q
@@ -165,6 +242,42 @@ class Companheiro:
         with self._trava:
             if q in self._ouvintes:
                 self._ouvintes.remove(q)
+
+    def definir_atividade(
+        self,
+        atividade: str,
+        detalhe: str | None = None,
+        erro: str | None = None,
+        legenda: str | None = None,
+        resultado: dict | None = None,
+    ) -> dict:
+        ativ = (atividade or "").strip().lower()
+        if ativ not in ATIVIDADES:
+            raise ValueError(f"Atividade desconhecida: {atividade}")
+        campos: dict = {"atividade": ativ}
+        if detalhe is not None:
+            campos["detalhe"] = detalhe
+        if erro is not None:
+            campos["erro"] = erro
+        if legenda is not None:
+            campos["legenda"] = legenda
+            campos["ultima_resposta"] = legenda
+        if resultado is not None:
+            campos["resultado"] = resultado
+        return self.atualizar(**campos)
+
+    def registrar_erro(self, mensagem: str) -> dict:
+        msg = (mensagem or "Erro ao processar solicitacao.").strip()
+        return self.atualizar(
+            atividade="erro",
+            expressao="erro",
+            erro=msg,
+            ultima_resposta=msg,
+            legenda=msg,
+        )
+
+    def definir_resultado(self, resultado: dict | None) -> dict:
+        return self.atualizar(resultado=resultado)
 
     def definir_modo(self, modo: str, aplicar_ambiente: bool = True) -> dict:
         if modo not in MODOS:
@@ -204,8 +317,13 @@ companheiro = Companheiro()
 def conversar_com_humor(texto: str, conversar) -> dict:
     """Detecta o humor, ajusta a expressao, chama o cerebro e devolve a resposta."""
     emocao = detectar_emocao(texto)
-    companheiro.atualizar(atividade="pensando", emocao_usuario=emocao,
-                          expressao=REACAO[emocao], ultima_mensagem=texto)
+    companheiro.atualizar(
+        atividade="pensando",
+        emocao_usuario=emocao,
+        expressao=REACAO[emocao],
+        ultima_mensagem=texto,
+        erro="",
+    )
     from .fala import IDIOMAS
     dicas = [DICA_PARA_O_CEREBRO.get(emocao)]
     idioma = companheiro.ver().get("idioma", "pt-BR")
@@ -220,9 +338,15 @@ def conversar_com_humor(texto: str, conversar) -> dict:
             resposta = responder(pergunta, sistema=SISTEMA_IDENTIDADE[identidade], tokens=300)
         else:
             resposta = conversar(pergunta)
-    finally:
-        companheiro.atualizar(atividade="ocioso")
-    estado = companheiro.atualizar(ultima_resposta=resposta, expressao=REACAO[emocao])
+    except Exception as e:
+        companheiro.registrar_erro(str(e) or "Erro ao consultar o cerebro.")
+        raise
+    estado = companheiro.atualizar(
+        atividade="ocioso",
+        ultima_resposta=resposta,
+        legenda=resposta,
+        expressao=REACAO[emocao],
+    )
     return {"resposta": resposta, "emocao": emocao, "estado": estado}
 
 

@@ -17,7 +17,16 @@ home_assistant/config/
 .perfil
 !.env.example
 automacoes.json
+adaptadores.json
+assistentes.log
+dispositivos.json
+historico_organizacoes.json
 textos/
+dados_estudos/
+reunioes/
+gravacoes_tela/
+*.mp4
+*.wav
 
 # Modelos locais (vozes Piper, Vosk)
 models/
@@ -25,3 +34,8 @@ voz_dono.npy
 
 # Estado local do Maestri (canvas, roles)
 .maestri/
+
+# Artefatos de build do pacote
+*.egg-info/
+build/
+dist/

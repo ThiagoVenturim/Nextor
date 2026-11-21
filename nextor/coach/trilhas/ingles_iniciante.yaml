@@ -1,0 +1,69 @@
+id: "ingles_iniciante"
+titulo: "Ingles Basico em Dominio Publico"
+habilidade: "ingles"
+nivel: "iniciante"
+descricao: "Trilha introdutoria de ingles focada em escuta, leitura de classicos em dominio publico e fixacao."
+autor: "Nextor"
+recursos:
+  - id: "ing_01_sons"
+    tipo: "video"
+    titulo: "Sons e fonetica basica do alfabeto ingles"
+    url: "https://archive.org/details/english-phonetics-intro"
+    dominio_publico: true
+    duracao_min: 15
+    ordem: 1
+    descricao: "Introducao aos fonemas fundamentais e pares minimos."
+
+  - id: "ing_02_frases"
+    tipo: "aula"
+    titulo: "Estrutura basica de frases e pronomes"
+    url: "https://en.wikibooks.org/wiki/English_in_Use/Simple_Sentences"
+    dominio_publico: true
+    duracao_min: 20
+    ordem: 2
+    descricao: "Construcao de sentencas simples afirmativas e negativas."
+
+  - id: "ing_03_leitura"
+    tipo: "livro"
+    titulo: "Leitura orientada em dominio publico: The Tale of Peter Rabbit"
+    url: "https://www.gutenberg.org/ebooks/14838"
+    dominio_publico: true
+    duracao_min: 20
+    ordem: 3
+    descricao: "Texto integral em dominio publico no Projeto Gutenberg."
+
+  - id: "ing_04_exercicio"
+    tipo: "exercicio"
+    titulo: "Vocabulario de rotina e repeticao ativa"
+    url: null
+    dominio_publico: true
+    duracao_min: 15
+    ordem: 4
+    descricao: "Exercicios práticos de fixacao das palavras-chave encontradas."
+
+  - id: "ing_05_artigo"
+    tipo: "artigo"
+    titulo: "Artigo aberto: Metodos de aquisicao de linguagem"
+    url: "https://en.wikipedia.org/wiki/Language_acquisition"
+    dominio_publico: true
+    duracao_min: 15
+    ordem: 5
+    descricao: "Fundamentos de imersao e compreensao de audio."
+
+  - id: "ing_06_quiz"
+    tipo: "teste"
+    titulo: "Quiz e avaliacao de fixacao inicial"
+    url: null
+    dominio_publico: true
+    duracao_min: 15
+    ordem: 6
+    descricao: "Perguntas de multipla escolha e repeticao espacada."
+
+  - id: "ing_07_revisao"
+    tipo: "revisao"
+    titulo: "Sessao de revisao e mapa mental de vocabulario"
+    url: null
+    dominio_publico: true
+    duracao_min: 20
+    ordem: 7
+    descricao: "Sintese do vocabulario novo e preparacao para o proximo ciclo."

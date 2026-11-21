@@ -34,6 +34,11 @@ python -m venv .venv
 O `setup.py` pergunta o essencial e escreve o `.env` (segredos e preferencias), que nao vai
 para o git. Tambem da para copiar `.env.example` para `.env` e editar na mao.
 
+> Seguranca do token: o servico exige que `NEXTOR_TOKEN` tenha no minimo 24 caracteres
+> e recusa o valor padrao `troque-este-token`. O `scripts/setup.py` gera um token seguro
+> automaticamente se deixado em branco, ou voce pode gerar um via terminal:
+> `python -c "import secrets; print(secrets.token_urlsafe(24))"`
+
 ## Estrutura
 
 O codigo e um pacote em `nextor/` (um modulo por habilidade). Veja `docs/ARQUITETURA.md`.
@@ -77,12 +82,13 @@ O servico ja traz um agendador proprio: automacoes em horarios fixos, sem Docker
 Home Assistant, sem Agendador do Windows. Acoes: `rotina` (bom dia), `agenda`, `noticias`,
 `falar` e `comando`. Ficam em `automacoes.json` (fora do git); vem com a rotina das 7h.
 
-Painel web (navegador/celular na rede de casa):
+Painel web e PWA instalavel (navegador, celular, tablet ou desktop na rede de casa):
 ```
-http://localhost:5005/painel?token=SEU_TOKEN
+http://localhost:5005/painel
+http://localhost:5005/download
 ```
-De la da para falar, anotar, ouvir agenda/noticias e criar ou remover automacoes.
-API: `GET/POST/DELETE /automacoes` (POST com `hora`, `acao`, `texto`).
+De la da para falar, anotar, ouvir agenda/noticias, criar ou remover automacoes e instalar o Nextor como aplicativo no Android, iPhone, Windows, Linux e Mac (com shell offline via Service Worker). Veja o guia de instalacao e empacotamento em `docs/MULTIPLATAFORMA.md`.
+API: `GET/POST/DELETE /automacoes` (POST com `hora`, `acao`, `texto`) e `GET /v1/plataformas`.
 
 ## MCP (conectar o Claude ou outro assistente ao Nextor)
 
@@ -96,8 +102,9 @@ noticias, falar) para um assistente compativel com MCP se conectar e usar.
 Num cliente MCP (ex.: Claude Desktop), aponte para esse comando (transporte stdio),
 com `cwd` na pasta do projeto.
 
-Endpoints (POST, com `?token=...`):
-- `/comando`  entrada unica: entende a frase e roteia (anotar/agenda/noticias/conversar)
+Endpoints (POST, com `?token=...` ou `Authorization: Bearer ...`):
+- `/v1/assistente` ponto de entrada unico para assistentes externos (Siri, Alexa, Google Assistant/HA, Telegram, clientes HTTP): texto entra, texto sai em JSON, sem efeito colateral de falar no Nest; exige token individual por adaptador (`hmac.compare_digest`), aplica limite de requisicoes e registra log sanitizado (veja `docs/ASSISTENTES.md`)
+- `/comando`  entrada local com voz: entende a frase, roteia e fala a resposta no Nest/PC
 - `/anotar`   salva a nota e confirma em voz
 - `/falar`    fala o texto
 - `/conversar` pensa com a IA local e responde em voz (conhece notas e agenda)
@@ -105,13 +112,7 @@ Endpoints (POST, com `?token=...`):
 - `/noticias` resume e fala as noticias (`?assunto=...`)
 - `/notas`    (GET) lista as notas
 
-Comando unico (recomendado para o atalho do iPhone): mande a fala para `/comando` e o
-Nextor decide o que fazer. Ex.: "ei Nextor, anota comprar pao", "o que tenho amanha",
-"me traz as noticias sobre IA".
-
-Primeira configuracao: `.venv/Scripts/python.exe nextor_setup.py` (define nome, token, etc.).
-
-O atalho do iPhone esta descrito em `ATALHO_IPHONE.md`.
+Atalho do iPhone (Siri): aponte para `/v1/assistente` com o token do adaptador `siri` para que a propria Siri leia a resposta no iPhone/AirPods, ou para `/comando` se quiser ouvir no Nest Mini. Veja `docs/ATALHO_IPHONE.md` e `docs/ASSISTENTES.md`.
 
 ## Google Agenda
 
@@ -128,7 +129,8 @@ amanha". Sem o endereco, o resto do Nextor funciona normalmente.
 
 O Nextor tem um rosto: um bichinho que reage ao que voce escreve e muda de visual com o modo.
 
-- Abra `http://localhost:5005/rosto?token=SEU_TOKEN` ou rode `scriptsosto.ps1`, que abre o rosto numa janela propria.
+- Abra `http://localhost:5005/rosto?token=SEU_TOKEN` ou rode `scripts
+osto.ps1`, que abre o rosto numa janela propria.
 - No NexDeck, o botao de carinha no topo abre o mesmo bichinho no celular.
 - Converse pela tela; marque "no Nest" se quiser ouvir a resposta no alto-falante.
 
@@ -210,6 +212,26 @@ stream deck do PC e conversa com o Nextor nos dois sentidos:
 Configure `NEXTOR_DECK_URL` e `NEXTOR_DECK_TOKEN` no `.env` (o token esta em
 `data/secret.json` do NexDeck).
 
+## Dispositivos (celular, tablet, notebook, PC e TV)
+
+O Nextor conhece os seus aparelhos e escolhe onde responder.
+
+- Cadastro e pareamento: no bloco **Dispositivos** do `/painel` (token mestre), informe
+  identificador, nome e tipo. O Nextor gera um token so daquele aparelho e mostra uma unica
+  vez o QR code e o link de pareamento (o token vai no fragmento `#token=`, que nao chega aos
+  logs). No disco fica apenas o hash SHA-256; a comparacao e em tempo constante. Para o QR
+  code, instale o extra opcional: `pip install -e ".[qr]"`. Sem ele, o painel mostra so o link.
+- TV (Android TV / Google TV): abra o link de pareamento no navegador da TV, ou transmita a
+  pagina por Cast (ex.: `catt cast_site <link>`).
+- Presenca e hand-off: a pagina de pareamento avisa presenca a cada 30 segundos e o ultimo
+  aparelho visto fica ativo. Diga "mostra na
+  TV" ou "continua no celular" para mandar a resposta para outro aparelho.
+- Permissoes por tipo: a TV so mostra (`visualizar`); celular e tablet tambem conversam
+  (`interagir`); PC e notebook podem executar acoes pelo NexDeck (`executar`).
+- Revogacao: botao **Revogar** no painel ou `POST /v1/dispositivos/<id>/revogar`.
+- Rede: as rotas de dispositivos so respondem para a rede local, loopback e a faixa do
+  Tailscale. Outras VPNs entram em `NEXTOR_REDES_PERMITIDAS` (CIDR). Endereco publico recebe 403.
+
 ## Seguranca
 
 - So responde na rede local, protegido por um token.
@@ -217,6 +239,60 @@ Configure `NEXTOR_DECK_URL` e `NEXTOR_DECK_TOKEN` no `.env` (o token esta em
 - Licenca MIT (ver arquivo LICENSE).
 - Nao abra porta no roteador. Para uso fora de casa, use uma VPN privada (ex.: Tailscale).
 - Gravar reunioes (recurso futuro) exige o consentimento dos participantes.
+- Gravacao de aulas (Modo Estudos): gravar aulas depende obrigatoriamente de autorizacao previa do professor e da instituicao de ensino. O assistente emite aviso previo de consentimento por voz e registra no cabecalho de cada transcricao gerada.
+
+## Modo Estudos: Biblioteca e Gravacao de Aulas
+
+O Nextor conta com biblioteca local por disciplina e recurso de gravacao e transcricao offline de aulas:
+
+- Comandos de biblioteca: "nova disciplina calculo", "adiciona este PDF em calculo", "o que tenho de material de fisica", "busca limites em calculo".
+- Comandos de gravacao: "Nextor, grava a aula de calculo" (inicia a gravacao) e "para a gravacao" (encerra e transcreve).
+- Transcricao offline dividida em trechos com carimbo de horario ([00:00 - 00:15] ...) salva diretamente na pasta da disciplina.
+- Indicador visual e de estado ativo durante a gravacao.
+- Aviso de consentimento mandatorio em todas as gravacoes.
+- Resumos e Flashcards Anki: "Resume a ultima aula de fisica", "resume o capitulo 3 de calculo", "flashcards de calculo". Gera topicos com fontes identificadas e exporta flashcards prontos para importacao no Anki (CSV/TSV).
+- Quizzes por voz com repeticao espacada: "Me faz um quiz de calculo", "Iniciar quiz de fisica", "Quiz do dia". Suporta multipla escolha e verdadeiro/falso com explicacao detalhada e fonte, registrando acertos/erros e priorizando questoes com menor aproveitamento.
+- Perguntas sobre a materia com fontes: "O que e derivada segundo o meu material?", "Explica integrais em calculo pelo meu material". Responde em duas camadas (voz concisa para Nest e resposta detalhada com citacoes exatas de fontes). Regra estrita anti-alucinacao: recusa e declara explicitamente caso o material nao cubra o assunto.
+- Busca de artigos cientificos (OpenAlex e arXiv): "Procura artigos sobre redes neurais", "Buscar artigos de fisica para calculo", "Salvar artigo <id> na disciplina calculo". Extrai os artigos mais relevantes com resumo e referencia ABNT NBR 6023, permitindo salvar diretamente na biblioteca da disciplina.
+- Integracao Canvas LMS: "Quais sao minhas tarefas do Canvas?", "Avisos do Canvas", "Tarefas de fisica no Canvas". Consulta cursos ativos, tarefas com prazos e comunicados, integrando pendencias academicas ao painel unificado com sintese de voz para o Nest.
+- Integracao Google Sala de Aula (Classroom): "Quais sao minhas atividades do Google Sala de Aula?", "Atividades do Classroom", "Tarefas do Sala de Aula de fisica", "Avisos do Classroom". Consulta cursos ativos, atividades com prazos e avisos, integrando ao painel multifonte e respondendo por voz no Nest. Veja o guia em docs/GOOGLE_CLASSROOM.md.
+- NexRead (tradutor de artigo/pagina ao vivo com estudo): modulo em `nextor/nexread/`, PWA em `/nexread` e extensao de navegador em `nextor/web/nexread/extensao/`. Traduz apenas a pagina ou PDF que a pessoa abriu mantendo o layout (`bilingue`, `lado_a_lado` ou `substituir`), preferindo modelo local (Ollama, LibreTranslate local, NLLB-200 ou Opus-MT). Permite marcar trechos, anotar, gravar notas de voz, salvar na biblioteca de estudos (FTS5 + referencia ABNT) e conversar com a IA sobre o tema citando os blocos do proprio texto e artigos cientificos relacionados. Ferramentas expostas tambem no servidor MCP (`nexread_traduzir_pagina`, `nexread_marcar_trecho`, `nexread_gravar_nota`, `nexread_salvar_estudos`, `nexread_conversar`).
+- NexVoice (tradutor de audio ao vivo para videos, aulas e reunioes bidirecionais): modulo em `nextor/nexvoice/` e PWA em `/nexvoice`. Opera no modo `ouvir` (video, aula ou microfone -> legenda sincronizada e voz traduzida) e no modo `reuniao` bidirecional (streaming por trechos nos dois sentidos: meu idioma <-> idioma do interlocutor). Reusa fala->texto local (Whisper / faster-whisper / Vosk), traducao com modelo aberto local (Ollama, NLLB-200, Opus-MT ou LibreTranslate local) e sintese de voz neural local (`nextor.fala` com Piper). Exige aviso e confirmacao expressa de consentimento antes de traduzir ou gravar reunioes e aulas, registra auditoria em SQLite e mantem processamento estritamente local para nao enviar voz de terceiros para a nuvem. Integra com a biblioteca de estudos (FTS5 + exportacao `.srt`), gera atas bilingues de reuniao e expoe ferramentas no servidor MCP (`nexvoice_iniciar_sessao`, `nexvoice_traduzir_trecho`, `nexvoice_exportar_legendas`, `nexvoice_salvar_estudos`, `nexvoice_encerrar_sessao`).
+
+## Banco de dados plugavel, Conteineres e Kubernetes
+
+O Nextor suporta persistencia de dados plugavel atraves do SQLAlchemy Core, mantendo o SQLite como padrao com zero configuracao e permitindo utilizar bancos de dados relacionais externos (PostgreSQL, MySQL, SQL Server via ODBC).
+
+- Documentacao completa: `docs/DATABASE.md`
+- Subir local: `.\scripts\run.ps1 local` ou `./scripts/run.sh local`
+- Subir via Docker Compose: `docker compose up --build`
+- Subir com PostgreSQL via Docker Compose: `docker compose --profile postgres up --build`
+- Manifestos Kubernetes: `k8s/`
+
+## Painel GTD no celular
+
+O painel GTD (`/gtd`) e um PWA instalavel com captura rapida, contextos (`@faculdade`, `@casa`,
+`@trabalho`, `@academia`, `@leitura`), proximas acoes, agenda do dia, ordem sugerida do dia a
+partir da agenda e da rotina, e revisao semanal. Os mesmos passos funcionam pelo Telegram
+(`/inbox`, `/ordem`, `/proximas`, `/feito`, `/revisao`). Fora de casa, so pela VPN. Veja
+`docs/PAINEL_GTD.md`.
+
+## Integracoes do GTD (Notion, GitHub e anotacoes)
+
+O painel GTD (`/gtd`) sincroniza tarefas, projetos e leituras com o Notion, issues e PRs
+do GitHub e as anotacoes do proprio Nextor. Cada fonte tem direcao configuravel no painel
+(mao dupla, so importar, so exportar ou desligado) e os tokens ficam so no `.env`. Detalhes,
+nomes de propriedades e o webhook do GitHub em `docs/INTEGRACOES_GTD.md`.
+
+## Notificacoes multicanal e temas
+
+Lembretes, agenda do dia, tarefas atrasadas, PRs para revisar, fim do pomodoro e reunioes
+podem chegar por Telegram, Discord (webhook ou bot), WhatsApp (Cloud API, opcional), web
+push no PWA e voz no Nest ou no PC, em um ou varios canais ao mesmo tempo. No painel `/gtd`
+voce escolhe os canais ativos, quais eventos vao para cada canal, o horario de silencio e o
+tema (claro ou escuro, com paletas azul, esmeralda, violeta ou ambar). Tokens e webhooks
+ficam so no `.env`; canal sem variavel fica desligado e nada quebra. Passo a passo de cada
+canal em `docs/NOTIFICACOES.md`.
 
 ## Estado
 
