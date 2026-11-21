@@ -12,8 +12,7 @@ Cobre:
 7) gatilhos no roteador ('quais sao minhas pendencias', 'o que fazer hoje', 'marcar tarefa como feita', confirmar/cancelar);
 8) endpoints HTTP em servico.py (/v1/pendencias, /v1/pendencias/concluir; 401 sem token, filtros e 200).
 """
-from datetime import date, datetime, timedelta
-import json
+from datetime import date, datetime
 import os
 from pathlib import Path
 import tempfile

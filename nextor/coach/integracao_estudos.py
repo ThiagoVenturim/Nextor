@@ -1,6 +1,6 @@
 """Integracao do Coach com o modo estudante (quiz, flashcards, resumos, notificacoes) (Issue #57)."""
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from .modelos import Plano, ProgressoAcao, Recurso
 
@@ -35,7 +35,6 @@ def obter_material_apoio(recurso: Recurso) -> Dict[str, Any]:
 
     elif tipo == "revisao":
         try:
-            from .. import qa_estudos
             resultado["apoio_disponivel"] = True
             resultado["detalhes"] = {
                 "modulo": "qa_estudos",

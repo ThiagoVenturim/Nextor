@@ -8,7 +8,7 @@ from unittest import mock
 from nextor import config
 from nextor.gtd import capturar, processar, listar_por_contexto, agenda_do_dia, revisao_semanal
 from nextor.gtd.armazenamento import ArmazenamentoGTD
-from nextor.gtd.modelos import Item, Projeto, Leitura
+from nextor.gtd.modelos import Projeto, Leitura
 
 
 class TestLogicaGTD(unittest.TestCase):

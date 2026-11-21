@@ -1,5 +1,5 @@
 """Modulo de integracao somente leitura com o Canvas LMS (Issue #17)."""
-from datetime import date, datetime, timezone
+from datetime import datetime
 import html
 import json
 import logging
@@ -142,7 +142,6 @@ def listar_tarefas(
     hoje_data = dt_agora.date()
 
     cursos = listar_cursos_ativos(base_url=base_url, token=token, http_client=http_client)
-    mapa_cursos = {c["id"]: c["nome"] for c in cursos}
 
     # Filtra por curso especifico se solicitado
     cursos_alvo = cursos

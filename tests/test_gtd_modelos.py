@@ -7,7 +7,6 @@ from nextor.gtd.modelos import (
     Leitura,
     normalizar_contexto,
     normalizar_prazo,
-    CONTEXTOS_PERMITIDOS,
 )
 
 
@@ -66,22 +65,22 @@ class TestModelosGTD(unittest.TestCase):
         self.assertEqual(p2.nome, p.nome)
 
     def test_leitura_criacao_e_serializacao(self):
-        l = Leitura(
+        leitura = Leitura(
             titulo="A Arte de Fazer Acontecer",
             autor="David Allen",
             tipo="livro",
             paginas_total=350,
             paginas_lidas=50,
         )
-        self.assertTrue(l.id)
-        self.assertEqual(l.estado, "quero_ler")
-        self.assertEqual(l.paginas_total, 350)
-        self.assertEqual(l.paginas_lidas, 50)
+        self.assertTrue(leitura.id)
+        self.assertEqual(leitura.estado, "quero_ler")
+        self.assertEqual(leitura.paginas_total, 350)
+        self.assertEqual(leitura.paginas_lidas, 50)
 
-        d = l.to_dict()
+        d = leitura.to_dict()
         l2 = Leitura.from_dict(d)
-        self.assertEqual(l2.id, l.id)
-        self.assertEqual(l2.titulo, l.titulo)
+        self.assertEqual(l2.id, leitura.id)
+        self.assertEqual(l2.titulo, leitura.titulo)
         self.assertEqual(l2.autor, "David Allen")
 
 

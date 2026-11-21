@@ -13,7 +13,6 @@ from nextor.coach.armazenamento import ArmazenamentoCoach
 from nextor.coach.coach import concluir, criar_plano
 from nextor.coach.integracao_gtd import (
     criar_tarefa_gtd_para_acao,
-    sincronizar_conclusao_gtd,
 )
 from nextor.coach.modelos import Recurso, Trilha
 from nextor.gtd.armazenamento import ArmazenamentoGTD

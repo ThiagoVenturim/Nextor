@@ -17,12 +17,11 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest import mock
-from zoneinfo import ZoneInfo
 
 os.environ["NEXTOR_VOZ_SAIDA"] = "nenhuma"
 
 from nextor import agenda, config, mcp_server, roteador, servico
-from nextor.gtd import ArmazenamentoGTD, agenda_do_dia, criar_tarefa_de_evento, criar_evento_de_tarefa
+from nextor.gtd import ArmazenamentoGTD, criar_tarefa_de_evento, criar_evento_de_tarefa
 from nextor.gtd.configuracao import carregar_config, salvar_config
 
 TZ = agenda.TZ
@@ -460,7 +459,7 @@ class TestConfiguracaoAgenda(unittest.TestCase):
                 "limite_horas_dia_cheio": 7.5,
             }
         }
-        salvo = salvar_config(dados_novos, caminho_customizado=self.caminho_cfg)
+        salvar_config(dados_novos, caminho_customizado=self.caminho_cfg)
         cfg_carregada = carregar_config(caminho_customizado=self.caminho_cfg)
 
         self.assertEqual(cfg_carregada["agenda"]["lembrete_minutos_antes"], 15)

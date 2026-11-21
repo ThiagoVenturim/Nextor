@@ -1,5 +1,4 @@
 """Extrator de conteudo estruturado para o NexRead mantendo o layout da pagina ou PDF (Issue #55)."""
-import html
 from html.parser import HTMLParser
 from pathlib import Path
 import re
@@ -7,7 +6,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 import urllib.request
 
 from .. import estudos
-from .modelos import TAGS_BLOCO_PERMITIDAS, BlocoPagina
+from .modelos import BlocoPagina
 
 try:
     import trafilatura  # type: ignore
@@ -326,7 +325,7 @@ def extrair_blocos_pdf(
                     if p.strip()
                 ]
                 if len(paragrafos) == 1 and "\n" in texto_pag:
-                    paragrafos = [l.strip() for l in texto_pag.splitlines() if l.strip()]
+                    paragrafos = [ln.strip() for ln in texto_pag.splitlines() if ln.strip()]
 
                 for i_p, p in enumerate(paragrafos):
                     idx = len(blocos) + 1

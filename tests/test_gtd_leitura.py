@@ -71,9 +71,9 @@ class TestLeituraGTD(unittest.TestCase):
         self.assertIsNotNone(res["leitura"]["concluido_em"])
 
     def test_meta_diaria_progresso(self):
-        l = criar_leitura("Livro A", db=self.banco)
+        leitura = criar_leitura("Livro A", db=self.banco)
         with mock.patch.object(config, "LEITURA_META_DIARIA", 25):
-            atualizar_progresso(l.id, 10, db=self.banco)
+            atualizar_progresso(leitura.id, 10, db=self.banco)
             meta = meta_diaria_progresso(db=self.banco)
             self.assertEqual(meta["paginas_lidas_hoje"], 10)
             self.assertEqual(meta["meta_diaria"], 25)

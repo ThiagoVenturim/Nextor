@@ -12,7 +12,6 @@ Cobre:
 """
 import base64
 from datetime import datetime, timedelta, timezone
-import json
 import os
 import unittest
 from unittest import mock
@@ -28,7 +27,7 @@ import tempfile
 
 os.environ["NEXTOR_VOZ_SAIDA"] = "nenhuma"
 
-from nextor import adaptadores, alexa_skill, config, servico
+from nextor import adaptadores, alexa_skill, servico
 
 
 def _gerar_chave_rsa():

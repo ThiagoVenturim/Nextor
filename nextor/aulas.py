@@ -1,13 +1,12 @@
 """Modulo de gravacao e transcricao de aulas para o modo Estudos."""
 import json
-import os
 import queue
 import threading
 import time
 import wave
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional
 
 from . import config, estudos
 

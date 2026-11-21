@@ -5,9 +5,9 @@ import re
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional
 
-from . import config, estudos, resumos
+from . import estudos, resumos
 
 
 def garantir_tabelas_quiz(con) -> None:
@@ -87,8 +87,8 @@ def obter_questoes_repeticao_espacada(
             """
             SELECT id, disciplina_id, tipo, pergunta, opcoes_json, resposta_correta,
                    explicacao, fonte, acertos, erros, repeticoes, ultima_revisao, criado_em,
-                   (CASE 
-                       WHEN repeticoes = 0 THEN 999.0 
+                   (CASE
+                       WHEN repeticoes = 0 THEN 999.0
                        ELSE (erros * 2.0 / repeticoes) + (julianday('now') - julianday(COALESCE(ultima_revisao, criado_em)))
                     END) AS prioridade
             FROM quiz_questoes

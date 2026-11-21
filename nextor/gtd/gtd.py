@@ -17,7 +17,6 @@ from .modelos import (
     Item,
     Projeto,
     Leitura,
-    CONTEXTOS_PERMITIDOS,
     normalizar_contexto,
     normalizar_prazo,
 )

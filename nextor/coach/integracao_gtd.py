@@ -4,7 +4,7 @@ Cada acao do dia vira uma tarefa no GTD com contexto @estudo e prazo.
 Concluir a tarefa no painel GTD reflete no progresso do coach, e vice-versa.
 """
 import logging
-from typing import Any, List, Optional
+from typing import List, Optional
 import uuid
 
 from ..gtd.armazenamento import ArmazenamentoGTD

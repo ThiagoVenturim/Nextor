@@ -3,7 +3,6 @@ from datetime import date, datetime, time, timezone
 import json
 import logging
 from pathlib import Path
-import re
 import urllib.parse
 import urllib.request
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -219,7 +218,6 @@ def listar_atividades(
     hoje_data = dt_agora.date()
 
     cursos = listar_cursos_ativos(token=token, http_client=http_client)
-    mapa_cursos: Dict[str, str] = {c["id"]: c["nome"] for c in cursos}
 
     # Filtrar cursos alvo
     if curso_id:

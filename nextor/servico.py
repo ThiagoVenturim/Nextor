@@ -1875,7 +1875,7 @@ def gtd_listar_leituras_endpoint():
     estado = request.args.get("estado")
     tipo = request.args.get("tipo")
     leituras = listar_leituras(estado=estado, tipo=tipo)
-    return jsonify(ok=True, leituras=[l.to_dict() for l in leituras])
+    return jsonify(ok=True, leituras=[leitura.to_dict() for leitura in leituras])
 
 
 @app.post("/gtd/leituras")
