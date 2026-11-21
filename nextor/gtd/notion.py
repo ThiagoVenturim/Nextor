@@ -17,6 +17,7 @@ from .. import config
 log = logging.getLogger("nextor.gtd.notion")
 NOTION_API_VERSION = "2022-06-28"
 NOTION_BASE_URL = "https://api.notion.com/v1"
+MAX_PAGINAS_CONSULTA = 50
 
 
 def obter_token_notion() -> str:
@@ -31,6 +32,10 @@ def obter_db_leituras() -> str:
     return os.getenv("NOTION_DB_LEITURAS", "") or getattr(config, "NOTION_DB_LEITURAS", "")
 
 
+def obter_db_projetos() -> str:
+    return os.getenv("NOTION_DB_PROJETOS", "") or getattr(config, "NOTION_DB_PROJETOS", "")
+
+
 class ClienteNotion:
     """Cliente HTTP minimo para as operacoes necessarias na API do Notion."""
 
@@ -40,15 +45,21 @@ class ClienteNotion:
         db_tarefas: Optional[str] = None,
         db_leituras: Optional[str] = None,
         http_client: Optional[Callable[[str, str, Optional[Dict[str, Any]], Dict[str, str]], Tuple[int, Dict[str, Any]]]] = None,
+        db_projetos: Optional[str] = None,
     ):
         self.token = (token if token is not None else obter_token_notion()).strip()
         self.db_tarefas = (db_tarefas if db_tarefas is not None else obter_db_tarefas()).strip()
         self.db_leituras = (db_leituras if db_leituras is not None else obter_db_leituras()).strip()
+        self.db_projetos = (db_projetos if db_projetos is not None else obter_db_projetos()).strip()
         self._http_client = http_client
+
+    def __repr__(self) -> str:
+        # Nunca expoe o token em repr/log.
+        return f"ClienteNotion(disponivel={self.disponivel()})"
 
     def disponivel(self) -> bool:
         """Indica se a integracao esta habilitada com token e pelo menos um banco configurado."""
-        return bool(self.token and (self.db_tarefas or self.db_leituras))
+        return bool(self.token and (self.db_tarefas or self.db_leituras or self.db_projetos))
 
     def _requisicao(
         self,
@@ -94,14 +105,33 @@ class ClienteNotion:
         if not self.disponivel() or not database_id:
             return []
 
-        payload: Dict[str, Any] = {}
-        if filtro:
-            payload["filter"] = filtro
+        resultados: List[Dict[str, Any]] = []
+        cursor: Optional[str] = None
+        # Pagina ate o fim (has_more/next_cursor), com teto para evitar laco infinito.
+        for _ in range(MAX_PAGINAS_CONSULTA):
+            payload: Dict[str, Any] = {"page_size": 100}
+            if filtro:
+                payload["filter"] = filtro
+            if cursor:
+                payload["start_cursor"] = cursor
 
-        status, resp = self._requisicao(f"/databases/{database_id}/query", metodo="POST", dados=payload)
-        if status == 200 and isinstance(resp, dict):
-            return resp.get("results", [])
-        return []
+            status, resp = self._requisicao(f"/databases/{database_id}/query", metodo="POST", dados=payload)
+            if status != 200 or not isinstance(resp, dict):
+                break
+            resultados.extend(r for r in resp.get("results", []) if isinstance(r, dict))
+            cursor = resp.get("next_cursor")
+            if not resp.get("has_more") or not cursor:
+                break
+        return resultados
+
+    def obter_esquema(self, database_id: str) -> Dict[str, Dict[str, Any]]:
+        """Retorna as propriedades (nome -> definicao com 'type') de uma base do Notion."""
+        if not self.disponivel() or not database_id:
+            return {}
+        status, resp = self._requisicao(f"/databases/{database_id}", metodo="GET")
+        if status == 200 and isinstance(resp, dict) and isinstance(resp.get("properties"), dict):
+            return resp["properties"]
+        return {}
 
     def criar_pagina(self, database_id: str, propriedades: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Cria uma nova pagina em uma base de dados do Notion."""
@@ -150,7 +180,21 @@ def extrair_texto_propriedade(prop: Dict[str, Any]) -> str:
         return str(prop.get("number", 0))
     if tipo == "url":
         return prop.get("url") or ""
+    if tipo == "checkbox":
+        return "true" if prop.get("checkbox") else "false"
+    if tipo == "date":
+        data = prop.get("date") or {}
+        return data.get("start") or ""
+    if tipo == "multi_select":
+        return ",".join(o.get("name", "") for o in prop.get("multi_select") or [])
     return ""
+
+
+def extrair_relacoes(prop: Dict[str, Any]) -> List[str]:
+    """Retorna os IDs de paginas de uma propriedade do tipo relation."""
+    if not isinstance(prop, dict) or prop.get("type") != "relation":
+        return []
+    return [r.get("id", "") for r in prop.get("relation") or [] if isinstance(r, dict) and r.get("id")]
 
 
 def montar_propriedade_titulo(texto: str) -> Dict[str, Any]:
@@ -167,3 +211,23 @@ def montar_propriedade_select(nome: str) -> Dict[str, Any]:
 
 def montar_propriedade_numero(valor: int) -> Dict[str, Any]:
     return {"number": valor}
+
+
+def montar_propriedade_status(nome: str) -> Dict[str, Any]:
+    return {"status": {"name": nome}}
+
+
+def montar_propriedade_checkbox(valor: bool) -> Dict[str, Any]:
+    return {"checkbox": bool(valor)}
+
+
+def montar_propriedade_data(data_iso: Optional[str]) -> Dict[str, Any]:
+    return {"date": {"start": data_iso} if data_iso else None}
+
+
+def montar_propriedade_url(url: str) -> Dict[str, Any]:
+    return {"url": url or None}
+
+
+def montar_propriedade_relacao(ids_paginas: List[str]) -> Dict[str, Any]:
+    return {"relation": [{"id": i} for i in ids_paginas if i]}

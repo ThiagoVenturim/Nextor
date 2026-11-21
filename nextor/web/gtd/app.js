@@ -298,23 +298,44 @@ function preencherTelaConfig() {
   const listaInt = document.getElementById('lista-integracoes-config');
   listaInt.innerHTML = '';
   const integracoes = estado.configCompleta.integracoes || {};
+  const direcoes = estado.configCompleta.direcoes_sincronizacao || [];
+  const rotulosDirecao = {
+    bidirecional: 'Mao dupla',
+    importar: 'So importar',
+    exportar: 'So exportar',
+    desligado: 'Desligado'
+  };
   Object.keys(integracoes).forEach((chave) => {
     const itemInt = integracoes[chave];
     const div = document.createElement('div');
     div.className = 'linha-config';
+    let seletorDirecao = '';
+    if (itemInt.direcao && direcoes.length) {
+      const opcoes = direcoes.map((d) =>
+        `<option value="${escaparHtml(d)}" ${d === itemInt.direcao ? 'selected' : ''}>${escaparHtml(rotulosDirecao[d] || d)}</option>`
+      ).join('');
+      seletorDirecao = `<select class="select-padrao sel-direcao" data-chave="${escaparHtml(chave)}" aria-label="Direcao de ${escaparHtml(chave)}">${opcoes}</select>`;
+    }
     div.innerHTML = `
       <div>
         <strong>${escaparHtml(chave.toUpperCase())}</strong>
         <p class="linha-config-descricao">${escaparHtml(itemInt.descricao || '')}</p>
         <span class="badge ${itemInt.configurado ? '' : 'alerta'}">${itemInt.configurado ? 'Configurado' : 'Pendente de credencial'}</span>
+        ${seletorDirecao}
       </div>
       <label class="toggle-switch">
-        <input type="checkbox" class="chk-integracao" data-chave="${chave}" ${itemInt.ativo ? 'checked' : ''}>
+        <input type="checkbox" class="chk-integracao" data-chave="${escaparHtml(chave)}" ${itemInt.ativo ? 'checked' : ''}>
         <span class="toggle-slider"></span>
       </label>
     `;
     listaInt.appendChild(div);
   });
+
+  const sinc = (estado.configCompleta.config || {}).sincronizacao || {};
+  const selConflito = document.getElementById('config-conflito');
+  if (selConflito) selConflito.value = sinc.conflito || 'remoto';
+  const inputRepos = document.getElementById('config-github-repos');
+  if (inputRepos) inputRepos.value = (sinc.github_repos || []).join(', ');
 
   // Lista agentes
   const listaAgentes = document.getElementById('lista-agentes-config');
@@ -359,6 +380,17 @@ async function salvarConfiguracoesTela() {
     integracoes[chk.getAttribute('data-chave')] = chk.checked;
   });
 
+  const sincronizacao = {};
+  document.querySelectorAll('.sel-direcao').forEach((sel) => {
+    sincronizacao[sel.getAttribute('data-chave')] = sel.value;
+  });
+  const selConflito = document.getElementById('config-conflito');
+  if (selConflito) sincronizacao.conflito = selConflito.value;
+  const inputRepos = document.getElementById('config-github-repos');
+  if (inputRepos) {
+    sincronizacao.github_repos = inputRepos.value.split(',').map((r) => r.trim()).filter((r) => r);
+  }
+
   const agentes = {};
   document.querySelectorAll('.chk-agente').forEach((chk) => {
     agentes[chk.getAttribute('data-id')] = chk.checked;
@@ -376,6 +408,7 @@ async function salvarConfiguracoesTela() {
     },
     canais_ativos: canaisAtivos,
     integracoes: integracoes,
+    sincronizacao: sincronizacao,
     agentes: agentes
   };
 
@@ -1042,10 +1075,27 @@ async function concluirItem(id) {
 async function dispararSincronizacao() {
   mostrarToast('Sincronizando...');
   try {
-    await api('/gtd/sincronizar', 'POST');
-    mostrarToast('Sincronizacao concluida');
+    const res = await api('/gtd/sincronizar', 'POST', {});
+    mostrarToast(resumirSincronizacao(res));
     carregarAbaAtual();
   } catch (err) {}
+}
+
+function resumirSincronizacao(res) {
+  const partes = [];
+  ['notion', 'github', 'nextor'].forEach((fonte) => {
+    const r = (res || {})[fonte];
+    if (!r || r.status === 'desligado') return;
+    if (r.status !== 'ok') {
+      partes.push(`${fonte}: falhou`);
+      return;
+    }
+    const total = fonte === 'notion'
+      ? (r.sincronizados || 0)
+      : (r.novas_tarefas || r.novas || 0) + (r.atualizadas_local || 0) + (r.atualizadas_remoto || 0);
+    partes.push(`${fonte}: ${total}`);
+  });
+  return partes.length ? `Sincronizado (${partes.join(', ')})` : 'Nenhuma integracao ativa';
 }
 
 // -------------------------------------------------------------

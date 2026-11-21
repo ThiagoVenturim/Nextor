@@ -13,6 +13,50 @@ from .. import config
 
 log = logging.getLogger("nextor.gtd.configuracao")
 
+# Direcoes de sincronizacao aceitas por fonte externa (Issue #42).
+DIRECOES_SINCRONIZACAO = ("desligado", "importar", "exportar", "bidirecional")
+POLITICAS_CONFLITO = ("remoto", "local")
+FONTES_SINCRONIZACAO = ("notion", "github", "nextor")
+
+
+def obter_sincronizacao_padrao() -> Dict[str, Any]:
+    # GitHub comeca so importando: escrever no GitHub (fechar/abrir issues) exige que o
+    # usuario escolha "bidirecional" ou "exportar" no painel, o que vale como confirmacao.
+    return {
+        "notion": "bidirecional",
+        "github": "importar",
+        "nextor": "bidirecional",
+        "conflito": "remoto",
+        "github_repos": [],
+    }
+
+
+def normalizar_sincronizacao(dados: Any, base: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Mescla e valida a secao 'sincronizacao', descartando valores invalidos."""
+    resultado = dict(base) if isinstance(base, dict) else obter_sincronizacao_padrao()
+    for k, v in obter_sincronizacao_padrao().items():
+        resultado.setdefault(k, v)
+    if not isinstance(dados, dict):
+        return resultado
+    for fonte in FONTES_SINCRONIZACAO:
+        if fonte in dados:
+            d = str(dados[fonte]).strip().lower()
+            if d in DIRECOES_SINCRONIZACAO:
+                resultado[fonte] = d
+    if "conflito" in dados:
+        p = str(dados["conflito"]).strip().lower()
+        if p in POLITICAS_CONFLITO:
+            resultado["conflito"] = p
+    if "github_repos" in dados and isinstance(dados["github_repos"], list):
+        repos = []
+        for r in dados["github_repos"]:
+            r = str(r).strip()
+            # Aceita apenas "repo" ou "dono/repo" com caracteres validos do GitHub.
+            if r and len(r) <= 140 and all(ch.isalnum() or ch in "-_./" for ch in r) and r.count("/") <= 1 and ".." not in r:
+                repos.append(r)
+        resultado["github_repos"] = repos[:20]
+    return resultado
+
 
 def obter_caminho_config() -> Path:
     env_caminho = os.getenv("NEXTOR_GTD_CONFIG_JSON", "")
@@ -56,7 +100,9 @@ def obter_config_padrao() -> Dict[str, Any]:
             "github": True,
             "agenda": True,
             "artigos": True,
+            "nextor": True,
         },
+        "sincronizacao": obter_sincronizacao_padrao(),
         "agentes": {
             "organizar_inbox": True,
             "sugerir_ordem_dia": True,
@@ -83,6 +129,10 @@ def carregar_config(caminho_customizado: Optional[Path] = None) -> Dict[str, Any
         for k, v in padrao.items():
             if k not in dados:
                 dados[k] = v
+        if isinstance(dados.get("integracoes"), dict):
+            for k, v in padrao["integracoes"].items():
+                dados["integracoes"].setdefault(k, v)
+        dados["sincronizacao"] = normalizar_sincronizacao(None, dados.get("sincronizacao"))
         return dados
     except Exception as e:
         log.warning("Falha ao ler config.json, usando padrao: %s", type(e).__name__)
@@ -125,6 +175,9 @@ def salvar_config(novos_dados: Dict[str, Any], caminho_customizado: Optional[Pat
 
     if "integracoes" in novos_dados and isinstance(novos_dados["integracoes"], dict):
         atual["integracoes"].update({k: bool(v) for k, v in novos_dados["integracoes"].items()})
+
+    if "sincronizacao" in novos_dados:
+        atual["sincronizacao"] = normalizar_sincronizacao(novos_dados["sincronizacao"], atual.get("sincronizacao"))
 
     if "agentes" in novos_dados and isinstance(novos_dados["agentes"], dict):
         atual["agentes"].update({k: bool(v) for k, v in novos_dados["agentes"].items()})
@@ -187,16 +240,25 @@ def obter_config_completa(caminho_customizado: Optional[Path] = None) -> Dict[st
     # Status de integracoes no .env
     from .notion import ClienteNotion
     notion_cli = ClienteNotion()
+    sinc = cfg.get("sincronizacao") or obter_sincronizacao_padrao()
     status_integracoes = {
         "notion": {
             "ativo": cfg.get("integracoes", {}).get("notion", True),
             "configurado": notion_cli.disponivel(),
-            "descricao": "Sincronizacao bidirecional com bancos de dados do Notion",
+            "direcao": sinc.get("notion", "bidirecional"),
+            "descricao": "Tarefas, projetos e leituras sincronizados com bases do Notion",
         },
         "github": {
             "ativo": cfg.get("integracoes", {}).get("github", True),
             "configurado": bool(os.getenv("GITHUB_TOKEN", "") or getattr(config, "GITHUB_TOKEN", "")),
-            "descricao": "Importacao de issues e PRs atribuidos como tarefas em @trabalho",
+            "direcao": sinc.get("github", "importar"),
+            "descricao": "Issues e PRs atribuidos viram tarefas em @trabalho; concluir fecha a issue",
+        },
+        "nextor": {
+            "ativo": cfg.get("integracoes", {}).get("nextor", True),
+            "configurado": True,
+            "direcao": sinc.get("nextor", "bidirecional"),
+            "descricao": "Anotacoes do Nextor (voz, Telegram) viram tarefas; concluir marca a anotacao",
         },
         "agenda": {
             "ativo": cfg.get("integracoes", {}).get("agenda", True),
@@ -222,6 +284,7 @@ def obter_config_completa(caminho_customizado: Optional[Path] = None) -> Dict[st
         {"nome": "agenda_dia", "descricao": "Consulta a agenda do dia com reunioes e blocos livres"},
         {"nome": "proxima_reuniao", "descricao": "Consulta a proxima reuniao agendada e link de video"},
         {"nome": "blocos_livres", "descricao": "Calcula os blocos de horario livre e sugere timeboxing"},
+        {"nome": "gtd_sincronizar", "descricao": "Sincroniza tarefas com Notion, GitHub e anotacoes do Nextor"},
     ]
 
     # Agentes especializados disponiveis
@@ -248,6 +311,7 @@ def obter_config_completa(caminho_customizado: Optional[Path] = None) -> Dict[st
 
     return {
         "config": cfg,
+        "direcoes_sincronizacao": list(DIRECOES_SINCRONIZACAO),
         "metodos": listar_metodos(),
         "canais": roteador_instancia.listar_status_canais(),
         "integracoes": status_integracoes,

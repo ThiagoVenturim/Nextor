@@ -150,6 +150,9 @@ LEITURA_META_DIARIA = int(os.getenv("NEXTOR_LEITURA_META_DIARIA", "20"))
 NOTION_TOKEN = os.getenv("NOTION_TOKEN", "").strip()
 NOTION_DB_TAREFAS = os.getenv("NOTION_DB_TAREFAS", "").strip()
 NOTION_DB_LEITURAS = os.getenv("NOTION_DB_LEITURAS", "").strip()
+NOTION_DB_PROJETOS = os.getenv("NOTION_DB_PROJETOS", "").strip()
+# Segredo do webhook do GitHub (Issue #42): valida X-Hub-Signature-256 em tempo constante.
+GITHUB_WEBHOOK_SECRET = os.getenv("GITHUB_WEBHOOK_SECRET", "").strip()
 TELEGRAM_DONO_CHAT_ID = os.getenv("TELEGRAM_DONO_CHAT_ID", "").strip()
 
 # Coach de estudos (Issue #57)
