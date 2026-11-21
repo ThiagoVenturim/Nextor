@@ -102,6 +102,9 @@ noticias, falar) para um assistente compativel com MCP se conectar e usar.
 Num cliente MCP (ex.: Claude Desktop), aponte para esse comando (transporte stdio),
 com `cwd` na pasta do projeto.
 
+Quais ferramentas o servidor expoe e escolhido na aba Ajustes do painel `/gtd`
+(skills, ferramentas MCP e agentes; veja `docs/AGENTES_GTD.md`).
+
 Endpoints (POST, com `?token=...` ou `Authorization: Bearer ...`):
 - `/v1/assistente` ponto de entrada unico para assistentes externos (Siri, Alexa, Google Assistant/HA, Telegram, clientes HTTP): texto entra, texto sai em JSON, sem efeito colateral de falar no Nest; exige token individual por adaptador (`hmac.compare_digest`), aplica limite de requisicoes e registra log sanitizado (veja `docs/ASSISTENTES.md`)
 - `/comando`  entrada local com voz: entende a frase, roteia e fala a resposta no Nest/PC
