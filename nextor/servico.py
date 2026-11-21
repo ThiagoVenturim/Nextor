@@ -1940,6 +1940,67 @@ def gtd_progresso_leitura_endpoint(id_leitura: str):
         return jsonify(ok=False, erro=str(e)), 400
 
 
+@app.get("/gtd/leituras/meta")
+def gtd_meta_leitura_endpoint():
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    from .gtd import resumo_leituras
+    return jsonify(ok=True, **resumo_leituras())
+
+
+@app.post("/gtd/leituras/<id_leitura>/estado")
+def gtd_estado_leitura_endpoint(id_leitura: str):
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    dados = request.get_json(silent=True) or {}
+    from .gtd import definir_estado_leitura
+    try:
+        leitura = definir_estado_leitura(id_leitura, str(dados.get("estado") or ""))
+    except ValueError as e:
+        return jsonify(ok=False, erro=str(e)), 400
+    return jsonify(ok=True, leitura=leitura.to_dict())
+
+
+@app.delete("/gtd/leituras/<id_leitura>")
+def gtd_remover_leitura_endpoint(id_leitura: str):
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    from .gtd import remover_leitura
+    if not remover_leitura(id_leitura):
+        return jsonify(ok=False, erro="leitura nao encontrada"), 404
+    return jsonify(ok=True)
+
+
+@app.post("/gtd/leituras/importar-artigos")
+def gtd_importar_artigos_leitura_endpoint():
+    """Leva artigos cientificos para a fila 'quero_ler'.
+
+    Aceita {"artigos": [...]} com o resultado de /estudos/artigos/buscar ou
+    {"termo": "...", "fonte": "todos|openalex|arxiv", "limite": 5} para buscar agora.
+    """
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    dados = request.get_json(silent=True) or {}
+    termo = str(dados.get("termo") or "").strip()
+    fonte = str(dados.get("fonte") or "todos").strip().lower()
+    artigos = dados.get("artigos")
+    try:
+        limite = int(dados.get("limite") or 5)
+    except (ValueError, TypeError):
+        limite = 5
+
+    if fonte not in ("todos", "openalex", "arxiv"):
+        return jsonify(ok=False, erro="fonte deve ser todos, openalex ou arxiv"), 400
+    if artigos is not None and not isinstance(artigos, list):
+        return jsonify(ok=False, erro="artigos deve ser uma lista"), 400
+    if artigos is None and not termo:
+        return jsonify(ok=False, erro="informe termo ou artigos"), 400
+
+    from .gtd import importar_artigos
+    importados = importar_artigos(termo=termo, fonte=fonte, limite=limite, artigos=artigos)
+    return jsonify(ok=True, total=len(importados), importados=[leitura.to_dict() for leitura in importados])
+
+
 @app.post("/gtd/sincronizar")
 def gtd_sincronizar_endpoint():
     if not autorizado_gtd():
