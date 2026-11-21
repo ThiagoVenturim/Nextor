@@ -284,6 +284,16 @@ do GitHub e as anotacoes do proprio Nextor. Cada fonte tem direcao configuravel 
 (mao dupla, so importar, so exportar ou desligado) e os tokens ficam so no `.env`. Detalhes,
 nomes de propriedades e o webhook do GitHub em `docs/INTEGRACOES_GTD.md`.
 
+## Notificacoes multicanal e temas
+
+Lembretes, agenda do dia, tarefas atrasadas, PRs para revisar, fim do pomodoro e reunioes
+podem chegar por Telegram, Discord (webhook ou bot), WhatsApp (Cloud API, opcional), web
+push no PWA e voz no Nest ou no PC, em um ou varios canais ao mesmo tempo. No painel `/gtd`
+voce escolhe os canais ativos, quais eventos vao para cada canal, o horario de silencio e o
+tema (claro ou escuro, com paletas azul, esmeralda, violeta ou ambar). Tokens e webhooks
+ficam so no `.env`; canal sem variavel fica desligado e nada quebra. Passo a passo de cada
+canal em `docs/NOTIFICACOES.md`.
+
 ## Estado
 
 Ver o diario de construcao e o plano de estudo em `PLANO.md` e a visao do produto em

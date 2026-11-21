@@ -248,6 +248,7 @@ function configurarEventosAcoes() {
 
   document.getElementById('btn-salvar-tudo-config').addEventListener('click', salvarConfiguracoesTela);
   document.getElementById('btn-disparar-teste-notificacao').addEventListener('click', dispararTesteNotificacao);
+  document.getElementById('btn-ativar-push').addEventListener('click', ativarPushNoAparelho);
   document.getElementById('btn-abrir-wizard').addEventListener('click', abrirWizard);
 }
 
@@ -312,6 +313,8 @@ function preencherTelaConfig() {
     `;
     listaCanais.appendChild(div);
   });
+
+  preencherMatrizEventos(cfg, canais);
 
   // Lista integracoes
   const listaInt = document.getElementById('lista-integracoes-config');
@@ -426,6 +429,7 @@ async function salvarConfiguracoesTela() {
       fim: silFim
     },
     canais_ativos: canaisAtivos,
+    eventos_notificacao: coletarMatrizEventos(),
     integracoes: integracoes,
     sincronizacao: sincronizacao,
     agentes: agentes,
@@ -438,6 +442,85 @@ async function salvarConfiguracoesTela() {
     mostrarToast('Configuracoes salvas');
     await carregarConfiguracoesServidor();
   } catch (err) {}
+}
+
+// -------------------------------------------------------------
+// Eventos por canal e Web Push (#46)
+// -------------------------------------------------------------
+const ROTULOS_EVENTOS = {
+  lembrete: 'Lembretes',
+  agenda_do_dia: 'Agenda do dia',
+  tarefa_atrasada: 'Tarefas atrasadas',
+  pr_para_revisar: 'PR para revisar',
+  pomodoro_fim: 'Fim do pomodoro',
+  reuniao_lembrete: 'Lembrete de reuniao',
+  reuniao_inicio: 'Inicio de reuniao'
+};
+
+function preencherMatrizEventos(cfg, canais) {
+  const tabela = document.getElementById('matriz-eventos-config');
+  if (!tabela) return;
+  const eventos = (estado.configCompleta && estado.configCompleta.eventos_notificacao) || Object.keys(ROTULOS_EVENTOS);
+  const mapa = cfg.eventos_notificacao || {};
+  const cabecalho = canais.map((cn) => `<th scope="col">${escaparHtml(cn.nome)}</th>`).join('');
+  const linhas = eventos.map((ev) => {
+    const marcados = new Set(mapa[ev] || []);
+    const celulas = canais.map((cn) => `
+      <td><input type="checkbox" class="chk-evento" data-evento="${escaparHtml(ev)}" data-slug="${escaparHtml(cn.slug)}"
+        aria-label="${escaparHtml((ROTULOS_EVENTOS[ev] || ev) + ' por ' + cn.nome)}" ${marcados.has(cn.slug) ? 'checked' : ''}></td>`).join('');
+    return `<tr><th scope="row">${escaparHtml(ROTULOS_EVENTOS[ev] || ev)}</th>${celulas}</tr>`;
+  }).join('');
+  tabela.innerHTML = `<thead><tr><th scope="col">Evento</th>${cabecalho}</tr></thead><tbody>${linhas}</tbody>`;
+}
+
+function coletarMatrizEventos() {
+  const mapa = {};
+  document.querySelectorAll('.chk-evento').forEach((chk) => {
+    const ev = chk.getAttribute('data-evento');
+    if (!mapa[ev]) mapa[ev] = [];
+    if (chk.checked) mapa[ev].push(chk.getAttribute('data-slug'));
+  });
+  return mapa;
+}
+
+function chaveVapidParaBytes(base64) {
+  const preenchimento = '='.repeat((4 - (base64.length % 4)) % 4);
+  const b64 = (base64 + preenchimento).replace(/-/g, '+').replace(/_/g, '/');
+  const bruto = atob(b64);
+  const bytes = new Uint8Array(bruto.length);
+  for (let i = 0; i < bruto.length; i++) bytes[i] = bruto.charCodeAt(i);
+  return bytes;
+}
+
+async function ativarPushNoAparelho() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+    mostrarToast('Este navegador nao suporta web push (no iPhone, adicione o app a Tela de Inicio)');
+    return;
+  }
+  try {
+    const info = await api('/gtd/notificacoes/push/chave');
+    if (!info.ok || !info.chave_publica) {
+      mostrarToast('Web push nao configurado no servidor (VAPID no .env)');
+      return;
+    }
+    const permissao = await Notification.requestPermission();
+    if (permissao !== 'granted') {
+      mostrarToast('Permissao de notificacao negada');
+      return;
+    }
+    const registro = await navigator.serviceWorker.ready;
+    let inscricao = await registro.pushManager.getSubscription();
+    if (!inscricao) {
+      inscricao = await registro.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: chaveVapidParaBytes(info.chave_publica)
+      });
+    }
+    const res = await api('/gtd/notificacoes/push/inscrever', 'POST', inscricao.toJSON());
+    mostrarToast(res.ok ? 'Notificacoes ativadas neste aparelho' : 'Falha ao registrar o aparelho');
+  } catch (err) {
+    mostrarToast('Nao foi possivel ativar as notificacoes');
+  }
 }
 
 async function dispararTesteNotificacao() {

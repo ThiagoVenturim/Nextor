@@ -6,6 +6,7 @@ Centraliza metodo ativo, canais de notificacao, temas, paletas e integracoes.
 import json
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -56,6 +57,33 @@ def normalizar_sincronizacao(dados: Any, base: Optional[Dict[str, Any]] = None) 
                 repos.append(r)
         resultado["github_repos"] = repos[:20]
     return resultado
+
+
+_HORARIO_VALIDO = re.compile(r"([01]?\d|2[0-3]):([0-5]\d)")
+_EVENTO_VALIDO = re.compile(r"[a-z][a-z0-9_]{0,39}")
+PALETAS = ("azul", "esmeralda", "violeta", "ambar")
+TEMAS = ("escuro", "claro")
+
+
+def normalizar_horario(valor: Any, padrao: str) -> str:
+    """Aceita "HH:MM" (24h) e devolve com dois digitos; senao devolve o padrao."""
+    m = _HORARIO_VALIDO.fullmatch(str(valor or "").strip())
+    if not m:
+        return padrao
+    return f"{int(m.group(1)):02d}:{m.group(2)}"
+
+
+def normalizar_canais(canais: Any) -> list:
+    """Filtra a lista para os canais de notificacao conhecidos, sem repeticao."""
+    from ..notificacoes.roteador_notificacoes import CANAIS_CONHECIDOS
+    if not isinstance(canais, list):
+        return []
+    vistos = []
+    for c in canais:
+        slug = str(c).strip().lower()
+        if slug in CANAIS_CONHECIDOS and slug not in vistos:
+            vistos.append(slug)
+    return vistos
 
 
 def obter_caminho_config() -> Path:
@@ -152,27 +180,36 @@ def salvar_config(novos_dados: Dict[str, Any], caminho_customizado: Optional[Pat
 
     if "tema" in novos_dados:
         t = str(novos_dados["tema"]).strip().lower()
-        if t in ("escuro", "claro"):
+        if t in TEMAS:
             atual["tema"] = t
 
     if "paleta" in novos_dados:
         p = str(novos_dados["paleta"]).strip().lower()
-        if p in ("azul", "esmeralda", "violeta", "ambar"):
+        if p in PALETAS:
             atual["paleta"] = p
 
     if "horario_silencio" in novos_dados and isinstance(novos_dados["horario_silencio"], dict):
         hs = novos_dados["horario_silencio"]
+        hs_atual = atual.get("horario_silencio") or {}
         atual["horario_silencio"] = {
-            "ativo": bool(hs.get("ativo", True)),
-            "inicio": str(hs.get("inicio", "22:00")).strip(),
-            "fim": str(hs.get("fim", "07:00")).strip(),
+            "ativo": bool(hs.get("ativo", hs_atual.get("ativo", True))),
+            "inicio": normalizar_horario(hs.get("inicio"), hs_atual.get("inicio", "22:00")),
+            "fim": normalizar_horario(hs.get("fim"), hs_atual.get("fim", "07:00")),
         }
 
     if "canais_ativos" in novos_dados and isinstance(novos_dados["canais_ativos"], list):
-        atual["canais_ativos"] = [str(c).strip().lower() for c in novos_dados["canais_ativos"]]
+        atual["canais_ativos"] = normalizar_canais(novos_dados["canais_ativos"])
 
     if "eventos_notificacao" in novos_dados and isinstance(novos_dados["eventos_notificacao"], dict):
-        atual["eventos_notificacao"].update(novos_dados["eventos_notificacao"])
+        eventos_atual = atual.get("eventos_notificacao")
+        if not isinstance(eventos_atual, dict):
+            eventos_atual = {}
+        for evento, canais in novos_dados["eventos_notificacao"].items():
+            evento = str(evento).strip().lower()
+            if not _EVENTO_VALIDO.fullmatch(evento) or not isinstance(canais, list):
+                continue
+            eventos_atual[evento] = normalizar_canais(canais)
+        atual["eventos_notificacao"] = eventos_atual
 
     if "integracoes" in novos_dados and isinstance(novos_dados["integracoes"], dict):
         atual["integracoes"].update({k: bool(v) for k, v in novos_dados["integracoes"].items()})
@@ -209,10 +246,7 @@ def salvar_config(novos_dados: Dict[str, Any], caminho_customizado: Optional[Pat
             limite_cheio = 6.0
 
         canais_aviso = ag.get("canais_aviso", ag_atual.get("canais_aviso", ["telegram"]))
-        if isinstance(canais_aviso, list):
-            canais_aviso = [str(c).strip().lower() for c in canais_aviso]
-        else:
-            canais_aviso = ["telegram"]
+        canais_aviso = normalizar_canais(canais_aviso) if isinstance(canais_aviso, list) else ["telegram"]
 
         atual["agenda"] = {
             "lembrete_minutos_antes": lembrete_min,
@@ -243,7 +277,7 @@ def obter_config_completa(caminho_customizado: Optional[Path] = None) -> Dict[st
     """Retorna configuracao atual acompanhada do catalogo de metodos, canais e integracoes."""
     cfg = carregar_config(caminho_customizado=caminho_customizado)
     from .metodos.registro import listar_metodos
-    from ..notificacoes.roteador_notificacoes import roteador_instancia
+    from ..notificacoes.roteador_notificacoes import EVENTOS_PERMITIDOS, roteador_instancia
 
     # Status de integracoes no .env
     from .notion import ClienteNotion
@@ -320,6 +354,9 @@ def obter_config_completa(caminho_customizado: Optional[Path] = None) -> Dict[st
     return {
         "config": cfg,
         "direcoes_sincronizacao": list(DIRECOES_SINCRONIZACAO),
+        "temas": list(TEMAS),
+        "paletas": list(PALETAS),
+        "eventos_notificacao": list(EVENTOS_PERMITIDOS),
         "metodos": listar_metodos(),
         "canais": roteador_instancia.listar_status_canais(),
         "integracoes": status_integracoes,

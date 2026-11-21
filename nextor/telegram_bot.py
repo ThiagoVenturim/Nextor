@@ -516,8 +516,9 @@ def enviar_mensagem_telegram(
         with urllib.request.urlopen(req, timeout=15) as resp:
             return json.loads(resp.read().decode("utf-8"))
     except Exception as e:
-        log.warning("Falha ao enviar mensagem ao Telegram: %s", e)
-        return {"ok": False, "erro": str(e)}
+        # So o tipo do erro: a URL da API contem o token do bot.
+        log.warning("Falha ao enviar mensagem ao Telegram: %s", type(e).__name__)
+        return {"ok": False, "erro": type(e).__name__}
 
 
 def processar_update(

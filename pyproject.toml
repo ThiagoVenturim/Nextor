@@ -48,6 +48,9 @@ dev = [
 qr = [
     "segno>=1.5",
 ]
+push = [
+    "pywebpush>=1.14",
+]
 
 [tool.setuptools.packages.find]
 include = ["nextor*"]

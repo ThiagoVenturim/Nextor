@@ -908,3 +908,33 @@ input:checked + .toggle-slider:before {
   display: none;
   opacity: 0;
 }
+
+/* Matriz de eventos por canal (#46) */
+.tabela-rolavel {
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+.matriz-eventos {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.matriz-eventos th,
+.matriz-eventos td {
+  padding: 6px 4px;
+  text-align: center;
+  border-bottom: 1px solid var(--borda);
+}
+
+.matriz-eventos th[scope="row"] {
+  text-align: left;
+  font-weight: 500;
+}
+
+.matriz-eventos input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--destaque);
+}
