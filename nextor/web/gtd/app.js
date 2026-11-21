@@ -233,6 +233,7 @@ function configurarEventosAcoes() {
   });
 
   document.getElementById('btn-salvar-tudo-config').addEventListener('click', salvarConfiguracoesTela);
+  document.getElementById('config-select-metodo').addEventListener('change', atualizarDescricaoMetodo);
   document.getElementById('btn-disparar-teste-notificacao').addEventListener('click', dispararTesteNotificacao);
   document.getElementById('btn-abrir-wizard').addEventListener('click', abrirWizard);
 }
@@ -267,9 +268,10 @@ function preencherTelaConfig() {
   const cfg = estado.configCompleta.config || {};
 
   document.getElementById('config-select-metodo').value = cfg.metodo_ativo || 'gtd';
+  atualizarDescricaoMetodo();
   document.getElementById('config-wip-limite').value = cfg.kanban_wip_limite || 3;
   const rotina = Array.isArray(cfg.rotina) ? cfg.rotina : [];
-  document.getElementById('config-rotina').value = rotina.map((b) => `- `).join('\n');
+  document.getElementById('config-rotina').value = rotina.map((b) => `${b.inicio}-${b.fim} ${b.contexto}`).join('\n');
 
   const sil = cfg.horario_silencio || {};
   document.getElementById('config-silencio-ativo').checked = sil.ativo !== false;
@@ -298,6 +300,7 @@ function preencherTelaConfig() {
     `;
     listaCanais.appendChild(div);
   });
+  preencherEventosNotificacao(cfg, canais);
 
   // Lista integracoes
   const listaInt = document.getElementById('lista-integracoes-config');
@@ -342,24 +345,124 @@ function preencherTelaConfig() {
   const inputRepos = document.getElementById('config-github-repos');
   if (inputRepos) inputRepos.value = (sinc.github_repos || []).join(', ');
 
-  // Lista agentes
+  // Lista agentes, com as skills de que cada um depende
   const listaAgentes = document.getElementById('lista-agentes-config');
   listaAgentes.innerHTML = '';
   const agentes = estado.configCompleta.agentes || [];
+  const nomesSkills = {};
+  (estado.configCompleta.skills || []).forEach((s) => { nomesSkills[s.id] = s.nome; });
   agentes.forEach((ag) => {
-    const div = document.createElement('div');
-    div.className = 'linha-config';
-    div.innerHTML = `
-      <div>
-        <strong>${escaparHtml(ag.nome)}</strong>
-        <p class="linha-config-descricao">${escaparHtml(ag.descricao)}</p>
-      </div>
-      <label class="toggle-switch">
-        <input type="checkbox" class="chk-agente" data-id="${ag.id}" ${ag.ativo ? 'checked' : ''}>
-        <span class="toggle-slider"></span>
-      </label>
-    `;
-    listaAgentes.appendChild(div);
+    const usa = (ag.skills || []).map((s) => nomesSkills[s] || s).join(', ');
+    let aviso = '';
+    if (ag.ativo && ag.efetivo === false) aviso = 'Pausado: ligue as skills que ele usa';
+    listaAgentes.appendChild(criarLinhaToggle({
+      titulo: ag.nome,
+      descricao: ag.descricao,
+      detalhe: usa ? `Usa: ${usa}` : '',
+      aviso: aviso,
+      classe: 'chk-agente',
+      atributo: 'data-id',
+      valor: ag.id,
+      marcado: ag.ativo
+    }));
+  });
+
+  // Skills
+  const listaSkills = document.getElementById('lista-skills-config');
+  listaSkills.innerHTML = '';
+  (estado.configCompleta.skills || []).forEach((sk) => {
+    const qtd = (sk.ferramentas || []).length;
+    listaSkills.appendChild(criarLinhaToggle({
+      titulo: sk.nome,
+      descricao: sk.descricao,
+      detalhe: qtd ? `${qtd} ferramenta(s) MCP` : '',
+      classe: 'chk-skill',
+      atributo: 'data-id',
+      valor: sk.id,
+      marcado: sk.ativo
+    }));
+  });
+
+  // Ferramentas MCP agrupadas pela skill
+  const listaMcp = document.getElementById('lista-mcp-config');
+  listaMcp.innerHTML = '';
+  const ferramentas = estado.configCompleta.mcp_ferramentas || [];
+  (estado.configCompleta.skills || []).forEach((sk) => {
+    const doGrupo = ferramentas.filter((f) => f.skill === sk.id);
+    if (!doGrupo.length) return;
+    const titulo = document.createElement('p');
+    titulo.className = 'grupo-config-titulo';
+    titulo.textContent = sk.nome;
+    listaMcp.appendChild(titulo);
+    doGrupo.forEach((f) => {
+      listaMcp.appendChild(criarLinhaToggle({
+        titulo: f.nome,
+        descricao: f.descricao,
+        aviso: sk.ativo ? '' : 'Skill desligada: nao sera exposta',
+        classe: 'chk-mcp',
+        atributo: 'data-nome',
+        valor: f.nome,
+        marcado: f.ativo
+      }));
+    });
+  });
+}
+
+// Mostra o que o metodo escolhido faz, com a descricao que vem do registro de metodos.
+function atualizarDescricaoMetodo() {
+  const slug = document.getElementById('config-select-metodo').value;
+  const metodo = ((estado.configCompleta || {}).metodos || []).find((m) => m.slug === slug);
+  document.getElementById('config-metodo-desc').textContent = metodo ? metodo.descricao : '';
+}
+
+// Linha com titulo, descricao do que o item faz e um interruptor.
+function criarLinhaToggle(op) {
+  const div = document.createElement('div');
+  div.className = 'linha-config';
+  const detalhe = op.detalhe ? `<p class="linha-config-descricao">${escaparHtml(op.detalhe)}</p>` : '';
+  const aviso = op.aviso ? `<span class="badge alerta">${escaparHtml(op.aviso)}</span>` : '';
+  const rotulo = escaparHtml(op.titulo || op.valor);
+  div.innerHTML = `
+    <div class="linha-config-texto">
+      <strong>${rotulo}</strong>
+      <p class="linha-config-descricao">${escaparHtml(op.descricao || '')}</p>
+      ${detalhe}
+      ${aviso}
+    </div>
+    <label class="toggle-switch">
+      <input type="checkbox" class="${op.classe}" ${op.atributo}="${escaparHtml(op.valor)}" aria-label="${rotulo}" ${op.marcado ? 'checked' : ''}>
+      <span class="toggle-slider"></span>
+    </label>
+  `;
+  return div;
+}
+
+const ROTULOS_EVENTOS = {
+  lembrete: 'Lembretes',
+  agenda_do_dia: 'Agenda do dia',
+  tarefa_atrasada: 'Tarefa atrasada',
+  pr_para_revisar: 'PR para revisar',
+  pomodoro_fim: 'Fim do pomodoro',
+  reuniao_lembrete: 'Reuniao chegando',
+  reuniao_inicio: 'Reuniao comecando'
+};
+
+// Matriz evento x canal: cada evento lista os canais como chips marcaveis.
+function preencherEventosNotificacao(cfg, canais) {
+  const lista = document.getElementById('lista-eventos-config');
+  lista.innerHTML = '';
+  const mapa = cfg.eventos_notificacao || {};
+  (estado.configCompleta.eventos || []).forEach((ev) => {
+    const marcados = new Set(mapa[ev] || []);
+    const bloco = document.createElement('div');
+    bloco.className = 'linha-evento';
+    const chips = canais.map((cn) => `
+      <label class="chip-canal">
+        <input type="checkbox" class="chk-evento" data-evento="${escaparHtml(ev)}" data-slug="${escaparHtml(cn.slug)}" ${marcados.has(cn.slug) ? 'checked' : ''}>
+        <span>${escaparHtml(cn.nome)}</span>
+      </label>`).join('');
+    bloco.innerHTML = `<strong>${escaparHtml(ROTULOS_EVENTOS[ev] || ev)}</strong><div class="chips-canais">${chips}</div>`;
+    lista.appendChild(bloco);
   });
 }
 
@@ -401,6 +504,23 @@ async function salvarConfiguracoesTela() {
     agentes[chk.getAttribute('data-id')] = chk.checked;
   });
 
+  const skills = {};
+  document.querySelectorAll('.chk-skill').forEach((chk) => {
+    skills[chk.getAttribute('data-id')] = chk.checked;
+  });
+
+  const mcpFerramentas = {};
+  document.querySelectorAll('.chk-mcp').forEach((chk) => {
+    mcpFerramentas[chk.getAttribute('data-nome')] = chk.checked;
+  });
+
+  const eventosNotificacao = {};
+  document.querySelectorAll('.chk-evento').forEach((chk) => {
+    const ev = chk.getAttribute('data-evento');
+    if (!eventosNotificacao[ev]) eventosNotificacao[ev] = [];
+    if (chk.checked) eventosNotificacao[ev].push(chk.getAttribute('data-slug'));
+  });
+
   const payload = {
     metodo_ativo: metodo,
     tema: estado.tema,
@@ -412,9 +532,12 @@ async function salvarConfiguracoesTela() {
       fim: silFim
     },
     canais_ativos: canaisAtivos,
+    eventos_notificacao: eventosNotificacao,
     integracoes: integracoes,
     sincronizacao: sincronizacao,
     agentes: agentes,
+    skills: skills,
+    mcp_ferramentas: mcpFerramentas,
     rotina: document.getElementById('config-rotina').value.trim()
   };
 
@@ -923,13 +1046,53 @@ function configurarEventosWizard() {
   document.getElementById('btn-wizard-voltar-2').addEventListener('click', () => mudarPassoWizard(1));
   document.getElementById('btn-wizard-avancar-2').addEventListener('click', () => mudarPassoWizard(3));
   document.getElementById('btn-wizard-voltar-3').addEventListener('click', () => mudarPassoWizard(2));
+  document.getElementById('btn-wizard-avancar-3').addEventListener('click', () => mudarPassoWizard(4));
+  document.getElementById('btn-wizard-voltar-4').addEventListener('click', () => mudarPassoWizard(3));
   document.getElementById('btn-wizard-concluir').addEventListener('click', concluirWizard);
 }
 
 function abrirWizard() {
   estado.passoWizard = 1;
+  preencherWizardOpcoes();
   mudarPassoWizard(1);
   document.getElementById('modal-wizard').classList.remove('oculto');
+}
+
+// Passo 4 do assistente: integracoes e agentes vindos do servidor, ja com o que cada um faz.
+function preencherWizardOpcoes() {
+  const completa = estado.configCompleta || {};
+  const cfg = completa.config || {};
+  if (cfg.metodo_ativo) document.getElementById('wizard-metodo').value = cfg.metodo_ativo;
+  if (cfg.tema) document.getElementById('wizard-tema').value = cfg.tema;
+  if (cfg.paleta) document.getElementById('wizard-paleta').value = cfg.paleta;
+
+  const listaInt = document.getElementById('wizard-lista-integracoes');
+  listaInt.innerHTML = '';
+  const integracoes = completa.integracoes || {};
+  Object.keys(integracoes).forEach((chave) => {
+    const it = integracoes[chave];
+    listaInt.appendChild(criarLinhaToggle({
+      titulo: chave.toUpperCase(),
+      descricao: it.descricao,
+      classe: 'chk-wizard-integracao',
+      atributo: 'data-chave',
+      valor: chave,
+      marcado: it.ativo
+    }));
+  });
+
+  const listaAg = document.getElementById('wizard-lista-agentes');
+  listaAg.innerHTML = '';
+  (completa.agentes || []).forEach((ag) => {
+    listaAg.appendChild(criarLinhaToggle({
+      titulo: ag.nome,
+      descricao: ag.descricao,
+      classe: 'chk-wizard-agente',
+      atributo: 'data-id',
+      valor: ag.id,
+      marcado: ag.ativo
+    }));
+  });
 }
 
 function fecharWizard() {
@@ -958,12 +1121,29 @@ async function concluirWizard() {
   estado.paleta = paleta;
   aplicarTemaEPaleta();
 
+  const integracoes = {};
+  document.querySelectorAll('.chk-wizard-integracao').forEach((chk) => {
+    integracoes[chk.getAttribute('data-chave')] = chk.checked;
+  });
+  const agentes = {};
+  document.querySelectorAll('.chk-wizard-agente').forEach((chk) => {
+    agentes[chk.getAttribute('data-id')] = chk.checked;
+  });
+  // O canal escolhido passa a receber todos os eventos; a matriz fina fica em Ajustes.
+  const eventosNotificacao = {};
+  ((estado.configCompleta || {}).eventos || []).forEach((ev) => {
+    eventosNotificacao[ev] = [canal];
+  });
+
   try {
     await api('/gtd/config', 'PUT', {
       metodo_ativo: metodo,
       tema: tema,
       paleta: paleta,
       canais_ativos: [canal],
+      eventos_notificacao: eventosNotificacao,
+      integracoes: integracoes,
+      agentes: agentes,
       wizard_concluido: true
     });
     mostrarToast('Assistente inicial concluido!');

@@ -196,5 +196,24 @@ class TestEndpointConfig(BaseConfig):
         self.assertNotIn(self.token, corpo)
 
 
+class TestTelaPWA(unittest.TestCase):
+    def setUp(self) -> None:
+        pasta = Path(servico.__file__).resolve().parent / "web" / "gtd"
+        self.html = (pasta / "index.html").read_text(encoding="utf-8")
+        self.js = (pasta / "app.js").read_text(encoding="utf-8")
+
+    def test_secoes_da_tela_existem(self) -> None:
+        for id_ in ("lista-skills-config", "lista-mcp-config", "lista-agentes-config",
+                    "lista-eventos-config", "passo-wizard-4", "wizard-lista-agentes"):
+            self.assertIn(f'id="{id_}"', self.html)
+        self.assertIn('name="viewport"', self.html)
+
+    def test_ids_usados_no_js_existem_no_html(self) -> None:
+        import re
+        ids_js = set(re.findall(r"getElementById\('([\w-]+)'\)", self.js))
+        ids_html = set(re.findall(r'id="([\w-]+)"', self.html))
+        self.assertEqual(ids_js - ids_html, set())
+
+
 if __name__ == "__main__":
     unittest.main()
