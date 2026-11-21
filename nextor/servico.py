@@ -2090,15 +2090,13 @@ def gtd_salvar_config_endpoint():
 def gtd_visao_endpoint():
     if not autorizado_gtd():
         return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
-    from .gtd import ArmazenamentoGTD
     from .gtd.configuracao import carregar_config
-    from .gtd.metodos import obter_metodo
+    from .gtd.metodos import metodo_existe
+    from .gtd.metodos.operacoes import montar_visao
     cfg = carregar_config()
     slug_metodo = request.args.get("metodo") or cfg.get("metodo_ativo", "gtd")
-    metodo = obter_metodo(slug_metodo)
-
-    banco = ArmazenamentoGTD()
-    itens = banco.listar_itens()
+    if not metodo_existe(slug_metodo):
+        return jsonify(ok=False, erro="metodo desconhecido"), 400
 
     eventos = []
     try:
@@ -2112,8 +2110,49 @@ def gtd_visao_endpoint():
     except Exception:
         eventos = []
 
-    res = metodo.visao_dia(itens, eventos)
+    res = montar_visao(cfg=cfg, slug=slug_metodo, agenda=eventos)
+    res["pomodoro_ativo"] = bool(cfg.get("pomodoro_ativo", True))
     return jsonify(ok=True, **res)
+
+
+@app.get("/gtd/metodos")
+def gtd_metodos_endpoint():
+    """Catalogo dos metodos registrados (colunas, campos e regras) e o metodo ativo."""
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    from .gtd.configuracao import carregar_config
+    from .gtd.metodos import listar_metodos
+    cfg = carregar_config()
+    return jsonify(ok=True, ativo=cfg.get("metodo_ativo", "gtd"), metodos=listar_metodos(cfg))
+
+
+@app.post("/gtd/visao/mover")
+def gtd_visao_mover_endpoint():
+    """Move um item para uma coluna do metodo (ativo ou informado), respeitando as regras dele."""
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    dados = request.get_json(silent=True)
+    if not isinstance(dados, dict):
+        return jsonify(ok=False, erro="corpo da requisicao deve ser um objeto JSON"), 400
+    item_id = str(dados.get("item_id") or "").strip()
+    coluna = str(dados.get("coluna") or "").strip()
+    if not item_id or not coluna:
+        return jsonify(ok=False, erro="informe item_id e coluna"), 400
+    from .gtd.configuracao import carregar_config
+    from .gtd.metodos import ColunaInvalida, LimiteWIPExcedido, metodo_existe
+    from .gtd.metodos.operacoes import ItemNaoEncontrado, mover_item
+    slug = dados.get("metodo") or None
+    if slug is not None and not metodo_existe(str(slug)):
+        return jsonify(ok=False, erro="metodo desconhecido"), 400
+    try:
+        item, metodo = mover_item(item_id, coluna, cfg=carregar_config(), slug=slug)
+    except ItemNaoEncontrado:
+        return jsonify(ok=False, erro="item nao encontrado"), 404
+    except ColunaInvalida as e:
+        return jsonify(ok=False, erro=str(e)), 400
+    except LimiteWIPExcedido as e:
+        return jsonify(ok=False, erro=str(e), codigo="limite_wip"), 409
+    return jsonify(ok=True, metodo=metodo.slug, coluna=metodo.classificar(item), item=item.to_dict())
 
 
 @app.get("/gtd/pomodoro/estado")
@@ -2134,13 +2173,24 @@ def gtd_pomodoro_acao_endpoint(acao: str):
     dados = request.get_json(silent=True) or {}
     a = acao.strip().lower()
 
-    if a == "iniciar":
+    if a in ("iniciar", "retomar"):
+        from .gtd.configuracao import carregar_config
+        cfg = carregar_config()
+        if not cfg.get("pomodoro_ativo", True):
+            return jsonify(ok=False, erro="pomodoro desligado nos ajustes", codigo="pomodoro_desligado"), 409
+        if a == "retomar":
+            return jsonify(ok=True, **pomodoro.retomar())
         item_id = dados.get("item_id")
-        try:
-            duracao = int(dados.get("duracao_min", 25))
-        except (ValueError, TypeError):
-            duracao = 25
         modo = dados.get("modo", "foco")
+        if modo not in ("foco", "pausa_curta", "pausa_longa"):
+            modo = "foco"
+        padrao = cfg.get("pomodoro_duracao_min", 25) if modo == "foco" else None
+        try:
+            duracao = int(dados.get("duracao_min") or padrao or 0) or None
+        except (ValueError, TypeError):
+            duracao = padrao
+        if duracao is not None:
+            duracao = max(1, min(180, duracao))
         res = pomodoro.iniciar(item_id=item_id, duracao_min=duracao, modo=modo)
         return jsonify(ok=True, **res)
 
