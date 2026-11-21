@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nextor-gtd-shell-v3';
+const CACHE_NAME = 'nextor-gtd-shell-v4';
 const ASSETS = [
   '/gtd',
   '/gtd/',

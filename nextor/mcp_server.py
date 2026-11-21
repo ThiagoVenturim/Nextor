@@ -213,6 +213,39 @@ def leitura_progresso(paginas: int, leitura_id: str = "") -> str:
     return f"Registradas {paginas} paginas. Total hoje: {res['paginas_lidas_hoje']}/{res['meta_diaria']}. {status_meta}"
 
 
+@mcp.tool(description="Lista a fila de leitura (livros e artigos). estado: quero_ler, lendo, lido ou vazio para todos.")
+def leitura_listar(estado: str = "") -> str:
+    from .gtd import listar_leituras
+    leituras = listar_leituras(estado=estado.strip() or None)
+    if not leituras:
+        return "Fila de leitura vazia."
+    linhas = []
+    for leitura in leituras[:20]:
+        paginas = f"{leitura.paginas_lidas}/{leitura.paginas_total or '?'} pag"
+        linhas.append(f"[{leitura.id[:8]}] {leitura.titulo} ({leitura.tipo}, {leitura.estado}, {paginas})")
+    return "\n".join(linhas)
+
+
+@mcp.tool(description="Muda o estado de uma leitura para quero_ler, lendo ou lido.")
+def leitura_estado(leitura_id: str, estado: str) -> str:
+    from .gtd import definir_estado_leitura
+    try:
+        leitura = definir_estado_leitura(leitura_id, estado)
+    except ValueError as e:
+        return str(e)
+    return f"'{leitura.titulo}' agora esta em {leitura.estado}."
+
+
+@mcp.tool(description="Busca artigos cientificos (OpenAlex e arXiv) e coloca os novos na fila 'quero ler'.")
+def leitura_importar_artigos(termo: str, fonte: str = "todos", limite: int = 5) -> str:
+    from .gtd import importar_artigos
+    importados = importar_artigos(termo=termo, fonte=fonte, limite=limite)
+    if not importados:
+        return "Nenhum artigo novo para a fila de leitura."
+    titulos = "; ".join(leitura.titulo for leitura in importados)
+    return f"{len(importados)} artigo(s) em quero ler: {titulos}"
+
+
 @mcp.tool(description="Troca o metodo ativo de produtividade (gtd, para, eisenhower, kanban).")
 def gtd_trocar_metodo(metodo: str) -> str:
     from .gtd.configuracao import salvar_config

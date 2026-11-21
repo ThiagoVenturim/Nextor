@@ -13,6 +13,7 @@ import uuid
 
 from .. import config
 from .armazenamento import ArmazenamentoGTD
+from .leitura import resumo_leituras
 from .modelos import (
     Item,
     Projeto,
@@ -235,12 +236,16 @@ def agenda_do_dia(db: Optional[ArmazenamentoGTD] = None) -> Dict[str, Any]:
     leituras_ativas = banco.listar_leituras(estado="lendo")
     livro_atual = leituras_ativas[0].to_dict() if leituras_ativas else None
 
+    resumo_leit = resumo_leituras(db=banco)
+
     leitura_info = {
         "meta_diaria": meta_diaria,
         "paginas_lidas_hoje": paginas_lidas_hoje,
         "faltam_paginas": max(0, meta_diaria - paginas_lidas_hoje),
         "meta_atingida": paginas_lidas_hoje >= meta_diaria,
         "livro_atual": livro_atual,
+        "contagem": resumo_leit["contagem"],
+        "fila_quero_ler": resumo_leit["fila_quero_ler"],
     }
 
     # Resumo falado

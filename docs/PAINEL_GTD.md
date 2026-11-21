@@ -21,6 +21,39 @@ Contextos aceitos: `@faculdade`, `@casa`, `@trabalho`, `@academia`, `@leitura`, 
 `@qualquer`. O codigo usado em `/feito` sao os 6 primeiros caracteres do id, mostrados entre
 colchetes em `/proximas` e `/ordem`.
 
+## Lista de leitura e meta diaria
+
+A aba Leitura guarda livros e artigos com tres estados: quero ler, lendo e lido. Cada item
+tem um seletor de estado, o botao "+ Lidas" para somar paginas e o botao "Remover". Os chips
+acima da lista filtram por estado.
+
+- Somar paginas registra a sessao no historico do dia. Um item em "quero ler" passa para
+  "lendo"; quando as paginas lidas chegam ao total, ele vira "lido".
+- Marcar "lido" no seletor completa as paginas do item, mas nao soma nada a meta do dia. A
+  meta conta so as paginas registradas.
+- A meta diaria vem de `NEXTOR_LEITURA_META_DIARIA` (padrao 20 paginas).
+
+Na aba Visao, o card "Meta de Leitura Diaria" mostra a barra de progresso, o item em leitura,
+o proximo da fila e quantas paginas faltam. Os mesmos dados estao na chave `leitura` de
+`GET /gtd/hoje` (`livro_atual`, `fila_quero_ler`, `contagem`).
+
+### Artigos cientificos na fila
+
+O bloco "Puxar Artigos Cientificos" busca o tema no OpenAlex e no arXiv com
+`nextor/artigos_cientificos.py`, o mesmo modulo da busca de artigos dos estudos, e coloca os
+novos em "quero ler" como tipo artigo (10 paginas estimadas). Artigos com a mesma URL ou o
+mesmo titulo de um item que ja existe sao ignorados.
+
+A rota `POST /gtd/leituras/importar-artigos` aceita dois formatos:
+
+- `{"termo": "redes neurais", "fonte": "todos", "limite": 5}` faz a busca agora. `fonte` aceita
+  `todos`, `openalex` ou `arxiv`; `limite` vai de 1 a 20.
+- `{"artigos": [...]}` recebe a lista `artigos` devolvida por `/estudos/artigos/buscar` e nao
+  faz nova busca.
+
+No MCP, as ferramentas `leitura_listar`, `leitura_estado`, `leitura_importar_artigos` e
+`leitura_progresso` fazem o mesmo.
+
 ## Ordem sugerida do dia
 
 O planejador (`nextor/gtd/ordem_dia.py`) cruza tres fontes:
@@ -75,6 +108,12 @@ na URL e recusado.
 | `GET /gtd/revisao` | revisao semanal |
 | `GET/POST /gtd/projetos` | lista e cria projetos |
 | `GET/PUT /gtd/config` | ajustes do painel, inclusive `rotina` |
+| `GET/POST /gtd/leituras?estado=&tipo=` | lista e cadastra livros e artigos |
+| `POST /gtd/leituras/<id>/progresso` | soma paginas lidas (`{"paginas": 12}`) ao item e a meta do dia |
+| `POST /gtd/leituras/<id>/estado` | muda o estado (`{"estado": "quero_ler"}`, `lendo` ou `lido`) |
+| `DELETE /gtd/leituras/<id>` | remove o item da lista |
+| `GET /gtd/leituras/meta` | meta do dia, contagem por estado, o que esta em leitura e a fila |
+| `POST /gtd/leituras/importar-artigos` | leva artigos cientificos para "quero ler" |
 
 ## Acesso de fora de casa
 

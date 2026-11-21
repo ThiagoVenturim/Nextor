@@ -11,6 +11,7 @@ const estado = {
   contextoSelecionado: '@qualquer',
   itemSendoProcessado: null,
   dadosHoje: null,
+  filtroEstadoLeitura: '',
   tema: 'escuro',
   paleta: 'azul',
   configCompleta: null,
@@ -212,6 +213,19 @@ function configurarEventosAcoes() {
 
   // Criar Leitura
   document.getElementById('btn-adicionar-leitura').addEventListener('click', executarAdicionarLeitura);
+
+  // Puxar artigos cientificos para "quero ler"
+  document.getElementById('btn-importar-artigos').addEventListener('click', executarImportarArtigos);
+
+  // Filtro por estado da leitura
+  document.querySelectorAll('#filtro-estado-leitura .chip').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('#filtro-estado-leitura .chip').forEach(c => c.classList.remove('ativo'));
+      chip.classList.add('ativo');
+      estado.filtroEstadoLeitura = chip.dataset.estado || '';
+      carregarLeituras();
+    });
+  });
 
   // Somar Leitura no Hoje
   document.getElementById('btn-somar-leitura').addEventListener('click', executarSomarLeituraHoje);
@@ -473,6 +487,7 @@ async function carregarVisaoMetodo() {
     const pct = Math.min(100, Math.round((lidas / meta) * 100));
     document.getElementById('progresso-leitura-texto').textContent = `${lidas} / ${meta} pag`;
     document.getElementById('barra-leitura-progresso').style.width = `${pct}%`;
+    document.getElementById('texto-leitura-atual').textContent = textoLeituraDoDia(leit);
 
     // Compromissos da Agenda
     const listaAgenda = document.getElementById('lista-agenda');
@@ -1076,7 +1091,8 @@ async function carregarContextos() {
 
 async function carregarLeituras() {
   try {
-    const res = await api('/gtd/leituras');
+    const filtro = estado.filtroEstadoLeitura;
+    const res = await api(filtro ? `/gtd/leituras?estado=${encodeURIComponent(filtro)}` : '/gtd/leituras');
     const leituras = res.leituras || [];
 
     const lista = document.getElementById('lista-leituras');
@@ -1095,16 +1111,26 @@ async function carregarLeituras() {
           <div class="item-titulo">${escaparHtml(l.titulo)}</div>
           <div class="item-meta">
             <span class="tag-contexto">${escaparHtml(l.tipo)}</span>
-            <span>${escaparHtml(l.estado)}</span>
+            <span>${escaparHtml(ROTULOS_ESTADO_LEITURA[l.estado] || l.estado)}</span>
             <span>${l.paginas_lidas} / ${l.paginas_total || '?'} pag (${pct}%)</span>
             ${l.autor ? `<span>por ${escaparHtml(l.autor)}</span>` : ''}
           </div>
         </div>
         <div class="item-botoes">
-          <button class="btn-secundario btn-add-pag" data-id="${l.id}">+ Lidas</button>
+          <select class="select-padrao select-estado-leitura" aria-label="Estado da leitura">
+            <option value="quero_ler">Quero ler</option>
+            <option value="lendo">Lendo</option>
+            <option value="lido">Lido</option>
+          </select>
+          <button class="btn-secundario btn-add-pag">+ Lidas</button>
+          <button class="btn-secundario btn-remover-leitura">Remover</button>
         </div>
       `;
+      const seletor = div.querySelector('.select-estado-leitura');
+      seletor.value = l.estado;
+      seletor.addEventListener('change', () => mudarEstadoLeitura(l.id, seletor.value));
       div.querySelector('.btn-add-pag').addEventListener('click', () => registrarPaginasItem(l.id));
+      div.querySelector('.btn-remover-leitura').addEventListener('click', () => removerLeitura(l.id));
       lista.appendChild(div);
     });
   } catch (err) {}
@@ -1119,6 +1145,66 @@ async function registrarPaginasItem(id) {
   try {
     await api(`/gtd/leituras/${id}/progresso`, 'POST', { paginas: pag });
     mostrarToast(`Registradas ${pag} paginas`);
+    carregarLeituras();
+  } catch (err) {}
+}
+
+const ROTULOS_ESTADO_LEITURA = { quero_ler: 'Quero ler', lendo: 'Lendo', lido: 'Lido' };
+
+function textoLeituraDoDia(leit) {
+  const partes = [];
+  if (leit.livro_atual) {
+    partes.push(`Lendo agora: ${leit.livro_atual.titulo}.`);
+  }
+  const fila = leit.fila_quero_ler || [];
+  if (fila.length > 0) {
+    partes.push(`Proximo da fila: ${fila[0].titulo}.`);
+  }
+  if (leit.meta_atingida) {
+    partes.push('Meta de hoje cumprida.');
+  } else if (typeof leit.faltam_paginas === 'number') {
+    partes.push(`Faltam ${leit.faltam_paginas} paginas para a meta.`);
+  }
+  return partes.join(' ');
+}
+
+async function mudarEstadoLeitura(id, novoEstado) {
+  try {
+    const res = await api(`/gtd/leituras/${encodeURIComponent(id)}/estado`, 'POST', { estado: novoEstado });
+    if (!res.ok) {
+      mostrarToast(res.erro || 'Nao foi possivel mudar o estado');
+    } else {
+      mostrarToast(`Marcado como ${ROTULOS_ESTADO_LEITURA[novoEstado] || novoEstado}`);
+    }
+    carregarLeituras();
+  } catch (err) {}
+}
+
+async function removerLeitura(id) {
+  if (!confirm('Remover esta leitura da lista?')) return;
+  try {
+    const res = await api(`/gtd/leituras/${encodeURIComponent(id)}`, 'DELETE');
+    mostrarToast(res.ok ? 'Leitura removida' : (res.erro || 'Nao foi possivel remover'));
+    carregarLeituras();
+  } catch (err) {}
+}
+
+async function executarImportarArtigos() {
+  const termoInput = document.getElementById('input-termo-artigos');
+  const fonte = document.getElementById('select-fonte-artigos').value;
+  const termo = termoInput.value.trim();
+  if (!termo) {
+    mostrarToast('Informe o tema dos artigos');
+    return;
+  }
+  try {
+    const res = await api('/gtd/leituras/importar-artigos', 'POST', { termo, fonte, limite: 5 });
+    if (!res.ok) {
+      mostrarToast(res.erro || 'Nao foi possivel buscar artigos');
+      return;
+    }
+    termoInput.value = '';
+    mostrarToast(res.total > 0 ? `${res.total} artigo(s) em Quero ler` : 'Nenhum artigo novo encontrado');
     carregarLeituras();
   } catch (err) {}
 }

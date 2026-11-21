@@ -27,6 +27,9 @@ from .leitura import (
     atualizar_progresso,
     meta_diaria_progresso,
     importar_artigos,
+    definir_estado_leitura,
+    remover_leitura,
+    resumo_leituras,
 )
 
 __all__ = [
@@ -55,4 +58,7 @@ __all__ = [
     "atualizar_progresso",
     "meta_diaria_progresso",
     "importar_artigos",
+    "definir_estado_leitura",
+    "remover_leitura",
+    "resumo_leituras",
 ]

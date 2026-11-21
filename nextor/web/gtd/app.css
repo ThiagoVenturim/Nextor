@@ -427,6 +427,19 @@ textarea:focus, input:focus, select:focus {
   gap: 4px;
 }
 
+/* Leitura (#44): estado e acoes cabem em telas estreitas */
+.item-botoes .select-estado-leitura {
+  width: auto;
+  min-width: 0;
+  font-size: 0.8rem;
+  padding: 6px 8px;
+}
+
+#aba-leitura .item-card {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 /* Visao Kanban */
 .kanban-board {
   display: flex;

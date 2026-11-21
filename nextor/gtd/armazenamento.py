@@ -394,8 +394,8 @@ class ArmazenamentoGTD:
         with self._conexao() as conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM leituras WHERE id = ?", (leitura_id,))
-            cursor.execute("DELETE FROM historico_leitura WHERE leitura_id = ?", (leitura_id,))
             removido = cursor.rowcount > 0
+            cursor.execute("DELETE FROM historico_leitura WHERE leitura_id = ?", (leitura_id,))
             conn.commit()
             return removido
 
