@@ -16,7 +16,10 @@ from .gtd import (
     revisao_semanal,
     criar_tarefa_de_evento,
     criar_evento_de_tarefa,
+    contar_por_contexto,
+    buscar_item_por_prefixo,
 )
+from .ordem_dia import sugerir_ordem_do_dia, parsear_rotina, obter_rotina
 from .leitura import (
     criar_leitura,
     listar_leituras,
@@ -41,6 +44,11 @@ __all__ = [
     "revisao_semanal",
     "criar_tarefa_de_evento",
     "criar_evento_de_tarefa",
+    "contar_por_contexto",
+    "buscar_item_por_prefixo",
+    "sugerir_ordem_do_dia",
+    "parsear_rotina",
+    "obter_rotina",
     "criar_leitura",
     "listar_leituras",
     "obter_leitura",

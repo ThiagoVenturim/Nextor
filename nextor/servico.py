@@ -1494,6 +1494,22 @@ def restringe_rede_dispositivos():
     return jsonify(ok=False, erro="acesso permitido apenas pela rede local ou VPN"), 403
 
 
+# O webhook do GitHub vem da internet e tem assinatura HMAC propria; fica fora do filtro de rede.
+_GTD_ENDPOINTS_PUBLICOS = {"gtd_webhook_github_endpoint"}
+
+
+@app.before_request
+def restringe_rede_gtd():
+    """Painel GTD (PWA e API) so responde na rede de casa ou pela VPN (Issue #43)."""
+    endpoint = request.endpoint or ""
+    if not endpoint.startswith("gtd_") or endpoint in _GTD_ENDPOINTS_PUBLICOS:
+        return None
+    from . import dispositivos
+    if dispositivos.endereco_permitido(request.remote_addr, config.REDES_PERMITIDAS):
+        return None
+    return jsonify(ok=False, erro="acesso permitido apenas pela rede local ou VPN"), 403
+
+
 @app.route("/v1/dispositivos", methods=["GET", "POST"])
 def dispositivos_endpoint():
     from . import dispositivos
@@ -2018,6 +2034,30 @@ def gtd_revisao_endpoint():
     from .gtd import revisao_semanal
     res = revisao_semanal()
     return jsonify(ok=True, **res)
+
+
+@app.get("/gtd/ordem")
+def gtd_ordem_endpoint():
+    """Ordem sugerida do dia a partir da agenda, da rotina e dos contextos (Issue #43)."""
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    from .gtd.configuracao import carregar_config
+    from .gtd.ordem_dia import rotina_para_texto, sugerir_ordem_do_dia
+    cfg = carregar_config()
+    if not (cfg.get("agentes") or {}).get("sugerir_ordem_dia", True):
+        return jsonify(ok=True, desligado=True, linha_do_tempo=[], sem_bloco=[], proximo_passo=None,
+                       resumo="Planejador do dia desligado nos ajustes.")
+    res = sugerir_ordem_do_dia(cfg=cfg)
+    return jsonify(ok=True, rotina_texto=rotina_para_texto(res["rotina"]), **res)
+
+
+@app.get("/gtd/contextos")
+def gtd_contextos_endpoint():
+    """Contexto -> numero de proximas acoes abertas, para os chips do painel."""
+    if not autorizado_gtd():
+        return jsonify(ok=False, erro="token invalido ou ausente no header"), 401
+    from .gtd import contar_por_contexto
+    return jsonify(ok=True, contextos=contar_por_contexto())
 
 
 @app.get("/gtd/config")

@@ -320,9 +320,105 @@ def tratar_comando_gtd_leitura(arg: str) -> str:
         return f"Nao foi possivel registrar a leitura: {e}"
 
 
+def _linha_acao(item: Any) -> str:
+    prazo = f" (prazo {item.prazo})" if getattr(item, "prazo", None) else ""
+    return f"- [{item.id[:6]}] {item.titulo} {item.contexto}{prazo}"
+
+
+def tratar_comando_gtd_proximas(arg: str) -> str:
+    """Lista as proximas acoes, todas ou de um contexto (/proximas @casa)."""
+    try:
+        from .gtd.armazenamento import ArmazenamentoGTD
+        from .gtd.modelos import normalizar_contexto
+        banco = ArmazenamentoGTD()
+        ctx = arg.strip().split()[0] if arg.strip() else ""
+        if ctx:
+            ctx_norm = normalizar_contexto(ctx)
+            if ctx_norm == "@qualquer" and ctx.lstrip("@").lower() != "qualquer":
+                return f"Contexto desconhecido: {ctx}. Use /contextos para ver os disponiveis."
+            itens = banco.listar_itens(estado="proxima", contexto=ctx_norm)
+            titulo = f"Proximas acoes em {ctx_norm}"
+        else:
+            itens = banco.listar_itens(estado="proxima")
+            titulo = "Proximas acoes"
+        if not itens:
+            return f"{titulo}: nenhuma."
+        linhas = [f"{titulo} ({len(itens)}):"] + [_linha_acao(i) for i in itens[:15]]
+        if len(itens) > 15:
+            linhas.append(f"... e mais {len(itens) - 15}.")
+        linhas.append("Conclua com /feito <codigo>.")
+        return "\n".join(linhas)
+    except Exception as e:
+        return f"Nao foi possivel listar as proximas acoes: {e}"
+
+
+def tratar_comando_gtd_contextos() -> str:
+    """Mostra quantas proximas acoes ha em cada contexto."""
+    try:
+        from .gtd import contar_por_contexto
+        contagem = contar_por_contexto()
+        linhas = ["Contextos (proximas acoes):"]
+        linhas += [f"- {ctx}: {n}" for ctx, n in contagem.items()]
+        linhas.append("Veja um contexto com /proximas @contexto.")
+        return "\n".join(linhas)
+    except Exception as e:
+        return f"Nao foi possivel carregar os contextos: {e}"
+
+
+def tratar_comando_gtd_feito(arg: str) -> str:
+    """Marca uma acao como feita pelo codigo curto mostrado em /proximas."""
+    codigo = arg.strip().split()[0] if arg.strip() else ""
+    if not codigo:
+        return "Uso: /feito <codigo> (o codigo aparece em /proximas)"
+    try:
+        from .gtd import buscar_item_por_prefixo, processar
+        item = buscar_item_por_prefixo(codigo)
+        if not item:
+            return f"Nenhuma acao unica encontrada com o codigo {codigo}."
+        processar(item.id, "feito")
+        return f"Feito: {item.titulo}"
+    except Exception as e:
+        return f"Nao foi possivel concluir a acao: {e}"
+
+
+def tratar_comando_gtd_ordem() -> str:
+    """Ordem sugerida do dia a partir da agenda, da rotina e dos contextos."""
+    try:
+        from .gtd import sugerir_ordem_do_dia
+        res = sugerir_ordem_do_dia()
+        linhas = [res.get("resumo") or "Ordem do dia indisponivel."]
+        for e in res.get("linha_do_tempo", []):
+            if e.get("passado"):
+                continue
+            if e["tipo"] == "evento":
+                linhas.append(f"{e['inicio']}-{e['fim']} {e['titulo']}")
+                continue
+            sufixo = " (ocupado pela agenda)" if e.get("ocupado_pela_agenda") else ""
+            linhas.append(f"{e['inicio']}-{e['fim']} {e['contexto']}{sufixo}")
+            for a in e.get("acoes", []):
+                linhas.append(f"  - [{a['id'][:6]}] {a['titulo']}")
+        return "\n".join(linhas)
+    except Exception as e:
+        return f"Nao foi possivel montar a ordem do dia: {e}"
+
+
+def tratar_comando_gtd_revisao() -> str:
+    """Resumo da revisao semanal do GTD."""
+    try:
+        from .gtd import revisao_semanal
+        res = revisao_semanal()
+        linhas = [res.get("resumo", "Revisao semanal indisponivel.")]
+        for p in res.get("projetos_sem_proxima_acao", [])[:10]:
+            linhas.append(f"- Projeto sem proxima acao: {p.get('nome', '')}")
+        return "\n".join(linhas)
+    except Exception as e:
+        return f"Nao foi possivel fazer a revisao semanal: {e}"
+
+
 def tratar_comando(comando: str, argumento: str = "") -> str:
     """Roteia comandos iniciados por barra (/quiz, /resumo, /anotar, etc)."""
-    cmd = comando.strip().lower()
+    # Em grupos o Telegram manda "/comando@NomeDoBot"; o sufixo e descartado.
+    cmd = comando.strip().lower().split("@", 1)[0]
     arg = argumento.strip()
 
     if cmd in ("/hoje", "/dia"):
@@ -331,6 +427,18 @@ def tratar_comando(comando: str, argumento: str = "") -> str:
         return tratar_comando_gtd_leitura(arg)
     if cmd in ("/inbox", "/capturar", "/tarefa"):
         return tratar_comando_gtd_capturar(arg)
+    if cmd in ("/proximas", "/acoes"):
+        return tratar_comando_gtd_proximas(arg)
+    if cmd in ("/contextos", "/contexto"):
+        if arg:
+            return tratar_comando_gtd_proximas(arg)
+        return tratar_comando_gtd_contextos()
+    if cmd in ("/feito", "/concluir"):
+        return tratar_comando_gtd_feito(arg)
+    if cmd in ("/ordem", "/plano"):
+        return tratar_comando_gtd_ordem()
+    if cmd in ("/revisao", "/semanal"):
+        return tratar_comando_gtd_revisao()
     if cmd in ("/quiz", "/perguntas", "/teste"):
         return tratar_comando_quiz(arg)
     if cmd in ("/resumo", "/resumos", "/materiais"):
@@ -344,6 +452,15 @@ def tratar_comando(comando: str, argumento: str = "") -> str:
             "- /quiz [disciplina] - Inicia uma questao de quiz\n"
             "- /resumo [disciplina] - Mostra o resumo das materias\n"
             "- /anotar [texto] - Salva um lembrete ou anotacao\n\n"
+            "Comandos do GTD:\n"
+            "- /inbox [texto] - Captura rapida para a caixa de entrada\n"
+            "- /hoje - Agenda do dia e proximas acoes\n"
+            "- /ordem - Ordem sugerida do dia pela agenda e pelos contextos\n"
+            "- /contextos - Quantas acoes ha em cada contexto\n"
+            "- /proximas [@contexto] - Lista as proximas acoes\n"
+            "- /feito [codigo] - Conclui uma acao\n"
+            "- /revisao - Revisao semanal\n"
+            "- /li [paginas] - Registra a leitura do dia\n\n"
             "Voce tambem pode enviar qualquer pergunta em texto ou gravar uma mensagem de voz."
         )
 

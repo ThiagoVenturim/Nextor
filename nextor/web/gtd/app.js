@@ -216,6 +216,9 @@ function configurarEventosAcoes() {
   // Somar Leitura no Hoje
   document.getElementById('btn-somar-leitura').addEventListener('click', executarSomarLeituraHoje);
 
+  // Revisao semanal (#43)
+  document.getElementById('btn-revisao-semanal').addEventListener('click', carregarRevisao);
+
   // Tela de Ajustes (#47)
   document.getElementById('config-select-tema').addEventListener('change', (e) => {
     estado.tema = e.target.value;
@@ -265,6 +268,8 @@ function preencherTelaConfig() {
 
   document.getElementById('config-select-metodo').value = cfg.metodo_ativo || 'gtd';
   document.getElementById('config-wip-limite').value = cfg.kanban_wip_limite || 3;
+  const rotina = Array.isArray(cfg.rotina) ? cfg.rotina : [];
+  document.getElementById('config-rotina').value = rotina.map((b) => `- `).join('\n');
 
   const sil = cfg.horario_silencio || {};
   document.getElementById('config-silencio-ativo').checked = sil.ativo !== false;
@@ -409,7 +414,8 @@ async function salvarConfiguracoesTela() {
     canais_ativos: canaisAtivos,
     integracoes: integracoes,
     sincronizacao: sincronizacao,
-    agentes: agentes
+    agentes: agentes,
+    rotina: document.getElementById('config-rotina').value.trim()
   };
 
   try {
@@ -458,6 +464,7 @@ async function carregarVisaoMetodo() {
     const hojeRes = await api('/gtd/hoje');
     estado.dadosHoje = hojeRes;
     document.getElementById('texto-resumo-dia').textContent = hojeRes.resumo_falado || 'Dia carregado.';
+    renderizarOrdemDia(hojeRes.ordem_sugerida);
 
     // Meta Leitura
     const leit = hojeRes.leitura || {};
@@ -728,6 +735,117 @@ function renderizarGTD(container, colunas, itensPorCol) {
 }
 
 // -------------------------------------------------------------
+// Ordem do Dia, Contextos e Revisao Semanal (#43)
+// -------------------------------------------------------------
+function renderizarOrdemDia(ordem) {
+  const lista = document.getElementById('lista-ordem-dia');
+  const passo = document.getElementById('texto-proximo-passo');
+  lista.innerHTML = '';
+  passo.textContent = '';
+  if (!ordem) {
+    lista.innerHTML = '<p class="ajuda-texto">Planejador do dia desligado ou indisponivel.</p>';
+    return;
+  }
+  if (ordem.proximo_passo) {
+    passo.textContent = `Proximo passo: ${ordem.proximo_passo.titulo} as ${ordem.proximo_passo.inicio}`;
+  }
+  const entradas = (ordem.linha_do_tempo || []).filter((e) => !e.passado);
+  if (entradas.length === 0) {
+    lista.innerHTML = '<p class="ajuda-texto">A rotina de hoje ja terminou.</p>';
+  }
+  entradas.forEach((e) => {
+    const card = document.createElement('div');
+    card.className = 'item-card';
+    let detalhe = '';
+    if (e.tipo === 'evento') {
+      detalhe = '<span class="tag-contexto">Agenda</span>';
+    } else if (e.ocupado_pela_agenda) {
+      detalhe = '<span>Ocupado pela agenda</span>';
+    } else if (typeof e.leitura_faltam_paginas === 'number' && e.leitura_faltam_paginas > 0) {
+      detalhe = `<span>Faltam ${e.leitura_faltam_paginas} paginas da meta</span>`;
+    }
+    const acoes = (e.acoes || []).map((a) => `
+      <div class="item-meta">
+        <span>${escaparHtml(a.titulo)}</span>
+        ${a.atrasada ? '<span class="tag-prazo">Atrasada</span>' : ''}
+        ${a.para_hoje ? '<span class="tag-prazo">Hoje</span>' : ''}
+        <button class="btn-secundario btn-concluir" data-id="${escaparHtml(a.id)}">Feito</button>
+      </div>`).join('');
+    card.innerHTML = `
+      <div class="item-info">
+        <div class="item-titulo">${escaparHtml(e.inicio)}-${escaparHtml(e.fim)} ${escaparHtml(e.titulo)}</div>
+        <div class="item-meta">${detalhe}</div>
+        ${acoes}
+      </div>
+    `;
+    card.querySelectorAll('.btn-concluir').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        await concluirItem(btn.getAttribute('data-id'));
+        carregarVisaoMetodo();
+      });
+    });
+    lista.appendChild(card);
+  });
+  const soltas = ordem.sem_bloco || [];
+  if (soltas.length > 0) {
+    const div = document.createElement('div');
+    div.className = 'item-card';
+    div.innerHTML = `
+      <div class="item-info">
+        <div class="item-titulo">Sem bloco na rotina ou urgentes</div>
+        ${soltas.map((a) => `<div class="item-meta"><span class="tag-contexto">${escaparHtml(a.contexto)}</span><span>${escaparHtml(a.titulo)}</span></div>`).join('')}
+      </div>
+    `;
+    lista.appendChild(div);
+  }
+}
+
+async function atualizarContagemContextos() {
+  try {
+    const res = await api('/gtd/contextos');
+    const contagem = res.contextos || {};
+    let total = 0;
+    Object.values(contagem).forEach((n) => { total += n; });
+    document.querySelectorAll('#filtro-contextos .chip').forEach((chip) => {
+      const ctx = chip.getAttribute('data-ctx');
+      const n = ctx === '@qualquer' ? total : (contagem[ctx] || 0);
+      const nome = ctx === '@qualquer' ? 'Todos' : ctx;
+      chip.textContent = `${nome} (${n})`;
+    });
+  } catch (err) {}
+}
+
+async function carregarRevisao() {
+  const lista = document.getElementById('lista-revisao');
+  try {
+    const res = await api('/gtd/revisao');
+    lista.innerHTML = '';
+    const resumo = document.createElement('p');
+    resumo.className = 'ajuda-texto';
+    resumo.textContent = res.resumo || '';
+    lista.appendChild(resumo);
+    const grupos = [
+      ['Projetos sem proxima acao', (res.projetos_sem_proxima_acao || []).map((p) => p.nome)],
+      ['Parados no inbox ha mais de 2 dias', (res.itens_parados_inbox || []).map((i) => i.titulo)],
+      ['Aguardando terceiros', (res.itens_aguardando || []).map((i) => i.titulo)],
+      ['Algum dia / talvez', (res.itens_algum_dia || []).map((i) => i.titulo)]
+    ];
+    grupos.forEach(([titulo, nomes]) => {
+      if (nomes.length === 0) return;
+      const div = document.createElement('div');
+      div.className = 'item-card';
+      div.innerHTML = `
+        <div class="item-info">
+          <div class="item-titulo">${escaparHtml(titulo)} (${nomes.length})</div>
+          ${nomes.slice(0, 10).map((n) => `<div class="item-meta"><span>${escaparHtml(n)}</span></div>`).join('')}
+        </div>
+      `;
+      lista.appendChild(div);
+    });
+  } catch (err) {}
+}
+
+// -------------------------------------------------------------
 // Timer Pomodoro Integrado (#45)
 // -------------------------------------------------------------
 function configurarEventosPomodoro() {
@@ -916,6 +1034,7 @@ async function executarCaptura() {
 }
 
 async function carregarContextos() {
+  atualizarContagemContextos();
   try {
     let url = '/gtd/itens?estado=proxima';
     if (estado.contextoSelecionado && estado.contextoSelecionado !== '@qualquer') {
