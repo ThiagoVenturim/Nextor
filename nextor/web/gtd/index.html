@@ -136,6 +136,7 @@
           <div class="barra-fundo">
             <div id="barra-leitura-progresso" class="barra-preenchimento" style="width: 0%"></div>
           </div>
+          <p id="texto-leitura-atual" class="ajuda-texto"></p>
           <div class="meta-acao-rapida">
             <input type="number" id="input-paginas-hoje" min="1" placeholder="Paginas lidas" class="input-pequeno">
             <button id="btn-somar-leitura" class="btn-secundario">Registrar Leitura</button>
@@ -201,9 +202,31 @@
             </button>
           </div>
         </div>
+        <div class="card-captura">
+          <label for="input-termo-artigos" class="label-titulo">Puxar Artigos Cientificos</label>
+          <div class="grupo-captura">
+            <input type="text" id="input-termo-artigos" placeholder="Tema para buscar no OpenAlex e arXiv...">
+          </div>
+          <div class="linha-controles">
+            <select id="select-fonte-artigos" class="select-padrao">
+              <option value="todos">OpenAlex e arXiv</option>
+              <option value="openalex">OpenAlex</option>
+              <option value="arxiv">arXiv</option>
+            </select>
+            <button id="btn-importar-artigos" class="btn-secundario">
+              <span>Levar para Quero Ler</span>
+            </button>
+          </div>
+        </div>
         <div class="bloco-lista">
           <div class="lista-cabecalho">
             <h3>Fila de Leitura</h3>
+          </div>
+          <div class="seletor-chips-contexto" id="filtro-estado-leitura">
+            <button class="chip ativo" data-estado="">Todas</button>
+            <button class="chip" data-estado="quero_ler">Quero ler</button>
+            <button class="chip" data-estado="lendo">Lendo</button>
+            <button class="chip" data-estado="lido">Lido</button>
           </div>
           <div id="lista-leituras" class="itens-container"></div>
         </div>
