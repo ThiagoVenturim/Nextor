@@ -85,6 +85,37 @@
         <div id="autos" class="auto-list"></div>
       </section>
 
+      <section class="card" aria-labelledby="titulo-dispositivos">
+        <h2 id="titulo-dispositivos" class="card-title">Dispositivos</h2>
+        <p class="help-text">
+          Cadastre celular, tablet, notebook, PC ou TV. O token aparece uma unica vez, no QR code de pareamento.
+          Pareamento so pela rede local ou VPN.
+        </p>
+        <div class="row">
+          <div>
+            <label for="disp-id" class="field-label">Identificador</label>
+            <input id="disp-id" type="text" placeholder="tv-sala">
+          </div>
+          <div>
+            <label for="disp-nome" class="field-label">Nome</label>
+            <input id="disp-nome" type="text" placeholder="TV da sala">
+          </div>
+          <div>
+            <label for="disp-tipo" class="field-label">Tipo</label>
+            <select id="disp-tipo">
+              <option value="celular">Celular</option>
+              <option value="tablet">Tablet</option>
+              <option value="notebook">Notebook</option>
+              <option value="pc">PC</option>
+              <option value="tv">TV</option>
+            </select>
+          </div>
+        </div>
+        <button id="btn-cadastrar-dispositivo" type="button">Cadastrar e gerar QR code</button>
+        <div id="disp-pareamento" class="auto-list" hidden></div>
+        <div id="disp-lista" class="auto-list"></div>
+      </section>
+
       <section class="card" aria-labelledby="titulo-conexao">
         <h2 id="titulo-conexao" class="card-title">Conexao com o Nextor</h2>
         <p class="help-text">

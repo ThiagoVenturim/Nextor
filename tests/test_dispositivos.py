@@ -109,7 +109,7 @@ class TestCadastroDispositivos(BaseDispositivosTestCase):
 
 class TestRevogacaoEAtivacao(BaseDispositivosTestCase):
     def test_revogacao_e_ativacao_estritas_por_id(self):
-        item = dispositivos.cadastrar("tablet-sala", "Tablet Sala", tipo="tablet", token="token-tablet-123")
+        dispositivos.cadastrar("tablet-sala", "Tablet Sala", tipo="tablet", token="token-tablet-123")
 
         # Tentar revogar passando token puro falha
         self.assertFalse(dispositivos.revogar("token-tablet-123"))
@@ -299,6 +299,138 @@ class TestHandOffEFilaMensagens(BaseDispositivosTestCase):
         self.assertEqual(r_ok.status_code, 200)
         self.assertIn("text/html", r_ok.headers.get("Content-Type", ""))
         self.assertIn("TV Display", r_ok.get_data(as_text=True))
+
+
+class TestRedeLocalOuVpn(BaseDispositivosTestCase):
+    def test_endereco_permitido_aceita_rede_local_e_vpn(self):
+        permitidos = (
+            "127.0.0.1", "192.168.1.5", "10.0.0.8", "172.16.4.2", "169.254.10.1",
+            "100.101.102.103", "::1", "fe80::1", "fd00::5", "fd7a:115c:a1e0::1", "::ffff:192.168.0.9",
+        )
+        for ip in permitidos:
+            with self.subTest(ip=ip):
+                self.assertTrue(dispositivos.endereco_permitido(ip, ""))
+
+    def test_endereco_permitido_recusa_internet_e_lixo(self):
+        for ip in ("8.8.8.8", "1.1.1.1", "2001:4860:4860::8888", "0.0.0.0", "224.0.0.1", "", None, "abc"):
+            with self.subTest(ip=ip):
+                self.assertFalse(dispositivos.endereco_permitido(ip, ""))
+
+    def test_redes_extras_configuradas(self):
+        self.assertFalse(dispositivos.endereco_permitido("1.2.3.4", ""))
+        self.assertTrue(dispositivos.endereco_permitido("1.2.3.4", "1.2.3.0/24, cidr-invalido"))
+        self.assertTrue(dispositivos.endereco_permitido("1.2.3.4", ["1.2.3.4/32"]))
+
+    def test_rotas_de_dispositivos_recusam_ip_publico(self):
+        item = dispositivos.cadastrar("tv-sala", "TV Sala", tipo="tv")
+        publico = {"REMOTE_ADDR": "8.8.8.8"}
+        chamadas = (
+            self.client.get("/v1/dispositivos", headers=self.h_mestre, environ_base=publico),
+            self.client.post("/v1/dispositivos", json={"id": "pc", "tipo": "pc"}, headers=self.h_mestre,
+                             environ_base=publico),
+            self.client.post("/v1/dispositivos/tv-sala/revogar", headers=self.h_mestre, environ_base=publico),
+            self.client.post("/v1/dispositivos/hand-off", json={"alvo": "tv-sala", "texto": "oi"},
+                             headers=self.h_mestre, environ_base=publico),
+            self.client.get(f"/dispositivo/conectar?id=tv-sala&token={item['token']}", environ_base=publico),
+        )
+        for resp in chamadas:
+            self.assertEqual(resp.status_code, 403)
+        self.assertTrue(dispositivos.buscar_por_id("tv-sala")["ativo"])
+        self.assertIsNone(dispositivos.buscar_por_id("pc"))
+
+    def test_rotas_de_dispositivos_aceitam_vpn_e_rede_extra(self):
+        dispositivos.cadastrar("tv-sala", "TV Sala", tipo="tv")
+        resp_vpn = self.client.get("/v1/dispositivos", headers=self.h_mestre, environ_base={"REMOTE_ADDR": "100.88.1.2"})
+        self.assertEqual(resp_vpn.status_code, 200)
+        with mock.patch.object(config, "REDES_PERMITIDAS", "1.2.3.0/24"):
+            resp_extra = self.client.get("/v1/dispositivos", headers=self.h_mestre,
+                                         environ_base={"REMOTE_ADDR": "1.2.3.9"})
+        self.assertEqual(resp_extra.status_code, 200)
+
+    def test_restricao_nao_afeta_rotas_fora_de_dispositivos(self):
+        resp = self.client.get("/painel", environ_base={"REMOTE_ADDR": "8.8.8.8"})
+        self.assertNotEqual(resp.status_code, 403)
+
+
+class TestSegredosForaDoLog(BaseDispositivosTestCase):
+    def test_mascarar_segredos_em_query_string(self):
+        linha = '"GET /dispositivo/conectar?id=tv&token=nxt_dev_SEGREDO123 HTTP/1.1" 200 -'
+        limpa = dispositivos.mascarar_segredos(linha)
+        self.assertNotIn("SEGREDO123", limpa)
+        self.assertIn("token=***", limpa)
+        self.assertIn("id=tv", limpa)
+
+    def test_filtro_do_log_http_remove_token(self):
+        import logging
+
+        registro = logging.LogRecord(
+            "werkzeug", logging.INFO, __file__, 1, '%s - - "%s" %s -',
+            ("192.168.1.9", "GET /v1/dispositivos/tv/mensagens?limpar=1&token=nxt_dev_ABCDEF HTTP/1.1", "200"),
+            None,
+        )
+        self.assertTrue(servico.FiltroSegredosLog().filter(registro))
+        mensagem = registro.getMessage()
+        self.assertNotIn("nxt_dev_ABCDEF", mensagem)
+        self.assertIn("token=***", mensagem)
+        filtros = logging.getLogger("werkzeug").filters
+        self.assertTrue(any(isinstance(f, servico.FiltroSegredosLog) for f in filtros))
+
+    def test_cadastro_nao_loga_token(self):
+        with self.assertLogs(level="DEBUG") as captura:
+            import logging
+            logging.getLogger("nextor").debug("marcador")
+            item = dispositivos.cadastrar("cel", "Celular", tipo="celular")
+            self.client.get("/v1/dispositivos", headers=self.h_mestre)
+        self.assertNotIn(item["token"], "\n".join(captura.output))
+
+    def test_pagina_de_pareamento_envia_token_por_cabecalho(self):
+        item = dispositivos.cadastrar("tv-display", "TV Display", tipo="tv")
+        pagina = self.client.get(f"/dispositivo/conectar?id={item['id']}").get_data(as_text=True)
+        self.assertIn("X-Nextor-Token", pagina)
+        self.assertIn("/presenca", pagina)
+        self.assertNotIn("&token=", pagina)
+        self.assertNotIn(item["token"], pagina)
+
+    def test_pagina_de_pareamento_escapa_nome(self):
+        dispositivos.cadastrar("tv-x", "<script>alert(1)</script>", tipo="tv")
+        pagina = self.client.get("/dispositivo/conectar?id=tv-x").get_data(as_text=True)
+        self.assertNotIn("<script>alert(1)</script>", pagina)
+        self.assertIn("&lt;script&gt;", pagina)
+
+
+class TestQrCodePareamento(BaseDispositivosTestCase):
+    def test_cadastro_retorna_qr_e_nao_cacheia(self):
+        with mock.patch.object(dispositivos, "gerar_qr_svg", return_value="<svg>qr</svg>") as gerar:
+            resp = self.client.post("/v1/dispositivos", json={"id": "tv-q", "tipo": "tv"}, headers=self.h_mestre)
+        self.assertEqual(resp.status_code, 201)
+        dados = resp.get_json()
+        self.assertEqual(dados["qr_svg"], "<svg>qr</svg>")
+        gerar.assert_called_once_with(dados["url_pareamento"])
+        self.assertIn("no-store", resp.headers.get("Cache-Control", ""))
+
+    def test_cadastro_sem_biblioteca_de_qr_devolve_so_o_link(self):
+        with mock.patch.object(dispositivos, "gerar_qr_svg", return_value=None):
+            resp = self.client.post("/v1/dispositivos", json={"id": "cel-q", "tipo": "celular"},
+                                    headers=self.h_mestre)
+        dados = resp.get_json()
+        self.assertIsNone(dados["qr_svg"])
+        self.assertIn("#token=", dados["url_pareamento"])
+
+    def test_gerar_qr_svg_offline(self):
+        try:
+            import segno  # noqa: F401
+        except ImportError:
+            self.skipTest("segno nao instalado (extra opcional 'qr')")
+        svg = dispositivos.gerar_qr_svg("http://192.168.1.2:5005/dispositivo/conectar?id=tv#token=abc")
+        self.assertTrue(svg.lstrip().startswith("<svg"))
+
+    def test_painel_tem_gestao_de_dispositivos(self):
+        html = (servico.WEB / "painel.html").read_text(encoding="utf-8")
+        js = (servico.WEB / "painel.js").read_text(encoding="utf-8")
+        self.assertIn('id="disp-lista"', html)
+        self.assertIn('id="btn-cadastrar-dispositivo"', html)
+        self.assertIn('data-disp-acao="revogar"', js)
+        self.assertIn("qr_svg", js)
 
 
 class TestCriterioDeConclusaoIssue11(BaseDispositivosTestCase):
