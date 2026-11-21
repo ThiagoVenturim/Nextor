@@ -104,12 +104,8 @@
       <section id="aba-hoje" class="tela-secao">
         <!-- Seletor de Metodo Ativo -->
         <div class="seletor-metodo-container">
-          <div class="barra-metodos" id="seletor-metodos">
-            <button class="tab-metodo ativa" data-metodo="gtd">GTD</button>
-            <button class="tab-metodo" data-metodo="kanban">Kanban</button>
-            <button class="tab-metodo" data-metodo="eisenhower">Eisenhower</button>
-            <button class="tab-metodo" data-metodo="para">P.A.R.A.</button>
-          </div>
+          <!-- Abas montadas pelo app.js a partir de GET /gtd/config (registro de metodos) -->
+          <div class="barra-metodos" id="seletor-metodos"></div>
           <p id="metodo-descricao-ativa" class="metodo-descricao-texto">Fluxo classico de 5 passos do GTD.</p>
         </div>
 
@@ -224,7 +220,14 @@
           <p id="config-metodo-desc" class="ajuda-texto"></p>
 
           <label for="config-wip-limite">Limite de WIP do Kanban (Fazendo):</label>
-          <input type="number" id="config-wip-limite" min="1" max="10" class="input-pequeno" value="3">
+          <input type="number" id="config-wip-limite" min="1" max="50" class="input-pequeno" value="3">
+
+          <label for="config-pomodoro-ativo">
+            <input type="checkbox" id="config-pomodoro-ativo" checked>
+            Mostrar timer Pomodoro (vale para qualquer metodo)
+          </label>
+          <label for="config-pomodoro-minutos">Duracao do foco Pomodoro (minutos):</label>
+          <input type="number" id="config-pomodoro-minutos" min="1" max="180" class="input-pequeno" value="25">
 
           <label for="config-rotina">Rotina do dia (um bloco por linha, HH:MM-HH:MM @contexto):</label>
           <textarea id="config-rotina" rows="6" class="input-padrao" placeholder="08:00-12:00 @faculdade&#10;13:00-18:00 @trabalho&#10;18:30-19:30 @academia"></textarea>

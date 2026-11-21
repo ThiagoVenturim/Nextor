@@ -895,3 +895,7 @@ input:checked + .toggle-slider:before {
   display: none;
   opacity: 0;
 }
+
+.barra-pomodoro.oculto {
+  display: none;
+}
