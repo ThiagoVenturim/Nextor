@@ -3,7 +3,7 @@
 Inclui deteccao de reunioes (Zoom, Meet, Teams ou participantes), calculo de conflitos,
 blocos livres, sugestoes de timeboxing (estudos, academia, leitura) e disparos de lembretes.
 """
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, timedelta
 import logging
 import re
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
@@ -63,8 +63,8 @@ def extrair_participantes(ev: Any) -> List[str]:
     if ev is None:
         return participantes
 
-    # Se for dicionario sintetico
-    if isinstance(ev, dict):
+    # Se for dicionario sintetico (componentes do icalendar tambem herdam de dict)
+    if isinstance(ev, dict) and not hasattr(ev, "subcomponents"):
         parts = ev.get("participantes") or ev.get("attendees") or []
         if isinstance(parts, list):
             return [str(p).strip() for p in parts if str(p).strip()]
@@ -230,7 +230,7 @@ def _normaliza(ev: Any) -> dict:
         }
 
     # 2. Caso seja gerado pelo parser leve _parsear_ics_simples
-    if isinstance(ev, dict) and "dtstart" in ev:
+    if isinstance(ev, dict) and "dtstart" in ev and not hasattr(ev, "subcomponents"):
         inicio = ev["dtstart"]
         dia_inteiro = not isinstance(inicio, datetime)
         fim = ev.get("dtend")
